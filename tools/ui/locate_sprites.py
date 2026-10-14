@@ -10,8 +10,11 @@ import sys
 import cv2
 import numpy as np
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-UNITY = os.path.join(ROOT, "UnityAssets")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+UNITY = str(project_cfg.UNITY_ROOT)
 _cache = {}
 MIN = int(os.environ.get("MINPX", "20"))
 

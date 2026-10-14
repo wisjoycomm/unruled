@@ -10,9 +10,12 @@ import os
 import re
 import sys
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OURS = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter", "Art", "UI", "Atlas")
-ORIG = os.path.join(ROOT, "AllAssetsExport", "ExportedProject", "Assets", "Texture2D")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+OURS = str(project_cfg.ATLAS_DIR)
+ORIG = str(project_cfg.EXPORTED_ASSETS_DIR / "Texture2D")
 
 NAME = re.compile(r"^\s*name: (\S+)\s*$")
 BORDER = re.compile(r"^\s*border: \{x: ([-\d.]+), y: ([-\d.]+), z: ([-\d.]+), w: ([-\d.]+)\}")

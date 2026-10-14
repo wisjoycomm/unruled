@@ -11,14 +11,17 @@ import sys
 
 from PIL import Image, ImageDraw
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-TEX = os.path.join(ROOT, "AllAssetsExport", "ExportedProject", "Assets", "Texture2D")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+TEX = str(project_cfg.EXPORTED_ASSETS_DIR / "Texture2D")
 
 
 def find(names):
     want = set(names)
     found = {}
-    atlas = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter", "Art", "UI", "Atlas")
+    atlas = str(project_cfg.ATLAS_DIR)
     for meta in glob.glob(os.path.join(atlas, "*.png.meta")) + glob.glob(os.path.join(TEX, "sactx-*.meta")):
         text = open(meta, encoding="utf-8", errors="ignore").read()
         if not any(n in text for n in want):

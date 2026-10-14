@@ -1,4 +1,4 @@
-# Draws UnityAssets/Assets/_EndlessWinter/Art/UI/Ftue/ftue_exclaim_bubble.png (2x the captured size; a_1..a_8 show a 78x67 body + tail on a 900-wide frame).
+# Draws Art/UI/Ftue/ftue_exclaim_bubble.png (2x the captured size; a_1..a_8 show a 78x67 body + tail on a 900-wide frame).
 # Usage: python tools/art/draw_exclaim_bubble.py <out.png>
 import sys
 from PIL import Image, ImageDraw, ImageFilter

@@ -14,9 +14,12 @@ import re
 import shutil
 import sys
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-SRC = os.path.join(ROOT, "AllAssetsExport", "ExportedProject", "Assets", "Texture2D")
-DST = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter", "Art", "UI", "Atlas")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+SRC = str(project_cfg.EXPORTED_ASSETS_DIR / "Texture2D")
+DST = str(project_cfg.ATLAS_DIR)
 
 
 def pages(atlas):
@@ -30,7 +33,7 @@ def pages(atlas):
 
 
 def guid_for(name):
-    return hashlib.md5(("endlesswinter/atlas/" + name).encode()).hexdigest()
+    return hashlib.md5(f"{project_cfg.PROJECT_SLUG}/atlas/{name}".encode()).hexdigest()
 
 
 def main(names):

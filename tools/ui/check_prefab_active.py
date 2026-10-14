@@ -8,7 +8,12 @@ import io
 import os
 import re
 
-PREFABS = "UnityAssets/Assets/_EndlessWinter/Prefabs/Heroes/*.prefab"
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+PREFABS = sys.argv[1] if len(sys.argv) > 1 else str(project_cfg.PREFABS_DIR / "Heroes" / "*.prefab")
 
 for path in sorted(glob.glob(PREFABS)):
     text = io.open(path, encoding="utf-8", errors="ignore").read()
