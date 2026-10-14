@@ -1,0 +1,44 @@
+---
+paths:
+  - "Assets/**/*.cs"
+---
+
+# Unity C# performance rules (WebGL, Desktop & Mobile, IL2CPP/HybridCLR)
+
+Applies to every C# file in `Assets/`. Hot paths = `Update`, `FixedUpdate`,
+`LateUpdate`, `SimClock` per-tick loops, `MapBoardRenderer` draw updates, and UI Toolkit bindings.
+
+## Memory and GC
+- No boxing: don't pass structs to `object` parameters or non-generic APIs
+  (`string.Format`, `Debug.Log` with value types, `ArrayList`). Use generics and
+  `EqualityComparer<T>.Default`.
+- No allocations in hot paths: no LINQ, no lambda closures, no new arrays, `List<T>`,
+  `StringBuilder` or objects. Cache and reuse fields/buffers. Use `ArrayPool<T>` or
+  `NativeArray<T>` for large temporary buffers.
+- Strings: no `+` concatenation in loops or hot paths; use ZString or a cached
+  builder. Compare with `string.Equals(a, b, StringComparison.Ordinal)`.
+- Bulk config & board data (`SiteNode`, `StarlaneEdge`, 20-item inventories): prefer contiguous struct arrays to avoid heap fragmentation.
+
+## Unity API
+- Cache `Camera.main`, `GetComponent<T>()`, `Transform` and UI Toolkit `VisualElement` queries (`Q<T>()`) in `Awake`/`OnEnable` or `Bind`; never look them up every frame.
+- Use `Shader.PropertyToID()` and `Animator.StringToHash()`, never raw strings.
+- Async: use UniTask, not coroutines or `System.Threading.Tasks.Task`. Always pass a
+  `CancellationToken` (e.g. `this.GetCancellationTokenOnDestroy()`).
+
+## UI Toolkit & Board Rendering (`Unruled.View`)
+- Follow the 4-zone layout (`TopTelemetryHud`, `MapBoardRenderer`, `LeftInventoryDock`, `ContractAndMarketUI`) with 100% opaque backgrounds (no blur filters) and sharp high-contrast typography.
+- Turn off `pickingMode` (`PickingMode.Ignore`) on decorative UI Toolkit `VisualElement` nodes.
+- Lists & tables (20-item dock, WTO market orders): use `ListView` virtualization or pooled elements; never instantiate entire lists every tick.
+- Board rendering (`MapBoardRenderer`): batch `LineRenderer` / mesh updates only when board or fleet state changes on a tick, not every render frame when unchanged.
+
+## MessagePack (on top of architecture rules 9–10)
+- Deserialize directly from `ReadOnlyMemory<byte>` / `ReadOnlySequence<byte>`.
+- Serialize outbound frames into a pooled `IBufferWriter<byte>` (`ArrayPool<byte>`).
+- Network buffers rented from a pool are always returned in `try/finally`.
+
+## Checklist for changed C#
+- [ ] No hidden boxing.
+- [ ] No GC allocations in hot paths or tick loops.
+- [ ] Every async call takes a `CancellationToken`.
+- [ ] Pooled buffers are returned.
+- [ ] IL2CPP/HybridCLR AOT-safe (no dynamic resolvers, no reflection-built generics).

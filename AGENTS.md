@@ -1,0 +1,77 @@
+# AGENTS.md
+
+## Project Config & Sync
+- **Shared configuration:** `project.config` (and optional local `.env` overrides) holds project paths, assembly names, and per-agent settings.
+- **Rule templates:** `.agents/templates/`. Edit templates or `project.config`, then run `python .agents/sync-rules.py` to keep `CLAUDE.md`, `AGENTS.md`, `.claude/`, `.agents/`, `.codex/`, and `.cursor/` in sync.
+
+## Folders
+- **`.docs/`: main and finished docs only** (locked GDD `.docs/unruled_master_gdd.md`, data sheets `.docs/unruled_master_data_sheets.md`, architecture plan, finished specs and references). Write here only when a doc is final or I ask.
+- **`.temp/`: everything else**: work-in-progress plans, backlog, notes, screenshots/captures, logs, scratch files. Not committed. Never put temporary files in the project root or in `Assets/`.
+
+## How to work
+- **Small task** (clear, about 1–3 files): just do it. No plan file.
+- **Big feature:** plan first in plan mode. Write the plan to `.temp/plan.md` as a short checklist: one line per step, plus how we'll know it's done. Wait for my OK, then do one step at a time and tick it off. When the feature is finished, delete the file.
+- **Architecture:** the rules are in `.agents/rules/architecture.md`. Master specification: `.docs/unruled_master_gdd.md` and `.docs/unruled_master_data_sheets.md`. How the project works now: `.docs/overview.md`; where it is heading, why, and rule exceptions: `.docs/plan/roadmap.md`; the server API: `.docs/plan/backend-api.md`. Read them only when changing structure, data shapes or assemblies. Update the overview when you change structure; when we make an important decision, add 1–2 lines to the roadmap on *why*.
+- **Later:** ideas and bugs for later go in `.temp/backlog.md`, one line each. Don't read it unless I ask.
+- **Comparing with the original game:** use the `ldplayer-compare` skill.
+- Read only the files the task needs; don't scan the whole repo. Keep changes focused: no unrelated cleanup.
+- **Verify before saying done:** `request_recompile` shows no compile errors, the related EditMode tests pass, and the checklist in `.agents/rules/architecture.md` is met. If something couldn't be checked, say why.
+- **Report in 3–5 lines:** what changed, what verification passed or failed, and any rule exception taken (and why). No long summaries.
+
+## Git
+- **Commit after every finished task** (or every finished step of the plan), once verification passes. Don't ask first; I'll undo it myself if it's wrong.
+- One task per commit. Stage only the files that task changed, **including their `.meta` files** and any scene/prefab/asset saved through Unity MCP. Never `git add .` blindly.
+- Message: one clear line, e.g. `feat: wto market vwap engine`, `fix: supply line ammo deduction`.
+- Finished work isn't kept in files; git history is the record.
+- Never push unless I ask.
+
+## General code rules
+- Follow the patterns already in the codebase.
+- Already installed, use freely: UniTask, ZString, DOTween/LeanTween, MessagePack. Ask before adding any other dependency.
+- No commented-out code, no leftover debug logs, no empty catches, no hidden fallbacks.
+- Never log or commit secrets or tokens. Never delete or skip tests to make them pass.
+- If a rule conflicts with my latest request, follow the request and tell me about the conflict. If a rule is unclear or the change would be destructive, ask first.
+
+## Keeping this file useful
+Keep it short: it's loaded in every session. Add a rule only when the same mistake happens twice.
+
+
+<!-- KitWright Unity managed project skills -->
+<!-- KitWright Unity project skill versions: unity-mcp-workflow@1.0.1 -->
+
+# KitWright MCP for Unity Project Guidance
+
+This section is managed by KitWright MCP for Unity for Claude Code. Everything between the begin and end markers is regenerated on each sync; edit outside this block.
+
+## Installed skills
+
+- `unity-mcp-workflow` v1.0.1 - Efficient workflow for using Unity MCP to edit, import, compile, inspect, and test Unity projects.
+
+## Preferred workflow
+
+- Use KitWright Unity tools for Unity editor state and automation.
+- Use `execute_code` for non-trivial Unity orchestration. For new snippets, include `using KitWright.Editor.Tools.Scripting;`, implement `IKitWrightCommand`, and use `ctx.RegisterObjectCreation` / `RegisterObjectModification` / `DestroyObject` so changes participate in Undo and `ctx.Log` for traceable output.
+- Confirm the Unity project root, active scene, and real object/prefab/asset path before edits. Treat user-provided object names as hints, not paths.
+- Inspect Unity objects through MCP before changing user-named scene or prefab targets. Carry the returned `instanceId` into follow-up calls (`find_method=by_id`) instead of re-resolving by name.
+- Tool returns are structured JSON (`{success, message, data}` / `{success: false, code, error, data}`). Branch on `code`, not free-form text.
+- Set component fields with `set_component_properties` — it picks up `[SerializeField] private` fields and accepts Object references as `{"fileID": <instanceId>}` or `{"assetPath": "Assets/..."}`.
+- Read editor state through `get_selection`, `get_prefab_stage`, `get_tags`, `get_layers`, `get_build_settings`; try `execute_menu_item` before writing ad-hoc `execute_code`.
+- Never edit `.unity`, `.prefab`, or `.asset` files with shell text tools or patches; use Unity MCP / Editor APIs for scenes, prefabs, and ScriptableObject assets.
+- Save only the scene or prefab assets intentionally modified, then read back exact values.
+- With default `core` exposure, use the focused workflow tools. With default `full` exposure, prefer specific MCP tools for simple editor operations.
+- `execute_code` refreshes assets and waits for compilation before running. For other tools that depend on freshly compiled code, still call `request_recompile` after external script edits.
+- In `execute_code`, null-guard every lookup and return explicit missing path/object/component messages; do not run self-healing fallback loops.
+- For Unity object references, do not use `??=` for lazy rebinding; use explicit `if (field == null) field = Resolve();`.
+- After code or resource edits, exit Play Mode if needed and call `request_recompile` first; it returns the compile errors unless it reports that Unity started importing or recompiling. Only then call `wait_for_compilation(force_refresh=false)`, which returns them too. Do not follow either with `get_compilation_errors`, and never use `force_refresh=false` without a `request_recompile` before it: on its own it reads the state from before the edits.
+- Editing several `.cs` files: write them with your own file tools, then call `request_recompile` once. `create_script`, `edit_script`, `patch_script`, `edit_script_members` and `write_file` each refresh the asset database.
+- Group independent reads into one `batch_execute` call instead of one round-trip each.
+- `request_recompile` is rejected while Unity is in Play Mode. Call `exit_play_mode` first, then retry.
+- `enter_play_mode` and a recompile reload the domain. In broker mode (the default) requests are held across the reload, so make the next call directly, with no poll loop. If the connection is refused instead (direct mode), poll the JSON-RPC `ping` method over HTTP (with native tools only, `get_reload_recovery_status`) until it answers. Never probe with `tools/list`: it returns the whole tool catalog.
+- If domain reload interrupts a request, treat the result as unknown until `get_reload_recovery_status`, compilation checks, and MCP readback confirm it.
+- Additional installed skills are available under `.agents/skills/`.
+
+## Project
+
+- Project root: `D:\GameProjects\unruled`
+- Product name: `Unruled`
+<!-- /KitWright Unity managed project skills -->

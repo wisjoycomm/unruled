@@ -1,0 +1,83 @@
+# Architecture rules (${PROJECT_NAME})
+
+Every code task follows these rules. The locked design and data tables are in
+`${MASTER_GDD_DOC}` and `${MASTER_DATA_DOC}`; the roadmap is in `${ROADMAP_DOC}`; how the
+project works today is in `${OVERVIEW_DOC}`. Keep this file, the overview and the
+roadmap in agreement.
+
+In one line: **data in config, rules in pure C# (`${CORE_ASM}`), state in one place,
+views (`${VIEW_ASM}`) only draw, and every change goes through one door.**
+
+## Rules
+
+1. **Views only draw.** A MonoBehaviour or UI Toolkit controller in `${VIEW_ASM}` shows
+   state and forwards player commands to the simulation/service layer. It never computes
+   economic recipes, combat outcomes or weather rolls, and never mutates simulation state
+   directly. UI uses Unity UI Toolkit (`.uxml` / `.uss`) with 100% opaque backgrounds
+   (no blur) and high-contrast text; board rendering uses `LineRenderer`/Mesh on a
+   single-layer astronomical plane.
+2. **Rules are pure C#.** Simulation, board, economy, military and system-faction rules
+   live in `${CORE_ASM}` (`${CORE_DIR}/`) with `noEngineReferences: true` (no
+   `UnityEngine`). Pass in deterministic tick (`SimClock`) and seed. Every new rule gets
+   an EditMode NUnit test in `${TESTS_DIR}/`.
+3. **One door for every change.** Simulation state changes only through commands queued
+   into `SimClock` / authoritative handlers. UI and renderers never write simulation
+   fields directly.
+4. **One owner per piece of state.** Board (`SiteNode`, `StarlaneEdge`), weather
+   (`NoaaWeatherEngine`), economy (`WtoMarketEngine`, `ConvoyRouter`), military
+   (`FleetUnit`, `SupplyLineSolver`, `LanchesterCombat`), and system factions
+   (`SystemAuthorityManager`, `SystemDefenseEvaluator`, `VictoryEvaluator`): each domain
+   has one owning engine/manager. Others read state or subscribe to events.
+5. **No hidden lookups.** No new `static Current`, singletons, `FindAnyObjectByType`
+   or `FindObjectsByType` in game code. Core classes take dependencies in their
+   constructor; views get them via explicit `Bind(...)`.
+6. **Numbers come from config.** Balance numbers, 20-item recipes (`10 RAW_*` → `10 ITEM_*`),
+   ESI thresholds, NOAA storm scales and tech gate requirements come from
+   `GameBalanceConfig` / `RecipeDatabase` and `${MASTER_DATA_DOC}`. No magic balance
+   literals scattered in logic.
+7. **Time is deterministic (`1 Tick = 1 Second`).** Track simulation time in integer
+   ticks via `SimClock` (`60 Ticks = 1m`, `3,600 Ticks = 1h`, `86,400 Ticks = 1d`), never
+   floating-point `Time.time` countdowns inside `${CORE_ASM}`.
+8. **Modules stay decoupled.** Subsystems in `${CORE_ASM}` interact through well-defined
+   domain interfaces/structs and events.
+9. **Saved and network data only grows.** MessagePack int `[Key(n)]` only; only
+   append keys, never reuse, renumber or remove one. Bump `SchemaVersion` and add a
+   migration test when a shape changes.
+10. **Multi-platform & AOT safe.** Keep code compatible with WebGL, Desktop and Mobile
+    IL2CPP/HybridCLR: no dynamic MessagePack resolvers (use generated resolvers) and no
+    reflection-built unconstrained open generics.
+11. **Dependencies point one way:** `${VIEW_ASM} → ${CORE_ASM}`. `${CORE_ASM}` has
+    `noEngineReferences: true` and never references `${VIEW_ASM}` or `UnityEngine`.
+    Editor tooling stays in `${EDITOR_DIR}/` (`${EDITOR_ASM}`).
+
+## Where code goes
+
+Paths are under `${SCRIPTS_ROOT}/` (plus `${EDITOR_DIR}/` and `${TESTS_DIR}/`).
+
+| Writing | Folder | Assembly |
+|---|---|---|
+| Tick clock, command queue & balance config | `${CORE_DIR}/Simulation/` (`SimClock.cs`, `GameBalanceConfig.cs`) | `${CORE_ASM}` |
+| Map sites (ESI, 3 mining depths), starlanes & NOAA weather (`R/S/G 1–5`) | `${CORE_DIR}/Board/` (`SiteNode.cs`, `StarlaneEdge.cs`, `NoaaWeatherEngine.cs`) | `${CORE_ASM}` |
+| 20 Items (`10 RAW_*`, `10 ITEM_*`), Leontief recipes, convoys & WTO market | `${CORE_DIR}/Economy/` (`ItemId.cs`, `RecipeDatabase.cs`, `ConvoyRouter.cs`, `WtoMarketEngine.cs`) | `${CORE_ASM}` |
+| 3-part fleets (Line/EW/Supply), supply lines & Lanchester salvo combat | `${CORE_DIR}/Military/` (`FleetUnit.cs`, `SupplyLineSolver.cs`, `LanchesterCombat.cs`) | `${CORE_ASM}` |
+| `THE SYSTEM` (STA, WTO, WHO, IAEA, NOAA), defense tiers & victory evaluator | `${CORE_DIR}/SystemFactions/` (`SystemAuthorityManager.cs`, `SystemDefenseEvaluator.cs`, `VictoryEvaluator.cs`) | `${CORE_ASM}` |
+| 1-layer astronomical board renderer (`LineRenderer`/Mesh) | `${VIEW_DIR}/` (`MapBoardRenderer.cs`) | `${VIEW_ASM}` |
+| UI Toolkit 4-zone HUD (`.uxml`/`.uss`: TopTelemetry, LeftInventory, ContractAndMarket) | `${VIEW_DIR}/UI/` (`TopTelemetryHud.cs`, `ContractAndMarketUI.cs`) | `${VIEW_ASM}` |
+| Editor builders, importers, menus | `${EDITOR_DIR}/` | `${EDITOR_ASM}` |
+| EditMode NUnit tests (simulation, economy, combat, system factions) | `${TESTS_DIR}/<Feature>/` | `${TESTS_ASM}` |
+
+## Before finishing a task (the one checklist)
+
+- [ ] `request_recompile` shows no compile errors; the related EditMode NUnit tests pass.
+- [ ] The diff adds no `.Current`, `Find*Object*`, singleton or upward dependency
+      (`grep -nE "\.Current\b|Find(Any)?Object" <changed files>`).
+- [ ] Pure simulation logic is in `${CORE_ASM}` (zero `UnityEngine` references) and tested; state changes go through `SimClock` / owning engine.
+- [ ] Asmdef references still point one way (`${VIEW_ASM} → ${CORE_ASM}`).
+- [ ] Changed C# meets the checklist in `unity-perf.md`.
+- [ ] Saved/network data changes: keys only appended, `SchemaVersion` bumped, migration test added.
+- [ ] The diff has no accidental or unrelated changes.
+
+## Exceptions
+
+When a rule blocks a task, don't bend it silently. Record the exception and the
+reason in `${ROADMAP_DOC}`, and tell the user.
