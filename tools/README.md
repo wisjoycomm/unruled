@@ -89,54 +89,47 @@ python tools/ld/wire.py .temp/ld-ch1     # -> <folder>/wire/
   header, and `CHANGED +Ns / NOCHANGE` with the frame numbers.
 - `beats_NN.jpg` — one panel per beat (first frame of its range) with the beat title.
 
-## 3. Reading captures and the original's data
+## 3. Reading captures and reference assets
+
+All capture analysis scripts in `tools/ld/` automatically analyze at **450x800** (`_img.py`, exact 9:16 ratio) using vectorized `numpy` and scale coordinates back to real device pixels and `640x1136` design units.
 
 | File | What |
 |---|---|
-| `ld/view.py`, `map.py`, `probe.py`, `stats.py`, `rows.py`, `cols.py`, `edge.py` | read a capture as text: strips, ASCII map, pixel grid, colours, row/column runs |
-| `ld/find.py` | find a template image inside a capture (where is this button) |
+| `ld/_img.py` | shared `450x800` NumPy loader (`load_cap_np`), path resolver, and `bright_bbox` |
+| `ld/view.py`, `stats.py`, `rows.py`, `cols.py`, `edge.py` | inspect a capture: strips/2x zoom box, luminance/dominant colours, row/column runs, colour steps |
+| `ld/find.py` | FFT normalised cross-correlation template matcher inside a capture |
 | `ld/cmp.py`, `ld/sbs.py` | compare an LD capture with a reference / Unity capture side by side |
-| `ld/btnbox.py`, `card.py`, `cards.py`, `colorbox.py`, `lightbox.py`, `lightscan.py`, `panelbox.py` | measure boxes of buttons / cards / panels in a capture |
-| `ld/i18n.py`, `ld/i18nrev.py` | look up English text by i18n key, or keys by text |
-| `ld/luastr.py` | strings from compiled LuaJIT view modules |
-| `ld/pflayout.py`, `pfdetail.py`, `pftmp.py` | original prefab: RectTransform tree / sprites + fonts / TMP texts |
-| `ld/animcurve.py` | dump an `.anim` clip's curves |
-| `ld/spritecut.py`, `ld/sprites.py` | cut a sprite from an atlas / check the Hero builder's sprites exist |
-| `ui/dump_prefab.py`, `dump_prefab_sprites.py` | original UI prefab hierarchy with rects, sprites, texts |
-| `ui/check_prefab_active.py` | root active flag of Hero UI prefabs |
-| `ui/crop_sprites.py`, `sprite_sheet.py`, `has_sprites.py`, `sprite_border.py` | atlas sprites: crop, sheet, existence, 9-slice borders |
-| `ui/import_atlas.py` | import an original atlas page + slices into Unity |
-| `ui/locate_sprites.py`, `match_ref_sprites.py` | which atlas sprite matches a region of an LD screenshot |
-| `ldplayer/peek.py` | print any LuaJSON config table (`peek.py <file.json> [keys]`) |
-| `ldplayer/export_shots.py` | copy chosen captures into `.docs/ftue_screens` as JPGs |
-| `art/draw_exclaim_bubble.py` | draws the FTUE exclaim bubble PNG |
+| `ld/btnbox.py`, `cards.py`, `colorbox.py`, `lightbox.py`, `lightscan.py`, `panelbox.py` | measure bounding boxes of buttons / cards / colour regions / light panels in a capture |
+| `ld/i18n.py`, `ld/i18nrev.py` | look up localization text by i18n key, or keys by text |
+| `ld/luastr.py` | extract string constants from compiled LuaJIT bytecode modules |
+| `ld/animcurve.py` | dump an `.anim` clip's transform/float curves |
+| `ui/dump_prefab.py`, `dump_prefab_sprites.py` | dump Unity UI prefab hierarchy with rects, anchors, sprites, and TMP texts |
+| `ui/crop_sprites.py`, `sprite_sheet.py`, `has_sprites.py`, `sprite_border.py` | atlas sprites: crop, contact sheet, existence check, 9-slice borders |
+| `ui/import_atlas.py` | import an atlas page + sprite slices into Unity |
+| `ui/locate_sprites.py`, `match_ref_sprites.py` | match which atlas sprite corresponds to a region of a reference screenshot |
 
-## 4. Config -> Unity data (`tools/config/`)
-
-Regenerate `${DATA_DIR}/...` (configured in `project.config`) from `${LUA_CONFIG_DIR}`.
-
-| File | Output |
-|---|---|
-| `extract_chapters.py`, `extract_chapter4.py` | chapter quests / ch4 recruitment |
-| `extract_city.py` | ch1-3 city data |
-| `extract_cutscenes.py`, `show_cutscenes.py` | FTUE camp cutscenes JSON / print it |
-| `extract_rescue_timeline.py` | ch3 rescue timeline cue sheets |
-| `extract_plot_dialog.py` | FTUE story dialog |
-| `extract_heroes.py`, `hero_unlock_table.py` | heroes.json / unlock table |
-| `extract_i18n.py` | English string table |
-| `extract_items.py`, `extract_growth.py`, `extract_stages.py`, `extract_survivor_daynight.py` | items, growth chains, exploration stages, day/night |
-| `dump_guides.py`, `dump_timeline.py` | readable guide steps / timeline summary |
-| `_grep_cfg.py` | grep every LuaJSON config for a substring |
-
-## 5. Asset recovery pipeline (repo root `tools/`)
+## 4. Config & localization utilities (`tools/config/`)
 
 | File | What |
 |---|---|
-| `download_assets.py` (+ `test_download_assets.py`) | download missing files from the shipped manifest, hash-verified |
-| `decrypt_bundles.py` | decode bundles with the game's reader in an offline ARM64 VM |
-| `research_elf.py`, `research_il2cpp.py`, `research_metadata.py` | offline probes of the native code / metadata |
-| `scan_assets.py`, `inventory_all_resources.py` | inventory asset packs and bundles |
-| `extract_base_assets.py`, `extract_audio.py`, `extract_video.py`, `export_spine.py` | textures/fonts, audio, video, Spine |
-| `export_resource_data.py`, `export_config_json.lua`, `config_json.py` | config + Lua export, strict JSON |
-| `prepare_unity_3d.py`, `import_battle_fx.py`, `BuildRecoveredGallery.cs`, `ValidateRecoveredScenes.cs` | build Unity art library, battle FX, galleries |
-| `verify_packages.py`, `build_delivery_report.py` | check exported packages, write the handoff report |
+| `_common.py` | shared LuaJSON loader (`load_lua_json`), cached localization lookup (`load_i18n`, `i18n_text`), and JSON writer (`write_json`) |
+| `extract_i18n.py` | extract localization string table from LuaJIT bytecode into `${RESOURCES_CONFIG_DIR}/i18n/en.json` |
+| `dump_timeline.py` | summarize an exported Unity `TimelineAsset` (`.playable`): tracks, clips, timing, and referenced assets |
+| `_grep_cfg.py` | grep every LuaJSON config table in `${LUA_CONFIG_DIR}` for a substring |
+
+## 5. Core RE & asset recovery pipeline (repo root `tools/`)
+
+| File | What |
+|---|---|
+| `project_cfg.py` | central configuration loader (`project.config` + `.env` overrides) |
+| `arm64_vm.py` | shared Unicorn ARM64 ELF constructor emulator and `.dynsym` import stub resolver |
+| `unityfs.py` (+ `test_unityfs.py`) | shared `UnityFS` bundle header parser and LZ4/LZMA block decompressor |
+| `unity_yaml.py` (+ `test_unity_yaml.py`) | shared Unity YAML document parser, parallel `.meta` GUID cache, and mtime-cached Sprite Atlas indexer |
+| `download_assets.py` (+ `test_download_assets.py`) | download missing files from a shipped manifest, hash-verified |
+| `decrypt_bundles.py` | multi-core (`ProcessPoolExecutor`) bundle decrypter using the game's reader in an offline ARM64 VM |
+| `research_elf.py`, `research_il2cpp.py`, `research_metadata.py` | offline probes of native `.so` constructors and IL2CPP `global-metadata.dat` |
+| `scan_assets.py`, `inventory_all_resources.py` | multi-threaded inventory of asset packs and bundles |
+| `extract_base_assets.py`, `extract_audio.py`, `extract_video.py`, `export_spine.py` | extract textures/fonts, audio, video, and Spine skeletons |
+| `export_resource_data.py`, `export_config_json.lua`, `config_json.py` | export ScriptableObjects and Lua config tables to strict JSON |
+| `prepare_unity_3d.py`, `BuildRecoveredGallery.cs`, `ValidateRecoveredScenes.cs`, `verify_packages.py` | build and validate recovered Unity 3D prefabs, scenes, and `.unitypackage` archives |
+
