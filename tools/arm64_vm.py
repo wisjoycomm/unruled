@@ -333,3 +333,45 @@ def probe_elf(
         encoding="utf-8",
     )
     return imports
+
+
+PRESETS = {
+    "unity": ("libunity.so", 0x1800000, 0x08000000, "elf_probe", 1_000_000_000),
+    "il2cpp": ("libil2cpp.so", 0x5000000, 0x10000000, "il2cpp_probe", 5_000_000_000),
+}
+
+
+def main() -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "target",
+        nargs="?",
+        default="unity",
+        help="Preset ('unity' or 'il2cpp') or ELF filename under extracted/native/",
+    )
+    ap.add_argument("--code-size", type=lambda x: int(x, 0), default=None)
+    ap.add_argument("--heap-size", type=lambda x: int(x, 0), default=None)
+    ap.add_argument("--report-prefix", default=None)
+    ap.add_argument("--budget", type=int, default=None)
+    args = ap.parse_args()
+
+    if args.target in PRESETS:
+        lib_name, code_sz, heap_sz, prefix, budget = PRESETS[args.target]
+    else:
+        lib_name = args.target
+        code_sz, heap_sz, prefix, budget = 0x5000000, 0x10000000, Path(lib_name).stem + "_probe", 2_000_000_000
+
+    probe_elf(
+        lib_name=lib_name,
+        code_size=args.code_size or code_sz,
+        heap_size=args.heap_size or heap_sz,
+        report_prefix=args.report_prefix or prefix,
+        insn_budget=args.budget or budget,
+    )
+
+
+if __name__ == "__main__":
+    main()
+

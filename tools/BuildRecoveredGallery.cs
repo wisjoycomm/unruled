@@ -14,11 +14,14 @@ public static class BuildRecoveredGallery
     {
         const string root = RecoveredRoot;
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-        string[] names = {"blaster", "captain_hendrik", "chef", "cop", "doc", "explorer", "hunter", "hector", "molly", "eleonora", "freya", "beastmaster"};
+        string charDir = root + "/Prefabs/Characters";
+        string[] paths = Directory.Exists(charDir)
+            ? Directory.GetFiles(charDir, "*.prefab").OrderBy(p => p).Take(12).ToArray()
+            : Array.Empty<string>();
         int count = 0;
-        foreach (string name in names)
+        foreach (string path in paths)
         {
-            string path = root + "/Prefabs/Characters/battle_hero_" + name + ".prefab";
+            string name = Path.GetFileNameWithoutExtension(path);
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null) throw new Exception("Missing gallery prefab: " + path);
             var holder = new GameObject(name + " display");

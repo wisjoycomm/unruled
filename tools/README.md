@@ -100,8 +100,6 @@ All capture analysis scripts in `tools/ld/` automatically analyze at **450x800**
 | `ld/find.py` | FFT normalised cross-correlation template matcher inside a capture |
 | `ld/cmp.py`, `ld/sbs.py` | compare an LD capture with a reference / Unity capture side by side |
 | `ld/btnbox.py`, `cards.py`, `colorbox.py`, `lightbox.py`, `lightscan.py`, `panelbox.py` | measure bounding boxes of buttons / cards / colour regions / light panels in a capture |
-| `ld/i18n.py`, `ld/i18nrev.py` | look up localization text by i18n key, or keys by text |
-| `ld/luastr.py` | extract string constants from compiled LuaJIT bytecode modules |
 | `ld/animcurve.py` | dump an `.anim` clip's transform/float curves |
 | `ui/dump_prefab.py`, `dump_prefab_sprites.py` | dump Unity UI prefab hierarchy with rects, anchors, sprites, and TMP texts |
 | `ui/crop_sprites.py`, `sprite_sheet.py`, `has_sprites.py`, `sprite_border.py` | atlas sprites: crop, contact sheet, existence check, 9-slice borders |
@@ -113,7 +111,7 @@ All capture analysis scripts in `tools/ld/` automatically analyze at **450x800**
 | File | What |
 |---|---|
 | `_common.py` | shared LuaJSON loader (`load_lua_json`), cached localization lookup (`load_i18n`, `i18n_text`), and JSON writer (`write_json`) |
-| `extract_i18n.py` | extract localization string table from LuaJIT bytecode into `${RESOURCES_CONFIG_DIR}/i18n/en.json` |
+| `extract_i18n.py` | extract localization string table from LuaJIT bytecode (`--lang`, `--input`), look up keys (`--lookup`), reverse-search (`--reverse`), or dump printable strings (`--strings`) |
 | `dump_timeline.py` | summarize an exported Unity `TimelineAsset` (`.playable`): tracks, clips, timing, and referenced assets |
 | `_grep_cfg.py` | grep every LuaJSON config table in `${LUA_CONFIG_DIR}` for a substring |
 
@@ -122,14 +120,14 @@ All capture analysis scripts in `tools/ld/` automatically analyze at **450x800**
 | File | What |
 |---|---|
 | `project_cfg.py` | central configuration loader (`project.config` + `.env` overrides) |
-| `arm64_vm.py` | shared Unicorn ARM64 ELF constructor emulator and `.dynsym` import stub resolver |
+| `arm64_vm.py` | shared Unicorn ARM64 ELF constructor emulator (`python tools/arm64_vm.py [unity\|il2cpp\|<lib.so>]`) and `.dynsym` import stub resolver |
 | `unityfs.py` (+ `test_unityfs.py`) | shared `UnityFS` bundle header parser and LZ4/LZMA block decompressor |
 | `unity_yaml.py` (+ `test_unity_yaml.py`) | shared Unity YAML document parser, parallel `.meta` GUID cache, and mtime-cached Sprite Atlas indexer |
 | `download_assets.py` (+ `test_download_assets.py`) | download missing files from a shipped manifest, hash-verified |
-| `decrypt_bundles.py` | multi-core (`ProcessPoolExecutor`) bundle decrypter using the game's reader in an offline ARM64 VM |
-| `research_elf.py`, `research_il2cpp.py`, `research_metadata.py` | offline probes of native `.so` constructors and IL2CPP `global-metadata.dat` |
+| `decrypt_bundles.py`, `research_metadata.py` | multi-core (`ProcessPoolExecutor`) bundle & metadata decrypter in an offline ARM64 VM |
 | `scan_assets.py`, `inventory_all_resources.py` | multi-threaded inventory of asset packs and bundles |
 | `extract_base_assets.py`, `extract_audio.py`, `extract_video.py`, `export_spine.py` | extract textures/fonts, audio, video, and Spine skeletons |
 | `export_resource_data.py`, `export_config_json.lua`, `config_json.py` | export ScriptableObjects and Lua config tables to strict JSON |
 | `prepare_unity_3d.py`, `BuildRecoveredGallery.cs`, `ValidateRecoveredScenes.cs`, `verify_packages.py` | build and validate recovered Unity 3D prefabs, scenes, and `.unitypackage` archives |
+
 

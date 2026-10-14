@@ -16,11 +16,16 @@ local function run(path)
     if not ok then error(result) end
     return result
 end
-run(source .. '/game_config_ConfigMeta.bytes')
--- View IDs are defined before the tablet-layout branch in ViewDefine. The
--- branch only changes GPadVIew, which scene_config does not read.
+local function try_run(path)
+    local f = io.open(path, 'rb')
+    if f then
+        f:close()
+        run(path)
+    end
+end
+try_run(source .. '/game_config_ConfigMeta.bytes')
 env.me = {Pad_Adaptive=arg[5]=='tablet'}
-run(source .. '/game_define_publicDefine_ViewDefine.bytes')
+try_run(source .. '/game_define_publicDefine_ViewDefine.bytes')
 local function quote(s)
     return '"' .. s:gsub('[%z\1-\31\\"]', function(c)
         if c == '"' then return '\\"' end

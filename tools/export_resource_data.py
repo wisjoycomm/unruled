@@ -24,8 +24,15 @@ def safe(name):
 
 def main():
     rows=[]
-    for kind in ('config','world','arsenal','brawlwar','garden','minewar','supremacywar','trianglewar'):
-        files={p.name:p for base in (project_cfg.RAW_GAME_ASSETS_DIR, project_cfg.DOWNLOADED_ASSETS_DIR) for p in (base/kind).glob('*') if p.is_file()}
+    dirs = {
+        d.name
+        for base in (project_cfg.RAW_GAME_ASSETS_DIR, project_cfg.DOWNLOADED_ASSETS_DIR)
+        if base.exists()
+        for d in base.iterdir()
+        if d.is_dir() and d.name != 'data'
+    }
+    for kind in sorted(dirs):
+        files={p.name:p for base in (project_cfg.RAW_GAME_ASSETS_DIR, project_cfg.DOWNLOADED_ASSETS_DIR) if (base/kind).exists() for p in (base/kind).glob('*') if p.is_file()}
         for p in files.values():
             folder=OUT/'Config'/('DeviceJSON' if kind=='config' else 'WorldBinary')
             if kind not in ('config','world'):folder=folder/kind

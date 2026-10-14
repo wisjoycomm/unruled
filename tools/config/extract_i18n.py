@@ -85,26 +85,58 @@ def pair_up(items):
     return table
 
 
+def dump_printable_strings(paths):
+    """Dump printable ASCII runs (>=4 chars) from compiled LuaJIT/binary files."""
+    for p in paths:
+        data = open(p, "rb").read()
+        print(f"===== {os.path.basename(p)}  ({len(data)} bytes)")
+        for m in re.finditer(rb"[\x20-\x7e]{4,}", data):
+            print(m.group().decode("ascii"))
+        print()
+
+
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--lang", default="en")
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--lang", default="en", help="Language code for game_languages_local_<lang>.bytes")
+    ap.add_argument("--input", default=None, help="Explicit path to a LuaJIT .bytes file")
+    ap.add_argument("--lookup", nargs="+", help="Look up specific i18n keys")
+    ap.add_argument("--reverse", default=None, help="Reverse-search i18n keys whose value contains phrase")
+    ap.add_argument("--strings", nargs="+", help="Dump printable ASCII strings from one or more .bytes files")
     args = ap.parse_args()
 
-    path = os.path.join(SRC, f"game_languages_local_{args.lang}.bytes")
-    data = open(path, "rb").read()
-    items = strings_in_order(data)
-    table = pair_up(items)
+    if args.strings:
+        dump_printable_strings(args.strings)
+        return
 
-    os.makedirs(OUT, exist_ok=True)
     dest = os.path.join(OUT, f"{args.lang}.json")
-    with open(dest, "w", encoding="utf-8") as fh:
-        json.dump(table, fh, indent=1, ensure_ascii=False, sort_keys=True)
-    print(f"[extract_i18n] {len(items)} constants -> {len(table)} keys -> {dest}")
+    path = args.input or os.path.join(SRC, f"game_languages_local_{args.lang}.bytes")
 
-    for probe in ("hero_name_50001", "hero_story_50001_1", "hero_ui_34", "hero_btn_07"):
-        v = table.get(probe)
-        print(f"  {probe} = {(v[:90] + '...') if v and len(v) > 90 else v}")
+    if (args.lookup or args.reverse) and os.path.exists(dest) and not args.input:
+        table = json.load(open(dest, encoding="utf-8"))
+    else:
+        data = open(path, "rb").read()
+        items = strings_in_order(data)
+        table = pair_up(items)
+        if not (args.lookup or args.reverse):
+            os.makedirs(OUT, exist_ok=True)
+            with open(dest, "w", encoding="utf-8") as fh:
+                json.dump(table, fh, indent=1, ensure_ascii=False, sort_keys=True)
+            print(f"[extract_i18n] {len(items)} constants -> {len(table)} keys -> {dest}")
+            for probe in list(table.keys())[:4]:
+                v = table[probe]
+                print(f"  {probe} = {(v[:90] + '...') if v and len(v) > 90 else v}")
+            return
+
+    if args.lookup:
+        for key in args.lookup:
+            print(f"{key} = {table.get(key, '(not found)')}")
+    if args.reverse:
+        q = args.reverse.lower()
+        for k, v in table.items():
+            if q in v.lower():
+                print(f"{k} = {v}")
 
 
 if __name__ == "__main__":
     main()
+
