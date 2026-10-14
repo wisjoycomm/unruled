@@ -1,76 +1,39 @@
 #!/usr/bin/env python3
 """Inventory this Android asset pack and test its first compressed data block.
 
-Run with .venv/bin/python tools/scan_assets.py. A readable first block does
+Run with `python tools/scan_assets.py`. A readable first block does
 not prove that every object in a bundle can be exported.
 """
+import concurrent.futures
 import csv
 import json
-import struct
+import sys
 from collections import Counter
 from pathlib import Path
 
-import lz4.block
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+import unityfs  # noqa: E402
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = project_cfg.ROOT
 
 
-def inspect_bundle(path):
-    row = {"file": str(path.relative_to(ROOT)), "bytes": path.stat().st_size,
-           "category": "_".join(path.stem.split("_")[:2])}
+def inspect_bundle(path: Path) -> dict:
+    row = {
+        "file": str(path.relative_to(ROOT)),
+        "bytes": path.stat().st_size,
+        "category": "_".join(path.stem.split("_")[:2]),
+    }
     with path.open("rb") as f:
-        def cstring():
-            value = bytearray()
-            while True:
-                c = f.read(1)
-                if not c:
-                    raise ValueError("Truncated string")
-                if c == b"\0":
-                    return value.decode("utf-8")
-                value.extend(c)
-
-        if cstring() != "UnityFS":
-            raise ValueError("Not UnityFS")
-        version = struct.unpack(">I", f.read(4))[0]
-        cstring()
-        row["unity_version"] = cstring()
-        size, compressed, expanded, flags = struct.unpack(">QIII", f.read(20))
-        if size != row["bytes"]:
-            raise ValueError("Bundle length mismatch")
-        if version >= 7:
-            f.seek((f.tell() + 15) // 16 * 16)
-        data_start = f.tell()
-        if flags & 0x80:
-            f.seek(size - compressed)
-        raw = f.read(compressed)
-        codec = flags & 0x3F
-        if codec in (2, 3):
-            info = lz4.block.decompress(raw, uncompressed_size=expanded)
-        elif codec == 0:
-            info = raw
-        else:
-            raise ValueError(f"Unsupported info codec {codec}")
-        if len(info) != expanded:
-            raise ValueError("Block info length mismatch")
-        block_count = struct.unpack_from(">I", info, 16)[0]
-        row["blocks"] = block_count
-        uncompressed, compressed, block_flags = struct.unpack_from(">IIH", info, 20)
-        if flags & 0x80:
-            f.seek(data_start)
-        if flags & 0x200:
-            f.seek((f.tell() + 15) // 16 * 16)
-        raw = f.read(compressed)
+        header = unityfs.parse_unityfs_header(f, total_bytes=row["bytes"])
+        row["unity_version"] = header.engine_version
+        row["blocks"] = len(header.blocks)
         row["block_info"] = "ok"
+        first = header.blocks[0]
+        f.seek(first.offset)
+        raw = f.read(first.compressed)
         try:
-            codec = block_flags & 0x3F
-            if codec in (2, 3):
-                data = lz4.block.decompress(raw, uncompressed_size=uncompressed)
-            elif codec == 0:
-                data = raw
-            else:
-                raise ValueError(f"Unsupported data codec {codec}")
-            if len(data) != uncompressed:
-                raise ValueError("Data block length mismatch")
+            unityfs.decompress_block(raw, first.expanded, first.codec)
             row["first_data_block"] = "ok"
         except Exception as exc:
             row["first_data_block"] = "failed"
@@ -78,23 +41,34 @@ def inspect_bundle(path):
     return row
 
 
-def main():
-    import sys
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import project_cfg
+def _safe_inspect(path: Path) -> dict:
+    try:
+        return inspect_bundle(path)
+    except Exception as exc:
+        return {
+            "file": str(path.relative_to(ROOT)),
+            "bytes": path.stat().st_size,
+            "first_data_block": "not_tested",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
 
+
+def main():
     report_dir = project_cfg.REPORTS_DIR
     report_dir.mkdir(exist_ok=True)
-    rows = []
-    for path in sorted((project_cfg.RAW_GAME_ASSETS_DIR / "data").glob("*.unity3d")):
-        try:
-            rows.append(inspect_bundle(path))
-        except Exception as exc:
-            rows.append({"file": str(path.relative_to(ROOT)),
-                         "bytes": path.stat().st_size, "first_data_block": "not_tested",
-                         "error": f"{type(exc).__name__}: {exc}"})
-    fields = ["file", "bytes", "category", "unity_version", "blocks",
-              "block_info", "first_data_block", "error"]
+    paths = sorted((project_cfg.RAW_GAME_ASSETS_DIR / "data").glob("*.unity3d"))
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        rows = list(pool.map(_safe_inspect, paths))
+    fields = [
+        "file",
+        "bytes",
+        "category",
+        "unity_version",
+        "blocks",
+        "block_info",
+        "first_data_block",
+        "error",
+    ]
     with (report_dir / "bundles.csv").open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
@@ -106,7 +80,7 @@ def main():
         "first_data_block": Counter(r["first_data_block"] for r in rows),
         "categories_inferred_from_filename": Counter(r.get("category", "unknown") for r in rows),
         "scope": "Every bundle header and block-info table; first data block only.",
-        "note": "Decompression failure alone does not identify the encryption algorithm."
+        "note": "Decompression failure alone does not identify the encryption algorithm.",
     }
     (report_dir / "scan_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))
