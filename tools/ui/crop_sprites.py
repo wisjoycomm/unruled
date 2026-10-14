@@ -12,20 +12,17 @@ import numpy as np
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import project_cfg  # noqa: E402
+import unity_yaml  # noqa: E402
 
 ROOT = str(project_cfg.ROOT)
 ATLAS = str(project_cfg.ATLAS_DIR)
 
 
 def index():
-    idx = {}
-    for fn in os.listdir(ATLAS):
-        if not fn.endswith(".png.meta"):
-            continue
-        txt = open(os.path.join(ATLAS, fn), encoding="utf-8").read()
-        for m in re.finditer(r"- serializedVersion: 2\n\s+name: (\S+)\n\s+rect:\n\s+serializedVersion: 2\n\s+x: ([\d.]+)\n\s+y: ([\d.]+)\n\s+width: ([\d.]+)\n\s+height: ([\d.]+)", txt):
-            idx.setdefault(m.group(1), (fn[:-5], *[float(v) for v in m.groups()[1:]]))
-    return idx
+    return {
+        name: (os.path.basename(png), x, y, w, h)
+        for name, (png, x, y, w, h, *_border) in unity_yaml.index_atlas_sprites([ATLAS]).items()
+    }
 
 
 def main():

@@ -12,26 +12,15 @@ from PIL import Image
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import project_cfg  # noqa: E402
+import unity_yaml  # noqa: E402
 
 ROOT = str(project_cfg.ROOT)
 ATLAS = str(project_cfg.ATLAS_DIR)
 OUT = os.path.join(ROOT, ".ldcap")
 
-ENTRY = re.compile(
-    r"- serializedVersion: \d+\s+name: (\S+).*?"
-    r"rect:\s+serializedVersion: \d+\s+x: ([\d.]+)\s+y: ([\d.]+)\s+width: ([\d.]+)\s+height: ([\d.]+)"
-    r".*?border: \{x: ([-\d.]+), y: ([-\d.]+), z: ([-\d.]+), w: ([-\d.]+)\}",
-    re.S)
-
 
 def table():
-    out = {}
-    for meta in glob.glob(os.path.join(ATLAS, "*.png.meta")):
-        text = open(meta, encoding="utf-8").read()
-        png = meta[:-5]
-        for m in ENTRY.finditer(text):
-            out[m.group(1)] = (png, *[float(v) for v in m.groups()[1:]])
-    return out
+    return unity_yaml.index_atlas_sprites([ATLAS])
 
 
 def main():

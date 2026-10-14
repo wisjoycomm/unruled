@@ -12,17 +12,14 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import project_cfg  # noqa: E402
+import unity_yaml  # noqa: E402
 
 ROOT = str(project_cfg.ROOT)
 ATLAS = str(project_cfg.ATLAS_DIR)
 
 
 def sprite_names():
-    names = set()
-    for meta in glob.glob(os.path.join(ATLAS, "*.png.meta")):
-        text = open(meta, encoding="utf-8", errors="ignore").read()
-        names.update(re.findall(r"\n\s*name: (\S+)", text))
-    return names
+    return set(unity_yaml.index_atlas_sprites([ATLAS]).keys())
 
 
 def main(argv):

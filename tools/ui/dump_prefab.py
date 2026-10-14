@@ -11,6 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import project_cfg  # noqa: E402
+import unity_yaml  # noqa: E402
 
 ROOT = str(project_cfg.ROOT)
 ASSETS = str(project_cfg.EXPORTED_ASSETS_DIR)
@@ -30,11 +31,12 @@ def guid_names():
             for meta in glob.glob(os.path.join(ASSETS, folder, "*.meta")):
                 try:
                     with open(meta, encoding="utf-8", errors="ignore") as f:
-                        m = re.search(r"guid: (\w+)", f.read(400))
+                        m = unity_yaml.GUID_RE.search(f.read(400))
                 except OSError:
                     continue
                 if m:
                     _guid_cache[m.group(1)] = os.path.basename(meta)[:-5]
+        os.makedirs(os.path.dirname(cache_file), exist_ok=True)
         json.dump(_guid_cache, open(cache_file, "w", encoding="utf-8"))
     return _guid_cache
 
@@ -48,31 +50,18 @@ def sprite_name(guid, file_id, gn):
     if asset is None:
         return guid
     if guid not in _atlas_tables:
-        table = {}
         meta = os.path.join(ASSETS, "Texture2D", asset + ".meta")
-        if os.path.exists(meta):
-            text = open(meta, encoding="utf-8", errors="ignore").read()
-            for m in re.finditer(r"- first:\s*\n\s*213: (-?\d+)\s*\n\s*second: (\S+)", text):
-                table[m.group(1)] = m.group(2)
-            for m in re.finditer(r"name: (\S+)\n(?:.*\n){0,12}?\s*internalID: (-?\d+)", text):
-                table.setdefault(m.group(2), m.group(1))
+        _, table, _ = unity_yaml.parse_atlas_meta(meta) if os.path.exists(meta) else (None, {}, {})
         _atlas_tables[guid] = table
     return _atlas_tables[guid].get(file_id, asset + "#" + file_id)
 
 
 def parse(path):
-    text = open(path, encoding="utf-8", errors="ignore").read()
-    docs = {}
-    for chunk in re.split(r"^--- !u!", text, flags=re.M)[1:]:
-        head = re.match(r"(\d+) &(-?\d+)", chunk)
-        if head:
-            docs[head.group(2)] = (int(head.group(1)), chunk)
-    return docs
+    return unity_yaml.parse_yaml_docs(path, int_class=True, include_header=True)
 
 
 def vec(chunk, key):
-    m = re.search(key + r": \{x: ([-\d.e]+), y: ([-\d.e]+)", chunk)
-    return (float(m.group(1)), float(m.group(2))) if m else None
+    return unity_yaml.yaml_vec2(chunk, key)
 
 
 def fmt(v):

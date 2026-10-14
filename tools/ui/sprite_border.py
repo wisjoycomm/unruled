@@ -12,31 +12,18 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import project_cfg  # noqa: E402
+import unity_yaml  # noqa: E402
 
 ROOT = str(project_cfg.ROOT)
 OURS = str(project_cfg.ATLAS_DIR)
 ORIG = str(project_cfg.EXPORTED_ASSETS_DIR / "Texture2D")
 
-NAME = re.compile(r"^\s*name: (\S+)\s*$")
-BORDER = re.compile(r"^\s*border: \{x: ([-\d.]+), y: ([-\d.]+), z: ([-\d.]+), w: ([-\d.]+)\}")
-
 
 def table(folder):
-    """Walk the sprite sheet line by line: each entry is "name:" followed later by "border:"."""
-    out = {}
-    for meta in glob.glob(os.path.join(folder, "*.meta")):
-        pending = None
-        with open(meta, encoding="utf-8", errors="ignore") as fh:
-            for line in fh:
-                m = NAME.match(line)
-                if m:
-                    pending = m.group(1)
-                    continue
-                m = BORDER.match(line)
-                if m and pending:
-                    out.setdefault(pending, tuple(int(float(m.group(i))) for i in (1, 2, 3, 4)))
-                    pending = None
-    return out
+    return {
+        name: (int(bx), int(by), int(bz), int(bw))
+        for name, (_png, _x, _y, _w, _h, bx, by, bz, bw) in unity_yaml.index_atlas_sprites([folder]).items()
+    }
 
 
 def main(names):

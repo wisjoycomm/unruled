@@ -5,23 +5,21 @@ atlas page holding 70 sprites. This walks the same prefab but resolves each
 `m_Sprite: {fileID: N, guid: G}` pair through the owning .meta's nameFileIdTable, so the
 output names the actual sprite (e.g. common_bg_tip_001) rather than the atlas page.
 """
+import os
 import re
 import sys
 import pathlib
 
-DOC = re.compile(r"^--- !u!(\d+) &(\d+)", re.M)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import unity_yaml  # noqa: E402
+
 SPRITE_REF = re.compile(r"m_Sprite: \{fileID: (-?\d+), guid: (\S+?),")
 FONT_REF = re.compile(r"m_FontAsset: \{fileID: (-?\d+), guid: (\S+?),")
 
 
 def parse(path):
     text = pathlib.Path(path).read_text(encoding="utf-8", errors="ignore")
-    bounds = [(m.start(), m.group(1), m.group(2)) for m in DOC.finditer(text)]
-    docs = {}
-    for i, (start, cls, fid) in enumerate(bounds):
-        end = bounds[i + 1][0] if i + 1 < len(bounds) else len(text)
-        docs[fid] = (cls, text[start:end])
-    return docs, text
+    return unity_yaml.parse_yaml_docs(text, include_header=True), text
 
 
 def build_sprite_table(root, guids):
@@ -34,16 +32,9 @@ def build_sprite_table(root, guids):
         if not directory.is_dir() or not remaining:
             continue
         for meta in directory.rglob("*.meta"):
-            body = meta.read_text(encoding="utf-8", errors="ignore")
-            m = re.search(r"guid: (\S+)", body)
-            if not m or m.group(1) not in remaining:
+            guid, names, _ = unity_yaml.parse_atlas_meta(meta)
+            if not guid or guid not in remaining:
                 continue
-            guid = m.group(1)
-            names = {}
-            for first, second in re.findall(
-                r"- first:\s*\n\s+\d+: (\d+)\s*\n\s+second: (\S+)", body
-            ):
-                names[first] = second
             table[guid] = (meta.stem, names)
             remaining.discard(guid)
             if not remaining:
@@ -54,27 +45,16 @@ def build_sprite_table(root, guids):
 
 
 def field(body, name, default=None):
-    m = re.search(rf"^\s+{re.escape(name)}: (.+)$", body, re.M)
-    return m.group(1).strip() if m else default
+    return unity_yaml.yaml_field(body, name, default)
 
 
 def vec(body, name):
-    raw = field(body, name)
-    if not raw:
-        return None
-    nums = re.findall(r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?", raw)
-    return tuple(round(float(n), 2) for n in nums[:2]) if len(nums) >= 2 else None
+    v = unity_yaml.yaml_vec2(body, name)
+    return (round(v[0], 2), round(v[1], 2)) if v else None
 
 
 def color_at(body, key):
-    m = re.search(
-        rf"{key}:\s*\n\s+r: ([\d.eE+-]+)\s*\n\s+g: ([\d.eE+-]+)\s*\n\s+b: ([\d.eE+-]+)\s*\n\s+a: ([\d.eE+-]+)",
-        body,
-    )
-    if not m:
-        return None
-    r, g, b, a = (float(x) for x in m.groups())
-    return f"#{int(r*255+0.5):02X}{int(g*255+0.5):02X}{int(b*255+0.5):02X}/{a:.2f}"
+    return unity_yaml.yaml_color_hex(body, key)
 
 
 def describe(cls, body, table):

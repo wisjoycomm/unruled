@@ -17,13 +17,12 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import project_cfg  # noqa: E402
+from unity_yaml import GUID_RE as GUID, HEADER_RE as HEADER  # noqa: E402
 
 ROOT = project_cfg.ROOT
 SOURCE = project_cfg.EXPORTED_ASSETS_DIR
 PROJECT = project_cfg.ASSETS_ROOT
 DEST = project_cfg.RECOVERED_ASSETS_ROOT / 'Recovered3D'
-GUID = re.compile(r'guid: ([a-f0-9]{32})')
-HEADER = re.compile(r'^--- !u!(\d+) &(-?\d+).*$', re.M)
 BUILTIN = {'0' * 32, '0000000000000000e000000000000000', '0000000000000000f000000000000000'}
 # GameObject, Transform, MeshRenderer, MeshFilter, TrailRenderer, Animation, ParticleSystem(+Renderer),
 # LineRenderer, SkinnedMeshRenderer, Animator.

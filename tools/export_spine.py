@@ -8,17 +8,15 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import project_cfg  # noqa: E402
+import unity_yaml  # noqa: E402
 
 ROOT=project_cfg.ROOT
 SOURCE=project_cfg.EXPORTED_ASSETS_DIR
-GUID=re.compile(r'guid: ([a-f0-9]{32})')
+GUID=unity_yaml.GUID_RE
 
 
 def main():
-    by_guid={}
-    for p in SOURCE.rglob('*.meta'):
-        m=GUID.search(p.read_text())
-        if m:by_guid[m[1]]=Path(str(p)[:-5])
+    by_guid = unity_yaml.build_guid_map(SOURCE)
     rows=[]
     for p in sorted((SOURCE/'MonoBehaviour').glob('*.asset')):
         text=p.read_text()

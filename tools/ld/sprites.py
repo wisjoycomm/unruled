@@ -10,6 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import project_cfg  # noqa: E402
+import unity_yaml  # noqa: E402
 
 ATLAS = str(project_cfg.ATLAS_DIR)
 
@@ -22,12 +23,10 @@ DEFAULT = [
 
 
 def index():
-    names = {}
-    for p in glob.glob(os.path.join(ATLAS, "*.png.meta")):
-        text = open(p, encoding="utf-8").read()
-        for n in re.findall(r"name: (\S+)", text):
-            names.setdefault(n, os.path.basename(p).replace(".png.meta", ""))
-    return names
+    return {
+        name: os.path.basename(png).replace(".png", "")
+        for name, (png, *_rest) in unity_yaml.index_atlas_sprites([ATLAS]).items()
+    }
 
 
 def main():

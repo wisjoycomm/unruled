@@ -11,6 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import project_cfg  # noqa: E402
+import unity_yaml  # noqa: E402
 
 ROOT = str(project_cfg.ROOT)
 ASSETS = str(project_cfg.EXPORTED_ASSETS_DIR)
@@ -18,39 +19,15 @@ INDEX = str(project_cfg.TEMP_DIR / "sprite_guid_index.json")
 
 
 def build_index():
-    if os.path.exists(INDEX):
-        return json.load(open(INDEX, encoding="utf-8"))
-    idx = {}
-    tex = os.path.join(ASSETS, "Texture2D")
-    for fn in os.listdir(tex):
-        if not fn.endswith(".meta"):
-            continue
-        with open(os.path.join(tex, fn), encoding="utf-8", errors="ignore") as f:
-            txt = f.read()
-        m = re.search(r"^guid: (\w+)", txt, re.M)
-        if not m:
-            continue
-        names = {}
-        for fid, nm in re.findall(r"213: (\d+)\n\s+second: (\S+)", txt):
-            names[fid] = nm
-        idx[m.group(1)] = {"file": fn[:-5], "names": names}
-    json.dump(idx, open(INDEX, "w", encoding="utf-8"))
-    return idx
+    return unity_yaml.cached_sprite_guid_index(ASSETS)
 
 
 def parse(path):
-    with open(path, encoding="utf-8", errors="ignore") as f:
-        txt = f.read()
-    docs = re.split(r"^--- !u!(\d+) &(-?\d+).*$", txt, flags=re.M)
-    objs = {}
-    for i in range(1, len(docs), 3):
-        objs[docs[i + 1]] = (docs[i], docs[i + 2])
-    return objs
+    return unity_yaml.parse_yaml_docs(path)
 
 
 def field(body, name):
-    m = re.search(r"^\s*" + name + r": (.*)$", body, re.M)
-    return m.group(1).strip() if m else None
+    return unity_yaml.yaml_field(body, name)
 
 
 def main():

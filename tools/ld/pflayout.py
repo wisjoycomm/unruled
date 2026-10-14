@@ -10,38 +10,21 @@ import os
 import re
 import sys
 
-NUM = r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import unity_yaml  # noqa: E402
 
 
 def parse(path):
     """Split the YAML stream into {fileID: (class, body)}."""
-    docs = {}
-    fid = None
-    cls = None
-    buf = []
-    with open(path, "r", encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            m = re.match(r"^--- !u!(\d+) &(\d+)", line)
-            if m:
-                if fid is not None:
-                    docs[fid] = (cls, "".join(buf))
-                cls, fid, buf = m.group(1), m.group(2), []
-                continue
-            if fid is not None:
-                buf.append(line)
-    if fid is not None:
-        docs[fid] = (cls, "".join(buf))
-    return docs
+    return unity_yaml.parse_yaml_docs(path)
 
 
 def val(body, key, default=None):
-    m = re.search(rf"^\s*{key}:\s*(.+)$", body, re.M)
-    return m.group(1).strip() if m else default
+    return unity_yaml.yaml_field(body, key, default)
 
 
 def vec2(body, key):
-    m = re.search(rf"^\s*{key}:\s*\{{x:\s*({NUM}),\s*y:\s*({NUM})\}}", body, re.M)
-    return (float(m.group(1)), float(m.group(2))) if m else (0.0, 0.0)
+    return unity_yaml.yaml_vec2(body, key, default=(0.0, 0.0))
 
 
 def fid_of(body, key):

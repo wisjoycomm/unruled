@@ -11,12 +11,13 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import project_cfg  # noqa: E402
+import unity_yaml  # noqa: E402
 
 ROOT = project_cfg.ROOT
 SOURCE = project_cfg.ASSET_RIPPER_EXPORT_DIR
 DEST = project_cfg.RECOVERED_ASSETS_ROOT/'Recovered3D'
-GUID = re.compile(r'guid: ([a-f0-9]{32})')
-HEADER = re.compile(r'^--- !u!(\d+) &(-?\d+).*$', re.M)
+GUID = unity_yaml.GUID_RE
+HEADER = unity_yaml.DOC_HEADER_RE
 # Geometry, skeleton, renderers, animation and colliders. Game scripts, effects,
 # lights and cameras are removed from the standalone model prefabs.
 KEEP = {1, 4, 23, 33, 65, 95, 111, 135, 136, 137, 224}

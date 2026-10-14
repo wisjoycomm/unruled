@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import project_cfg  # noqa: E402
+import unity_yaml  # noqa: E402
 
 ROOT = str(project_cfg.ROOT)
 TEX = str(project_cfg.EXPORTED_ASSETS_DIR / "Texture2D")
@@ -20,16 +21,12 @@ TEX = str(project_cfg.EXPORTED_ASSETS_DIR / "Texture2D")
 
 def find(names):
     want = set(names)
-    found = {}
-    atlas = str(project_cfg.ATLAS_DIR)
-    for meta in glob.glob(os.path.join(atlas, "*.png.meta")) + glob.glob(os.path.join(TEX, "sactx-*.meta")):
-        text = open(meta, encoding="utf-8", errors="ignore").read()
-        if not any(n in text for n in want):
-            continue
-        for m in re.finditer(r"- serializedVersion: 2\s*\n\s*name: (\S+)\s*\n\s*rect:\s*\n\s*serializedVersion: 2\s*\n\s*x: ([\d.]+)\s*\n\s*y: ([\d.]+)\s*\n\s*width: ([\d.]+)\s*\n\s*height: ([\d.]+)", text):
-            if m.group(1) in want and m.group(1) not in found:
-                found[m.group(1)] = (meta[:-5], [float(m.group(i)) for i in range(2, 6)])
-    return found
+    all_sprites = unity_yaml.index_atlas_sprites([project_cfg.ATLAS_DIR, TEX])
+    return {
+        n: (png, [x, y, w, h])
+        for n, (png, x, y, w, h, *_b) in all_sprites.items()
+        if n in want
+    }
 
 
 def main(out, names):
