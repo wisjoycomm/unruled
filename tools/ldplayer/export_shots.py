@@ -4,8 +4,11 @@ usage: python export_shots.py src=dst [src=dst ...]   (src relative to ld-captur
 import os, sys
 from PIL import Image
 
-CAP = r"D:\UnityProjects\endlesswinter\UnityAssets\.temp\ld-captures"
-OUT = r"D:\UnityProjects\endlesswinter\UnityAssets\.docs\ftue_screens"
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+CAP = str(project_cfg.LD_CAPTURES_DIR)
+OUT = str(project_cfg.DOCS_DIR / "ftue_screens")
 os.makedirs(OUT, exist_ok=True)
 for arg in sys.argv[1:]:
     src, dst = arg.split("=")

@@ -1,4 +1,4 @@
-"""Wireframe storyboard from a continuous LD capture folder (like UnityAssets/.temp/ld-ch1).
+"""Wireframe storyboard from a continuous LD capture folder (like .temp/ld-ch1).
 
 Input folder layout:
   frames/NNNNN_<ms>.png|jpg   continuous capture (index, ms since capture start)

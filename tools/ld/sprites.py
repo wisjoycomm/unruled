@@ -8,9 +8,10 @@ import os
 import re
 import sys
 
-ATLAS = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), "..", "..",
-    "UnityAssets", "Assets", "_EndlessWinter", "Art", "UI", "Atlas"))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ATLAS = str(project_cfg.ATLAS_DIR)
 
 DEFAULT = [
     "common_bg_001", "common_bg_002", "common_bg_021", "common_bg_026_04",

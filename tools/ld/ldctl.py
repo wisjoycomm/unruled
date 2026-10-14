@@ -1,6 +1,6 @@
 """ldctl - fast LDPlayer driver: quick actions, smart capture, action log, storyboard.
 
-Every action is logged to the current session (UnityAssets/.temp/ld-captures/<session>/):
+Every action is logged to the current session (.temp/ld-captures/<session>/):
   frames/NNNN_<name>@2.jpg   half-size previews (exact 9:16, real = preview * 2)
   frames/NNNN_<name>.png     full-res frame (only with --full / shot --full)
   log.jsonl                  one JSON line per action / beat (machine readable)
@@ -39,14 +39,17 @@ import time
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-CAP_ROOT = os.path.join(ROOT, "UnityAssets", ".temp", "ld-captures")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+CAP_ROOT = str(project_cfg.LD_CAPTURES_DIR)
 POINTS_FILE = os.path.join(os.path.dirname(__file__), "points.json")
-LD_DIR = r"D:\LDPlayer\LDPlayer14"
-ADB = os.path.join(LD_DIR, "adb.exe")
-LDCONSOLE = os.path.join(LD_DIR, "ldconsole.exe")
-PACKAGE = "com.gof.global"
-ACTIVITY = "com.gof.global/com.unity3d.player.MyMainPlayerActivity"
+LD_DIR = str(project_cfg.LD_DIR)
+ADB = project_cfg.ADB_PATH
+LDCONSOLE = project_cfg.LDCONSOLE_PATH
+PACKAGE = project_cfg.REF_GAME_PACKAGE
+ACTIVITY = project_cfg.REF_GAME_ACTIVITY
 PREVIEW_SCALE = 2
 MAX_WAIT = 60.0           # hard cap on any wait, seconds
 

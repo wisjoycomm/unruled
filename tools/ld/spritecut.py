@@ -10,8 +10,11 @@ import sys
 
 from PIL import Image
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-ATLAS = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter", "Art", "UI", "Atlas")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+ATLAS = str(project_cfg.ATLAS_DIR)
 OUT = os.path.join(ROOT, ".ldcap")
 
 ENTRY = re.compile(

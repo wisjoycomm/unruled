@@ -1,6 +1,9 @@
 import json, os, sys
 sys.stdout.reconfigure(encoding="utf-8")
-D = r"D:\UnityProjects\endlesswinter\ResourcesExport\Config\LuaJSON"
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+D = str(project_cfg.LUA_CONFIG_DIR)
 name = sys.argv[1]
 keys = sys.argv[2:]
 data = json.load(open(os.path.join(D, name), encoding="utf-8"))
