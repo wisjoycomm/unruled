@@ -107,37 +107,74 @@ def index_atlas_sprites(
 ) -> dict[str, tuple[str, float, float, float, float, float, float, float, float]]:
     """Index all `.png.meta` sprite entries across `folders` (defaults to `[project_cfg.ATLAS_DIR]`).
 
+    Uses `.temp/atlas_sprites_cache.json` when indexing the default `ATLAS_DIR` and `.meta` mtimes match.
     Returns `{sprite_name: (png_path, x, y, w, h, bx, by, bz, bw)}`.
     """
-    if folders is None:
-        folders = [project_cfg.ATLAS_DIR]
-    out: dict[str, tuple[str, float, float, float, float, float, float, float, float]] = {}
-    for folder in folders:
-        folder_path = Path(folder)
+    use_default = folders is None
+    folder_list = [project_cfg.ATLAS_DIR] if use_default else [Path(f) for f in folders]  # type: ignore[arg-type]
+    meta_files: list[Path] = []
+    max_mtime = 0.0
+    for folder_path in folder_list:
+        folder_path = Path(folder_path)
         if not folder_path.is_dir():
             continue
         for meta in sorted(folder_path.glob("*.meta")):
-            if not (meta.name.endswith(".png.meta") or meta.name.startswith("sactx-")):
-                continue
-            _, _, sprites = parse_atlas_meta(meta)
-            png_path = str(meta)[:-5]
-            for name, vals in sprites.items():
-                out.setdefault(name, (png_path, *vals))  # type: ignore[arg-type]
+            if meta.name.endswith(".png.meta") or meta.name.startswith("sactx-"):
+                meta_files.append(meta)
+                try:
+                    mt = meta.stat().st_mtime
+                    if mt > max_mtime:
+                        max_mtime = mt
+                except OSError:
+                    pass
+
+    cache_path = project_cfg.TEMP_DIR / "atlas_sprites_cache.json"
+    sig = f"{len(meta_files)}:{max_mtime:.3f}"
+    if use_default and meta_files and cache_path.exists():
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            if cached.get("_sig") == sig:
+                return {k: tuple(v) for k, v in cached["sprites"].items()}  # type: ignore[return-value]
+        except Exception:
+            pass
+
+    out: dict[str, tuple[str, float, float, float, float, float, float, float, float]] = {}
+    for meta in meta_files:
+        _, _, sprites = parse_atlas_meta(meta)
+        png_path = str(meta)[:-5]
+        for name, vals in sprites.items():
+            out.setdefault(name, (png_path, *vals))  # type: ignore[arg-type]
+
+    if use_default and meta_files:
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(json.dumps({"_sig": sig, "sprites": out}), encoding="utf-8")
+        except OSError:
+            pass
     return out
 
 
+def _read_meta_guid(p: Path) -> tuple[str, Path] | None:
+    try:
+        with p.open("r", encoding="utf-8", errors="ignore") as f:
+            head = f.read(512)
+    except OSError:
+        return None
+    m = GUID_RE.search(head)
+    return (m.group(1), Path(str(p)[:-5])) if m else None
+
+
 def build_guid_map(assets_root: str | Path) -> dict[str, Path]:
-    """Scan all `.meta` files under `assets_root` and return `{guid: asset_path}`."""
+    """Scan all `.meta` files under `assets_root` in parallel and return `{guid: asset_path}`."""
+    from concurrent.futures import ThreadPoolExecutor
+
     root = Path(assets_root)
+    metas = list(root.rglob("*.meta"))
     by_guid: dict[str, Path] = {}
-    for p in root.rglob("*.meta"):
-        try:
-            head = p.read_text(encoding="utf-8", errors="ignore")[:512]
-        except OSError:
-            continue
-        m = GUID_RE.search(head)
-        if m:
-            by_guid[m.group(1)] = Path(str(p)[:-5])
+    with ThreadPoolExecutor(max_workers=min(16, (os.cpu_count() or 4) * 2)) as pool:
+        for item in pool.map(_read_meta_guid, metas, chunksize=128):
+            if item is not None:
+                by_guid[item[0]] = item[1]
     return by_guid
 
 

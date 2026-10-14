@@ -7,22 +7,22 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _img import DH, DW, bright_bbox, load_cap  # noqa: E402
+from _img import DH, DW, bright_bbox, load_cap_np  # noqa: E402
 
 
 def main():
     name = sys.argv[1]
     minlum = int(sys.argv[2]) if len(sys.argv) > 2 else 215
 
-    _, px, w, h = load_cap(name)
-    box = bright_bbox(px, w, h, thresh=minlum)
+    arr, w, h, scale = load_cap_np(name)
+    box = bright_bbox(arr, w, h, thresh=minlum, scale=scale)
     if box is None:
         print("no bright card found")
         return
 
     minx, maxx, miny, maxy = box
     sx, sy = DW / w, DH / h
-    print(f"image {w}x{h}")
+    print(f"image {w}x{h} (analyzed at 1/{scale}x)")
     print(f"card px  x{minx}..{maxx} ({maxx-minx+1})  y{miny}..{maxy} ({maxy-miny+1})")
     print(f"design   w={(maxx-minx+1)*sx:.1f} h={(maxy-miny+1)*sy:.1f}")
     print(f"design   cx={((minx+maxx)/2 - w/2)*sx:+.1f}  "

@@ -11,19 +11,19 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _img import DH, DW, bright_bbox, load_cap  # noqa: E402
+from _img import DH, DW, bright_bbox, load_cap_np  # noqa: E402
 
 
 def main():
     name = sys.argv[1]
     thresh = int(sys.argv[2]) if len(sys.argv) > 2 else 200
 
-    _, px, w, h = load_cap(name)
+    arr, w, h, scale = load_cap_np(name)
 
     # Optional search window, so stray bright pixels elsewhere on screen (HUD text,
     # the hero portrait) do not inflate the bounding box.
     window = tuple(int(v) for v in sys.argv[3:7]) if len(sys.argv) > 6 else None
-    box = bright_bbox(px, w, h, thresh=thresh, window=window)
+    box = bright_bbox(arr, w, h, thresh=thresh, window=window, scale=scale)
     if box is None:
         print("no light pixels found")
         return

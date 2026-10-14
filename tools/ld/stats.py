@@ -6,12 +6,10 @@ Usage:
 """
 import os
 import sys
-from collections import Counter
-
-from PIL import Image
+import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _img import cap_path  # noqa: E402
+from _img import cap_path, load_cap_np  # noqa: E402
 
 
 def main():
@@ -20,17 +18,25 @@ def main():
         if not os.path.exists(path):
             print(f"{name}: MISSING")
             continue
-        im = Image.open(path).convert("RGB")
-        px = list(im.getdata())
-        lum = [(r * 299 + g * 587 + b * 114) // 1000 for r, g, b in px]
-        n = len(lum)
-        bright = sum(1 for v in lum if v >= 170)
-        mid = sum(1 for v in lum if 60 <= v < 170)
+        arr, _, _, _ = load_cap_np(name)
+        r = arr[:, :, 0].astype(np.int32)
+        g = arr[:, :, 1].astype(np.int32)
+        b = arr[:, :, 2].astype(np.int32)
+        lum = (r * 299 + g * 587 + b * 114) // 1000
+        n = lum.size
+        bright = int((lum >= 170).sum())
+        mid = int(((lum >= 60) & (lum < 170)).sum())
         dark = n - bright - mid
         # Quantise to a 32-level cube so near-identical shades group together.
-        common = Counter((r // 32 * 32, g // 32 * 32, b // 32 * 32) for r, g, b in px)
-        top = ", ".join(f"{c}:{k * 100.0 / n:.0f}%" for c, k in common.most_common(4))
-        print(f"{name}: mean_lum={sum(lum) / n:.1f} "
+        qr, qg, qb = (r // 32 * 32).ravel(), (g // 32 * 32).ravel(), (b // 32 * 32).ravel()
+        packed = (qr << 16) | (qg << 8) | qb
+        vals, counts = np.unique(packed, return_counts=True)
+        order = np.argsort(-counts)[:4]
+        top = ", ".join(
+            f"({int(vals[i] >> 16)}, {int((vals[i] >> 8) & 255)}, {int(vals[i] & 255)}):{counts[i] * 100.0 / n:.0f}%"
+            for i in order
+        )
+        print(f"{name}: mean_lum={float(lum.mean()):.1f} "
               f"bright={bright * 100.0 / n:.1f}% mid={mid * 100.0 / n:.1f}% "
               f"dark={dark * 100.0 / n:.1f}%")
         print(f"    top colours: {top}")

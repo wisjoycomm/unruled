@@ -8,34 +8,34 @@ reports its box in source pixels and in 640x1136 canvas design units.
 """
 import os
 import sys
+import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _img import DW as DESIGN_W, load_cap  # noqa: E402
+from _img import DW as DESIGN_W, load_cap_np  # noqa: E402
 
 
 def main():
     path = sys.argv[1]
     frac = float(sys.argv[2]) if len(sys.argv) > 2 else 0.85
 
-    _, px, w, h = load_cap(path)
-
-    y0 = int(h * frac)
-    xs, ys = [], []
-    for y in range(y0, h):
-        for x in range(w):
-            r, g, b = px[x, y]
-            # The button plate is a bright, strongly blue-dominant fill.
-            if b > 150 and b - r > 45 and g > 90:
-                xs.append(x)
-                ys.append(y)
-
-    if not xs:
+    arr, w, h, scale_factor = load_cap_np(path)
+    sh, _ = arr.shape[:2]
+    sy0 = int(sh * frac)
+    sub = arr[sy0:, :, :].astype(np.int16)
+    r, g, b = sub[:, :, 0], sub[:, :, 1], sub[:, :, 2]
+    mask = (b > 150) & ((b - r) > 45) & (g > 90)
+    if not mask.any():
         print("no button-like pixels found")
         return
 
-    l, r_, t, b_ = min(xs), max(xs), min(ys), max(ys)
+    ys, xs = np.nonzero(mask)
+    l = int(xs.min()) * scale_factor
+    r_ = int(xs.max() + 1) * scale_factor - 1
+    t = int(ys.min() + sy0) * scale_factor
+    b_ = int(ys.max() + sy0 + 1) * scale_factor - 1
+
     scale = DESIGN_W / w
-    print(f"image {w}x{h}   scan from y={y0}")
+    print(f"image {w}x{h} (analyzed at 1/{scale_factor}x)   scan from y={sy0 * scale_factor}")
     print(f"box px      = ({l},{t})-({r_},{b_})  size {r_-l+1}x{b_-t+1}")
     print(f"center px   = ({(l+r_)/2:.1f}, {(t+b_)/2:.1f})")
     print(f"design size = {(r_-l+1)*scale:.1f} x {(b_-t+1)*scale:.1f}")

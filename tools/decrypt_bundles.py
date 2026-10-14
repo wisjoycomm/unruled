@@ -7,6 +7,7 @@ host CPU, and the VM has no filesystem, network or process access.
 import argparse
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -122,12 +123,49 @@ def decrypt_bundle(decoder: Decoder, payload: bytes) -> bytes:
     return bytes(result)
 
 
+_WORKER_DECODER: Decoder | None = None
+
+
+def _init_worker() -> None:
+    global _WORKER_DECODER
+    _WORKER_DECODER = Decoder()
+
+
+def _process_one(task: tuple[Path, Path, bool]) -> dict[str, str]:
+    path, target, resume = task
+    decoder = _WORKER_DECODER or Decoder()
+    row = {"file": path.name}
+    try:
+        if resume and target.exists():
+            data = target.read_bytes()
+            for offset, size, expanded, codec in bundle_blocks(data):
+                raw = data[offset : offset + size]
+                if b"\xee\xdd" in raw[:74]:
+                    raise ValueError("Target still contains encrypted block")
+                unityfs.decompress_block(raw, expanded, codec)
+        else:
+            decoded = decrypt_bundle(decoder, path.read_bytes())
+            target.write_bytes(decoded)
+        row["status"] = "ok"
+    except Exception as exc:
+        row.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+    return row
+
+
 def main():
+    from concurrent.futures import ProcessPoolExecutor
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=project_cfg.RAW_GAME_ASSETS_DIR / "data")
     parser.add_argument("--output", type=Path, default=project_cfg.DECRYPTED_DIR)
     parser.add_argument("--filter", default="*.unity3d")
     parser.add_argument("--limit", type=int)
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=min(8, os.cpu_count() or 4),
+        help="Number of parallel VM worker processes (1 = single-process)",
+    )
     parser.add_argument(
         "--resume", action="store_true", help="Validate and reuse existing plaintext output"
     )
@@ -135,28 +173,30 @@ def main():
         "--report", type=Path, default=project_cfg.REPORTS_DIR / "decryption.json"
     )
     args = parser.parse_args()
-    decoder = Decoder()
     args.output.mkdir(parents=True, exist_ok=True)
-    rows = []
     paths = sorted(args.input.glob(args.filter))
     if args.limit:
         paths = paths[: args.limit]
-    for index, path in enumerate(paths):
-        row = {"file": path.name}
-        try:
-            target = args.output / path.name
-            if args.resume and target.exists():
-                decrypt_bundle(decoder, target.read_bytes())
-            else:
-                decoded = decrypt_bundle(decoder, path.read_bytes())
-                target.write_bytes(decoded)
-            row["status"] = "ok"
-        except Exception as exc:
-            row.update(status="failed", error=f"{type(exc).__name__}: {exc}")
-            print(row, flush=True)
-        rows.append(row)
-        if index % 100 == 0:
-            print(f"{index + 1}/{len(paths)}", flush=True)
+    tasks = [(p, args.output / p.name, args.resume) for p in paths]
+    rows = []
+    if args.workers <= 1 or len(tasks) <= 1:
+        _init_worker()
+        iterator = (_process_one(t) for t in tasks)
+        for index, row in enumerate(iterator):
+            if row["status"] != "ok":
+                print(row, flush=True)
+            rows.append(row)
+            if index % 100 == 0:
+                print(f"{index + 1}/{len(paths)}", flush=True)
+    else:
+        with ProcessPoolExecutor(max_workers=args.workers, initializer=_init_worker) as pool:
+            for index, row in enumerate(pool.map(_process_one, tasks, chunksize=8)):
+                if row["status"] != "ok":
+                    print(row, flush=True)
+                rows.append(row)
+                if index % 100 == 0:
+                    print(f"{index + 1}/{len(paths)}", flush=True)
+    args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(rows, indent=2) + "\n")
     print(f"Decoded {sum(r['status'] == 'ok' for r in rows)}/{len(rows)}")
 
