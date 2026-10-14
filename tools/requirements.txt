@@ -1,0 +1,6 @@
+UnityPy==1.25.3
+lz4==4.4.5
+pyelftools==0.33
+capstone==5.0.9
+unicorn==2.1.4
+certifi==2026.7.22

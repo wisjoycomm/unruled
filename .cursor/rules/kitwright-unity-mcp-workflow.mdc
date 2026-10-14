@@ -1,0 +1,52 @@
+---
+description: Efficient workflow for using Unity MCP to edit, import, compile, inspect, and test Unity projects.
+alwaysApply: true
+version: 1.0.1
+---
+<!-- KitWright Unity managed project skills -->
+<!-- KitWright Unity skill version: unity-mcp-workflow@1.0.1 -->
+
+# Unity MCP Workflow
+
+Use this skill when Codex or another AI agent is working in a Unity project and needs to verify code, prefabs, UI, Play Mode behavior, screenshots, scene hierarchy, console logs, domain reloads, or MCP connection issues.
+
+## Rules
+
+- Use Unity MCP as the source of truth for Editor state, scene hierarchy, prefab references, runtime objects, compilation status, and Play Mode behavior.
+- Locate the real Unity project root and active scene before editing.
+- Inspect hierarchy, prefab paths, selected objects, and relevant component references through MCP before changing user-named objects. Treat user-provided object names as hints, not paths.
+- Tool returns are structured JSON: `{success, message, data}` for success and `{success: false, code, error, data}` for errors. Parse `data` and check `code` (UPPERCASE_SNAKE_CASE) for branching — do not pattern-match free-form text.
+- Prefer `instanceId` returned by tools for follow-up calls. Pass it back via the `find_method=by_id` (or auto-detect when the value parses as an integer). This is more reliable than re-resolving by `name` when scenes contain duplicates.
+- Use the `find_method` parameter on GameObject/Component tools to choose how a target is resolved: `by_id`, `by_name`, `by_path`, `by_tag`, `by_layer`, `by_component`, or `by_id_or_name_or_path`. Default auto-detect picks `by_id` for integers, `by_path` for slashed strings, otherwise `by_name`.
+- When a GameObject has multiple components of the same type, target a specific one with `component_instance_id` instead of the type name to avoid hitting the wrong component.
+- Set component fields with `set_component_properties`: it now writes through SerializedObject, so `[SerializeField] private` fields are reachable. Pass Object references as JSON `{"fileID": <instanceId>}` (preferred) or `{"assetPath": "Assets/..."}`. The response reports per-field success/failure.
+- Inspect editor-level state through dedicated tools: `get_selection`, `set_selection`, `get_prefab_stage`, `get_active_tool`, `get_windows`, `get_tags`, `get_layers`, `get_build_settings`. Do not write `execute_code` snippets just to read this.
+- When no specialized MCP tool covers an editor action, try `execute_menu_item` (e.g. 'GameObject/2D Object/Sprite', 'Window/Layouts/Default', 'Edit/Undo') before falling back to `execute_code`. A path ending in '...' is refused because that is the editor's convention for an item that opens a modal dialog and freezes the editor; pass `allow_modal=true` only for a path you know opens an ordinary dockable window.
+- When Tool Exposure uses the default `core` profile, rely on the focused workflow tools: `execute_code`, recompilation, Play Mode control, hierarchy, console logs, screenshots, input simulation, and performance inspection.
+- When Tool Exposure uses the default `full` profile, all registered MCP tools are available. Prefer specific tools for simple scene, asset, GameObject, component, prefab, camera, UI, package, animation, file, or visual-feedback operations.
+- If Tool Exposure has been customized and a named tool is unavailable, adapt to the exposed tool list and report which expected tool is missing.
+- Never edit Unity serialized files (`.unity`, `.prefab`, `.asset`) with shell text tools or patches. Use Unity MCP or Editor APIs for scenes, prefabs, and ScriptableObject assets; shell tools may only inspect or locate these files.
+- Choose the correct edit surface: source files with normal repo tools, scene objects through Unity APIs and saved scenes, prefab assets through `PrefabUtility.LoadPrefabContents` and `SaveAsPrefabAsset`.
+- For `execute_code`, prefer the IKitWrightCommand template over the legacy `static string Run()`: include `using KitWright.Editor.Tools.Scripting;`, implement `IKitWrightCommand`, and use `ctx.RegisterObjectCreation`, `ctx.RegisterObjectModification`, `ctx.DestroyObject` so created/modified objects participate in editor Undo automatically. Use `ctx.Log` / `ctx.LogWarning` / `ctx.LogError` for traceable output that comes back in the response (without polluting the Unity console).
+- Batch related Unity-side changes in one guarded `execute_code` snippet. Null-guard every lookup, return explicit missing path/object/component messages, and include concise before/after values.
+- `execute_code` now refreshes the asset database and waits for compilation to finish before compiling the snippet, so external file edits are picked up automatically. For other tools that depend on the latest assemblies (e.g. `get_compilation_errors`), still call `request_recompile` after external file edits.
+- After code or resource edits, exit Play Mode if needed and call `request_recompile` first: it is the call that imports the edits, and unless it reports that Unity started importing or recompiling, its answer already carries the compile errors. Only when it reports that, call `wait_for_compilation(force_refresh=false)`, whose answer carries them too. Do not follow either call with `get_compilation_errors`. Never call `wait_for_compilation(force_refresh=false)` without a `request_recompile` before it: on its own it reads the state from before the edits.
+- When editing several `.cs` files, write them all with your own file tools, then call `request_recompile` once. `create_script`, `edit_script`, `patch_script`, `edit_script_members` and `write_file` each refresh the asset database, so writing N files through them starts up to N imports and compiles.
+- Group independent reads into one `batch_execute` call (`commands`: a JSON array of `{"name", "params"}` objects) instead of one round-trip per read.
+- Call `wait_for_compilation` before Play Mode, screenshots, or conclusions when a previous edit has not yet been confirmed.
+- `enter_play_mode` and a recompile both reload the domain. In broker mode (the default) the broker holds requests across the reload and delivers them once Unity is back, so make the next call directly — no poll loop; a call answered with "Unity is recompiling scripts, so this tool did not run" is simply repeated. If the connection is refused instead (direct mode), poll the JSON-RPC `ping` method over HTTP (with native tools only, `get_reload_recovery_status`) until it answers. Never probe with `tools/list`: it returns the whole tool catalog, tens of KB per probe.
+- `request_recompile` is rejected while Unity is in Play Mode — Unity does not process script compilation or domain reloads while playing. Call `exit_play_mode` first, then retry `request_recompile`.
+- If a request is interrupted by script recompilation or domain reload, treat the result as unknown until `get_reload_recovery_status`, compilation checks, and MCP readback confirm the final state.
+- Read back exact values from Unity after changes, not only success messages.
+- Test actual behavior in Unity through hierarchy, console logs, Play Mode, UI interactions, screenshots, or targeted `execute_code` checks.
+- When Unity readback and text files disagree for serialized scene or prefab state, trust Unity readback and investigate the asset path.
+- Do not run self-healing fallback loops. If a reference, path, tool, or package is missing, report one clear error and stop or skip that item instead of guessing new paths or silently creating replacements.
+- For `UnityEngine.Object` references, never use `??=` for lazy rebinding. Use explicit `if (field == null) field = Resolve();` checks so Unity fake-null references are handled correctly.
+- If Play Mode is entered, exit Play Mode before finishing unless the user explicitly wants it left running.
+
+## Metadata
+
+- Skill id: `unity-mcp-workflow`
+- Skill version: `1.0.1`
+- Built-in: `True`
+- Source: `https://github.com/kitwright/unity-mcp`

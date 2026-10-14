@@ -10,7 +10,8 @@
 
 ## How to work
 - **Small task** (clear, about 1–3 files): just do it. No plan file.
-- **Big feature:** plan first in plan mode. Write the plan to `.temp/plan.md` as a short checklist: one line per step, plus how we'll know it's done. Wait for my OK, then do one step at a time and tick it off. When the feature is finished, delete the file.
+- **Big feature:** plan first in plan mode. Write the plan to `.temp/plan.md` as a short checklist: one line per step, plus how we'll know it's done. Wait for my OK, then do one step at a time and tick it off. When the feature is finished, rename and move it to `/plan` folder, clear plan.md.
+- **Change Log** even git store history of change but you still log what we do in brief in `.docs/change_log.md` in format: yyyy-mm-dd - who did it - brief description
 - **Architecture:** the rules are in `.agents/rules/architecture.md`. Master specification: `.docs/unruled_master_gdd.md` and `.docs/unruled_master_data_sheets.md`. How the project works now: `.docs/overview.md`; where it is heading, why, and rule exceptions: `.docs/plan/roadmap.md`; the server API: `.docs/plan/backend-api.md`. Read them only when changing structure, data shapes or assemblies. Update the overview when you change structure; when we make an important decision, add 1–2 lines to the roadmap on *why*.
 - **Later:** ideas and bugs for later go in `.temp/backlog.md`, one line each. Don't read it unless I ask.
 - **Comparing with the original game:** use the `ldplayer-compare` skill.
