@@ -4,9 +4,13 @@ import json
 import re
 import shutil
 from pathlib import Path
+import sys
 
-ROOT=Path(__file__).resolve().parents[1]
-SOURCE=ROOT/'AllAssetsExport/ExportedProject/Assets'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+
+ROOT=project_cfg.ROOT
+SOURCE=project_cfg.EXPORTED_ASSETS_DIR
 GUID=re.compile(r'guid: ([a-f0-9]{32})')
 
 
@@ -24,7 +28,7 @@ def main():
             skeleton=by_guid[re.search(r'skeletonJSON:.*guid: ([a-f0-9]{32})',text)[1]]
             raw=skeleton.read_bytes()
             version=re.search(rb'[34]\.[0-9]+\.[0-9]+',raw[:200])
-            target=ROOT/'ResourcesExport/Spine'/p.stem
+            target=project_cfg.RESOURCES_EXPORT_DIR/'Spine'/p.stem
             target.mkdir(parents=True,exist_ok=True)
             ext='.json' if raw.lstrip().startswith(b'{') else '.skel.bytes'
             (target/(p.stem.replace('_SkeletonData','')+ext)).write_bytes(raw)

@@ -17,16 +17,16 @@ import project_cfg  # noqa: E402
 # Setup paths relative to repo root
 ROOT = project_cfg.ROOT
 SRC = project_cfg.LUA_CONFIG_DIR
-LUA = ROOT / "ResourcesExport" / "Lua" / "32"
+LUA = project_cfg.RESOURCES_EXPORT_DIR / "Lua" / "32"
 DST = project_cfg.DATA_DIR / "Survivors"
 
 # ==============================================================================
-# Default rows decoded from ResourcesExport/Lua/32/*.bytes
+# Default rows decoded from Lua/32/*.bytes
 # The JSON export leaves out each table's default row. Rows inherit missing fields
 # from these table defaults.
 # ==============================================================================
 
-# Decoded from ResourcesExport/Lua/32/game_config_default_qtime_seqment.bytes
+# Decoded from Lua/32/game_config_default_qtime_seqment.bytes
 # Table default row: state 4 (Eat), time_start 12, time_end 24, group_id 3,
 # wave_satiety -0.05, wave_sleep -0.05, wave_comfort_work -0.13, wave_mood_work -0.13.
 DEFAULT_QTIME = {
@@ -40,11 +40,11 @@ DEFAULT_QTIME = {
     "wave_mood_work": -0.13,
 }
 
-# Decoded from ResourcesExport/Lua/32/game_config_default_build301.bytes
+# Decoded from Lua/32/game_config_default_build301.bytes
 # Table default row: calendar is 3 for level 10+
 DEFAULT_CALENDAR = 3
 
-# Decoded from ResourcesExport/Lua/32/game_config_default_attribute.bytes
+# Decoded from Lua/32/game_config_default_attribute.bytes
 # Table default row: type 3, range [80, 100], value 0.0
 DEFAULT_ATTRIBUTE = {
     "type": 3,
@@ -52,7 +52,7 @@ DEFAULT_ATTRIBUTE = {
     "value": 0.0,
 }
 
-# Decoded from ResourcesExport/Lua/32/game_config_default_innercity_tips_config.bytes
+# Decoded from Lua/32/game_config_default_innercity_tips_config.bytes
 # Table default row: is_permanent is [2, 720]
 DEFAULT_TIP_IS_PERMANENT = [2, 720]
 

@@ -1,9 +1,9 @@
 """Extract the Chapter 3 rescue cutscene timeline (guide_anim_04) into JSON and Markdown cue sheets.
 
 Reads the 110 ScriptableObject JSON files in:
-  ResourcesExport/Config/AllScriptables/scene_city_plot_guide_anim_04_507f715315c40ca06ff087677265e3f0/
+  ${RESOURCES_CONFIG_DIR}/AllScriptables/scene_city_plot_guide_anim_04_507f715315c40ca06ff087677265e3f0/
 resolving tracks, child tracks, clips (m_Start, m_Duration, m_DisplayName), and playable assets by m_PathID.
-Also cross-references AllAssetsExport (guide_anim_04.playable + guide_anim_04.prefab + Recorded*.anim) when
+Also cross-references ${EXPORTED_ASSETS_DIR} (guide_anim_04.playable + guide_anim_04.prefab + Recorded*.anim) when
 present to resolve PlayableDirector scene bindings and ControlTrack exposed references.
 
 Outputs:
@@ -132,7 +132,7 @@ def load_json_folder(folder):
 
 
 def resolve_scene_bindings(by_id):
-    """Map track m_PathID -> bound GameObject path and exposedName -> GameObject path if AllAssetsExport exists."""
+    """Map track m_PathID -> bound GameObject path and exposedName -> GameObject path if exported assets exist."""
     tl_path = os.path.join(EXPORT_ASSETS, "MonoBehaviour", "guide_anim_04.playable")
     prefab_path = os.path.join(EXPORT_ASSETS, "GameObject", "guide_anim_04.prefab")
     if not (os.path.exists(tl_path) and os.path.exists(prefab_path)):
@@ -304,7 +304,7 @@ def extract_timeline():
 
     return {
         "name": root_data.get("m_Name", "guide_anim_04"),
-        "source_folder": "ResourcesExport/Config/AllScriptables/scene_city_plot_guide_anim_04_507f715315c40ca06ff087677265e3f0",
+        "source_folder": f"{project_cfg.CFG.get('RESOURCES_CONFIG_DIR', 'Config')}/AllScriptables/scene_city_plot_guide_anim_04_507f715315c40ca06ff087677265e3f0",
         "framerate": framerate,
         "total_length": total_length,
         "clip_count": len(cues),
@@ -318,8 +318,8 @@ def build_markdown(data):
     lines = [
         "# `guide_anim_04` Timeline Cue Sheet (Chapter 3 Bahiti Rescue)",
         "",
-        f"- **Source folder**: `ResourcesExport/Config/AllScriptables/scene_city_plot_guide_anim_04_507f715315c40ca06ff087677265e3f0/` (110 JSON files)",
-        f"- **Scene bindings cross-checked with**: `AllAssetsExport/ExportedProject/Assets/MonoBehaviour/guide_anim_04.playable` & `GameObject/guide_anim_04.prefab`",
+        f"- **Source folder**: `{data['source_folder']}/` (110 JSON files)",
+        f"- **Scene bindings cross-checked with**: `{project_cfg.CFG.get('EXPORTED_ASSETS_DIR', 'ExportedAssets')}/MonoBehaviour/guide_anim_04.playable` & `GameObject/guide_anim_04.prefab`",
         f"- **Framerate**: {data['framerate']:.0f} fps",
         f"- **Total timeline length**: **{data['total_length']:.3f} s** (active cutscene ends and triggers dialog `1000125` at **21.067–21.133 s**; `CCidle` runs to **24.633 s**; `等待` wait clip holds to **26.016 s**)",
         f"- **Total timed clips**: {data['clip_count']} clips (+ {data['transform_track_count']} recorded InfiniteClip transform tracks)",

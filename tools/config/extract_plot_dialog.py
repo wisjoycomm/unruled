@@ -84,7 +84,7 @@ def main():
             dict({"emotion": emo, "bust": avatar}, **({"spine": SPINE[avatar]} if avatar in SPINE else {}))
             for emo, avatar in emotions.items()]})
 
-    data = {"_source": "ResourcesExport new_player_plot + new_player_talker_config + game_languages_local_en (tools/config/extract_plot_dialog.py)",
+    data = {"_source": f"{project_cfg.CFG.get('RESOURCES_EXPORT_DIR', 'ResourcesExport')} new_player_plot + new_player_talker_config + game_languages_local_en (tools/config/extract_plot_dialog.py)",
             "speakers": speakers, "scripts": scripts}
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=1, ensure_ascii=False)

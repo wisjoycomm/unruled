@@ -97,7 +97,7 @@ def main():
     if not shutil.which("ffmpeg"):
         raise SystemExit("Install ffmpeg first")
     jobs, banks = [], []
-    paths = sorted((ROOT / "game_asset/assets/sound").glob('*')) + sorted((ROOT / "downloaded/assets/sound").glob('*'))
+    paths = sorted((project_cfg.RAW_GAME_ASSETS_DIR / "sound").glob('*')) + sorted((project_cfg.DOWNLOADED_ASSETS_DIR / "sound").glob('*'))
     for path in paths:
         if path.suffix not in (".acb", ".awb"):
             continue

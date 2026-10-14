@@ -79,10 +79,14 @@ def inspect_bundle(path):
 
 
 def main():
-    report_dir = ROOT / "reports"
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import project_cfg
+
+    report_dir = project_cfg.REPORTS_DIR
     report_dir.mkdir(exist_ok=True)
     rows = []
-    for path in sorted((ROOT / "game_asset/assets/data").glob("*.unity3d")):
+    for path in sorted((project_cfg.RAW_GAME_ASSETS_DIR / "data").glob("*.unity3d")):
         try:
             rows.append(inspect_bundle(path))
         except Exception as exc:

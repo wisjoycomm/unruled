@@ -297,7 +297,7 @@ def main():
         furniture.append(entry)
 
     out = {
-        "_source": "ResourcesExport/Config/LuaJSON build3xx + furnitureinfo (extract_city.py); names from .docs/WOS_FTUE_Log_LDPlayer.md",
+        "_source": f"{project_cfg.CFG.get('LUA_CONFIG_DIR', 'Config/LuaJSON')} build3xx + furnitureinfo (extract_city.py)",
         "buildings": buildings,
         "furniture": furniture,
     }

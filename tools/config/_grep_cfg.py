@@ -4,7 +4,10 @@ import json
 import os
 import sys
 
-CFG = os.path.join("ResourcesExport", "Config", "LuaJSON")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+CFG = str(project_cfg.LUA_CONFIG_DIR)
 needles = [n.lower() for n in sys.argv[1:]]
 for p in sorted(glob.glob(os.path.join(CFG, "*.json"))):
     try:

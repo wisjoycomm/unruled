@@ -10,7 +10,7 @@ Regenerates Data/Heroes/heroes.json from the original LuaJSON config:
 
 All display text (hero names, skill names/descriptions, story prose, UI strings) is resolved
 through the game's own English localization table, recovered by tools/config/extract_i18n.py
-into ResourcesExport/Config/i18n/en.json. Nothing here is invented: if a key is missing the
+into ${RESOURCES_CONFIG_DIR}/i18n/en.json. Nothing here is invented: if a key is missing the
 build fails loudly rather than substituting placeholder text.
 
 Run: python tools/config/extract_i18n.py && python tools/config/extract_heroes.py
@@ -104,7 +104,7 @@ def leader_type(cfg):
     return int(cfg.get("leader_type", 3))
 
 # hero_config keeps a default row (the Lua table's fallback for absent keys); the JSON export drops it.
-# Read from ResourcesExport/Lua/64/game_config_default_hero_config.bytes. The SR rows omit every ratio, so
+# Read from Lua/64/game_config_default_hero_config.bytes. The SR rows omit every ratio, so
 # they take 80 here, which LD confirms: Bahiti Lv1 = 5,000 x 80% + 10,000 x 80% + 2 x 720 skill = 13,440.
 HERO_CONFIG_DEFAULT = {
     "uplv_atk_ratio": 80, "uplv_def_ratio": 100, "uplv_hp_ratio": 80, "uplv_power_ratio": 80,
@@ -378,10 +378,10 @@ def main():
         })
 
     out = {
-        "_source": "ResourcesExport/Config/LuaJSON hero_config/hero_level/hero_star/skill_config/hero_story "
+        "_source": f"{project_cfg.CFG.get('LUA_CONFIG_DIR', 'Config/LuaJSON')} hero_config/hero_level/hero_star/skill_config/hero_story "
                    "(tools/config/extract_heroes.py). Every display string is resolved from the game's own "
                    "English localization table (tools/config/extract_i18n.py -> "
-                   "ResourcesExport/Config/i18n/en.json); no text is authored here.",
+                   f"{project_cfg.CFG.get('RESOURCES_CONFIG_DIR', 'Config')}/i18n/en.json); no text is authored here.",
         "ui": {key: i18n(key) for key in UI_KEYS},
         "heroes": heroes,
         "levelCurve": level_rows(hero_level),

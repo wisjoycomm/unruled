@@ -3,7 +3,7 @@
 
 Usage: python tools/ui/sprite_border.py hero_bg_031 common_bg_021 ...
 Output: "<name>  ours=(l,b,r,t)  orig=(l,b,r,t)  [DIFF]"
-The original values come from AllAssetsExport/ExportedProject/Assets/Texture2D/*.meta.
+The original values come from ${EXPORTED_ASSETS_DIR}/Texture2D/*.meta.
 """
 import glob
 import os

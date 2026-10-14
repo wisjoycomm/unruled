@@ -77,5 +77,14 @@ REF_APK_PATH: Path = ROOT / CFG.get("REF_APK_NAME", f"{REF_GAME_PACKAGE}.apk")
 EXPORTED_ASSETS_DIR: Path = ROOT / CFG.get(
     "EXPORTED_ASSETS_DIR", "AllAssetsExport/ExportedProject/Assets"
 )
+ASSET_RIPPER_EXPORT_DIR: Path = ROOT / CFG.get(
+    "ASSET_RIPPER_EXPORT_DIR", "AssetRipperExport/ExportedProject/Assets"
+)
+RESOURCES_EXPORT_DIR: Path = ROOT / CFG.get("RESOURCES_EXPORT_DIR", "ResourcesExport")
 LUA_CONFIG_DIR: Path = ROOT / CFG.get("LUA_CONFIG_DIR", "ResourcesExport/Config/LuaJSON")
 RESOURCES_CONFIG_DIR: Path = ROOT / CFG.get("RESOURCES_CONFIG_DIR", "ResourcesExport/Config")
+RAW_GAME_ASSETS_DIR: Path = ROOT / CFG.get("RAW_GAME_ASSETS_DIR", "game_asset/assets")
+DOWNLOADED_ASSETS_DIR: Path = ROOT / CFG.get("DOWNLOADED_ASSETS_DIR", "downloaded/assets")
+EXTRACTED_DIR: Path = ROOT / CFG.get("EXTRACTED_DIR", "extracted")
+DECRYPTED_DIR: Path = ROOT / CFG.get("DECRYPTED_DIR", "decrypted/assets/data")
+REPORTS_DIR: Path = ROOT / CFG.get("REPORTS_DIR", "reports")

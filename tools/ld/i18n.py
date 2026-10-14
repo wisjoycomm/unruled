@@ -9,10 +9,10 @@ import os
 import re
 import sys
 
-PATH = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), "..", "..",
-    "AllAssetsExport", "ExportedProject", "Assets", "TextAsset",
-    "game_languages_local_en.bytes"))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+PATH = str(project_cfg.EXPORTED_ASSETS_DIR / "TextAsset" / "game_languages_local_en.bytes")
 
 
 def clean(b):

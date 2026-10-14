@@ -23,12 +23,13 @@ ROOT = project_cfg.ROOT
 
 
 def main():
-    base = ROOT / "extracted/base/assets/bin/Data"
+    base_root = project_cfg.EXTRACTED_DIR / "base"
+    base = base_root / "assets/bin/Data"
     base.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(project_cfg.REF_APK_PATH) as archive:
         for name in archive.namelist():
             if name.startswith("assets/bin/Data/") and not name.endswith("/"):
-                path = ROOT / "extracted/base" / name
+                path = base_root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(archive.read(name))
     output = project_cfg.RECOVERED_ASSETS_ROOT / "BaseAPK"

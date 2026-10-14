@@ -9,9 +9,12 @@ import os
 import re
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LUA = os.path.join(ROOT, "ResourcesExport", "Config", "LuaJSON")
-LANG = os.path.join(ROOT, "ResourcesExport", "Lua", "32", "game_languages_local_en.bytes")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+LUA = str(project_cfg.LUA_CONFIG_DIR)
+LANG = str(project_cfg.RESOURCES_EXPORT_DIR / "Lua" / "32" / "game_languages_local_en.bytes")
 KEYS = ["ScenarioName", "Id", "FunctionName", "ParamName", "MsgId", "WaitTime", "ConstructionBID",
         "CustomPositon", "ViewID", "BtnName", "TransformParam", "HelperParam"]
 

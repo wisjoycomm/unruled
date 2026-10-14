@@ -5,7 +5,7 @@ Everything is derived from the original configs rather than hand-written:
   * game_config_default_hero_search_client.json - the two recruit banners
   * game_config_default_hero_search_config.json - banner rotation -> drop pool ids
   * game_config_default_drop_conf.json          - drop pool contents + weights
-  * ResourcesExport/Config/i18n/en.json         - banner display names
+  * ${RESOURCES_CONFIG_DIR}/i18n/en.json        - banner display names
 
 The original game has exactly two recruit banners, Advanced and Epic ("Recruit
 Hero"); there is no Drill Camp entry in hero_search_client. Each banner rotates

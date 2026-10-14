@@ -9,14 +9,17 @@ import os
 import re
 import sys
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-ASSETS = os.path.join(ROOT, "AllAssetsExport", "ExportedProject", "Assets")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+ASSETS = str(project_cfg.EXPORTED_ASSETS_DIR)
 _guid_cache = None
 
 
 def guid_names():
     global _guid_cache
-    cache_file = os.path.join(os.path.dirname(__file__), ".guid_cache.json")
+    cache_file = str(project_cfg.TEMP_DIR / "guid_cache.json")
     if _guid_cache is None and os.path.exists(cache_file):
         import json
         _guid_cache = json.load(open(cache_file, encoding="utf-8"))

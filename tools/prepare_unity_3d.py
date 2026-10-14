@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import project_cfg  # noqa: E402
 
 ROOT = project_cfg.ROOT
-SOURCE = ROOT/'AssetRipperExport/ExportedProject/Assets'
+SOURCE = project_cfg.ASSET_RIPPER_EXPORT_DIR
 DEST = project_cfg.RECOVERED_ASSETS_ROOT/'Recovered3D'
 GUID = re.compile(r'guid: ([a-f0-9]{32})')
 HEADER = re.compile(r'^--- !u!(\d+) &(-?\d+).*$', re.M)
@@ -128,7 +128,7 @@ def main():
         rows.append({'source':str(p.relative_to(SOURCE)),'path':str(target.relative_to(project_cfg.UNITY_ROOT)), 'bundle':bundle})
     report = {'counts':dict(collections.Counter(Path(r['path']).parts[3] for r in rows)),
               'missing_references':missing, 'assets':rows,
-              'material_note':'Built-in Standard replaces proprietary mobile shaders; original shaders remain in AssetRipperExport.'}
+              'material_note':'Built-in Standard replaces proprietary mobile shaders; original shaders remain in exported assets.'}
     (ROOT/'reports/unity_3d_staging.json').write_text(json.dumps(report,indent=2)+'\n')
     print(report['counts']); print('Unresolved references:',len(missing))
 

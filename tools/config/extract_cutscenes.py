@@ -181,7 +181,7 @@ def main():
             result.append(cut)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
-        json.dump({"_source": "AllAssetsExport TimelineAssets guide_anim_* + prefab PlayableDirector bindings",
+        json.dump({"_source": f"{project_cfg.CFG.get('EXPORTED_ASSETS_DIR', 'ExportedAssets')} TimelineAssets guide_anim_* + prefab PlayableDirector bindings",
                    "cutscenes": result}, f, indent=1, ensure_ascii=False)
     print("wrote", OUT)
 

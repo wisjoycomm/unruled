@@ -7,11 +7,15 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+import sys
 import UnityPy
 from config_json import dumps
 
-ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'ResourcesExport'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+
+ROOT=project_cfg.ROOT
+OUT=project_cfg.RESOURCES_EXPORT_DIR
 
 
 def safe(name):
@@ -21,7 +25,7 @@ def safe(name):
 def main():
     rows=[]
     for kind in ('config','world','arsenal','brawlwar','garden','minewar','supremacywar','trianglewar'):
-        files={p.name:p for base in ('game_asset/assets','downloaded/assets') for p in (ROOT/base/kind).glob('*') if p.is_file()}
+        files={p.name:p for base in (project_cfg.RAW_GAME_ASSETS_DIR, project_cfg.DOWNLOADED_ASSETS_DIR) for p in (base/kind).glob('*') if p.is_file()}
         for p in files.values():
             folder=OUT/'Config'/('DeviceJSON' if kind=='config' else 'WorldBinary')
             if kind not in ('config','world'):folder=folder/kind
@@ -34,8 +38,8 @@ def main():
             else:
                 target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(p,target)
             rows.append({'source':str(p.relative_to(ROOT)),'output':str(target.relative_to(ROOT)), 'status':'exported'})
-    paths=list((ROOT/'decrypted/assets/data').glob('config_*.unity3d'))
-    paths+=list((ROOT/'decrypted/assets/data').glob('luapackage_*.unity3d'))
+    paths=list(project_cfg.DECRYPTED_DIR.glob('config_*.unity3d'))
+    paths+=list(project_cfg.DECRYPTED_DIR.glob('luapackage_*.unity3d'))
     for path in sorted(paths):
         env=UnityPy.load(str(path))
         arch='64' if path.name.startswith('luapackage_64') else '32'

@@ -7,12 +7,10 @@ import os
 import re
 import sys
 
-ROOT = os.path.abspath(
-    os.path.join(
-        os.path.dirname(__file__), "..", "..",
-        "AllAssetsExport", "ExportedProject", "Assets", "TextAsset",
-    )
-)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.EXPORTED_ASSETS_DIR / "TextAsset")
 
 
 def resolve(name):

@@ -69,7 +69,7 @@ KẾT QUẢ KIỂM CHỨNG
 - Spine: {summary['spine'].get('exported',0)} bộ skeleton + atlas + PNG, phiên bản 3.8.86/3.8.99.
 
 TÀI NGUYÊN GỐC ĐẦY ĐỦ
-AllAssetsExport/ExportedProject/Assets chứa bản xuất chưa bỏ thành phần gameplay:
+{project_cfg.CFG.get('EXPORTED_ASSETS_DIR', 'ExportedAssets')} chứa bản xuất chưa bỏ thành phần gameplay:
 - GameObject: {full['files_by_extension'].get('.prefab',0):,} prefab.
 - Mesh, AnimationClip, Avatar, AnimatorController: model, clip, rig, controller gốc.
 - Texture2D: PNG và .meta chứa thông tin sprite; có {counts.get('Sprite',0):,} Sprite trong nguồn.
@@ -82,20 +82,20 @@ và thiết lập sprite. Prefab UI, timeline, particle và shader trong bản x
 còn cần nối lại runtime/script/material tương ứng trước khi hoạt động đầy đủ.
 
 CONFIG / SPINE / LUA
-ResourcesExport/Config/LuaJSON: bảng config Lua đã đọc thành dữ liệu JSON.
-ResourcesExport/Config/AllScriptables: dữ liệu serialized kèm đường dẫn bundle và PathID.
+{project_cfg.CFG.get('LUA_CONFIG_DIR', 'Config/LuaJSON')}: bảng config Lua đã đọc thành dữ liệu JSON.
+{project_cfg.CFG.get('RESOURCES_CONFIG_DIR', 'Config')}/AllScriptables: dữ liệu serialized kèm đường dẫn bundle và PathID.
   Số vô hạn/NaN được giữ bằng object {{"$float":"Infinity"}}, {{"$float":"-Infinity"}}
   hoặc {{"$float":"NaN"}} để file tuân thủ JSON chuẩn. PPtr vẫn là tham chiếu dữ liệu gốc.
-ResourcesExport/Config/Localization: bản dịch TXT và JSON.
-ResourcesExport/Config/WorldBinary: dữ liệu map gốc; định dạng nhị phân được giữ nguyên.
-ResourcesExport/Spine: mỗi bộ có .skel.bytes, .atlas.txt và PNG cùng thư mục.
+{project_cfg.CFG.get('RESOURCES_CONFIG_DIR', 'Config')}/Localization: bản dịch TXT và JSON.
+{project_cfg.CFG.get('RESOURCES_CONFIG_DIR', 'Config')}/WorldBinary: dữ liệu map gốc; định dạng nhị phân được giữ nguyên.
+{project_cfg.CFG.get('RESOURCES_EXPORT_DIR', 'ResourcesExport')}/Spine: mỗi bộ có .skel.bytes, .atlas.txt và PNG cùng thư mục.
   Cần runtime Spine-Unity tương thích 3.8 để tạo SkeletonDataAsset và phát animation.
-ResourcesExport/Lua/32 và /64: LuaJIT bytecode nguyên gốc, có thể phân tích tiếp.
+{project_cfg.CFG.get('RESOURCES_EXPORT_DIR', 'ResourcesExport')}/Lua/32 và /64: LuaJIT bytecode nguyên gốc, có thể phân tích tiếp.
 
 GIỚI HẠN CẦN BIẾT
 - Bộ Recovered3D đã bỏ script gameplay và particle component để dùng độc lập.
   Các prefab chưa đạt kiểm tra nằm trong Assets/Incomplete3D; bản đầy đủ
-  vẫn còn trong AllAssetsExport. Chi tiết: reports/character_catalog.csv.
+  vẫn còn trong {project_cfg.CFG.get('EXPORTED_ASSETS_DIR', 'ExportedAssets')}. Chi tiết: reports/character_catalog.csv.
 - Shader riêng của game được thay bằng Standard trong bộ Recovered3D. Vật liệu,
   hiệu ứng, outline và ánh sáng có thể khác bản game; bản shader xuất gốc được giữ lại.
 - Scene gốc chủ yếu là cấu trúc khởi tạo. Nhiều đối tượng được code/Lua tạo lúc chạy.

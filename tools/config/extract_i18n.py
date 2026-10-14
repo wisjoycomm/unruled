@@ -12,10 +12,14 @@ import argparse
 import json
 import os
 import re
+import sys
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-SRC = os.path.join(ROOT, "ResourcesExport", "Lua", "64")
-OUT = os.path.join(ROOT, "ResourcesExport", "Config", "i18n")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+SRC = str(project_cfg.RESOURCES_EXPORT_DIR / "Lua" / "64")
+OUT = str(project_cfg.RESOURCES_CONFIG_DIR / "i18n")
 
 # A localization key: lowercase/digits/underscore, e.g. hero_story_50000_1, hero_ui_34, hero_btn_07.
 KEY_RE = re.compile(r"^[a-z][a-z0-9_]{2,}$")

@@ -11,11 +11,15 @@ import json
 import struct
 from pathlib import Path
 
+import sys
 import lz4.block
 from unicorn import Uc, UC_ARCH_ARM64, UC_MODE_ARM, UC_HOOK_CODE
 from unicorn.arm64_const import *
 
-ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+
+ROOT = project_cfg.ROOT
 INPUT = 0x72000000
 STOP = 0x5000f000
 
@@ -23,13 +27,13 @@ STOP = 0x5000f000
 class Decoder:
     def __init__(self):
         required = {
-            'extracted/native/libunity.so': '31c0a92b1ff42547cbd200d7d88e8f7df9218aad6dcee147ab9dbf8e6e8788a0',
-            'reports/elf_probe_memory.bin': 'b6edcd75b7c5ee0052be8a8a93a2bdfd158510d55bf026628e2266dd14481689',
-            'reports/elf_probe_heap.bin': '531cffc1e0b78761725c04075d34c84dd6eabb300f4b8483711b4fe8b66d792d',
+            project_cfg.EXTRACTED_DIR / 'native/libunity.so': '31c0a92b1ff42547cbd200d7d88e8f7df9218aad6dcee147ab9dbf8e6e8788a0',
+            project_cfg.REPORTS_DIR / 'elf_probe_memory.bin': 'b6edcd75b7c5ee0052be8a8a93a2bdfd158510d55bf026628e2266dd14481689',
+            project_cfg.REPORTS_DIR / 'elf_probe_heap.bin': '531cffc1e0b78761725c04075d34c84dd6eabb300f4b8483711b4fe8b66d792d',
         }
-        for name, digest in required.items():
-            if hashlib.sha256((ROOT/name).read_bytes()).hexdigest() != digest:
-                raise ValueError(f'Decoder snapshot/build mismatch: {name}')
+        for path, digest in required.items():
+            if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                raise ValueError(f'Decoder snapshot/build mismatch: {path}')
         self.uc = uc = Uc(UC_ARCH_ARM64, UC_MODE_ARM)
         for address, size in [(0, 0x1800000), (0x50000000, 0x10000),
                               (0x60000000, 0x8000000), (0x70000000, 0x100000),
@@ -144,12 +148,12 @@ def decrypt_bundle(decoder, payload):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--input', type=Path, default=ROOT/'game_asset/assets/data')
-    parser.add_argument('--output', type=Path, default=ROOT/'decrypted/assets/data')
+    parser.add_argument('--input', type=Path, default=project_cfg.RAW_GAME_ASSETS_DIR/'data')
+    parser.add_argument('--output', type=Path, default=project_cfg.DECRYPTED_DIR)
     parser.add_argument('--filter', default='*.unity3d')
     parser.add_argument('--limit', type=int)
     parser.add_argument('--resume', action='store_true', help='Validate and reuse existing plaintext output')
-    parser.add_argument('--report', type=Path, default=ROOT/'reports/decryption.json')
+    parser.add_argument('--report', type=Path, default=project_cfg.REPORTS_DIR/'decryption.json')
     args = parser.parse_args()
     decoder = Decoder()
     args.output.mkdir(parents=True, exist_ok=True)

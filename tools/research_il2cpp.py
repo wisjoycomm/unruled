@@ -56,7 +56,8 @@ def main():
 
     import project_cfg
     pkg_lib = f"/data/app/{project_cfg.REF_GAME_PACKAGE}/lib/arm64/libil2cpp.so"
-    with (ROOT / "extracted/native/libil2cpp.so").open("rb") as f:
+    lib_path = project_cfg.EXTRACTED_DIR / "native/libil2cpp.so"
+    with lib_path.open("rb") as f:
         elf = ELFFile(f)
         for segment in elf.iter_segments():
             if segment["p_type"] == "PT_LOAD":
@@ -121,7 +122,7 @@ def main():
             if path in ("/proc/self/maps", "/proc/1234/maps"):
                 payload = ''.join(map_lines).encode()
             elif path.endswith('/libil2cpp.so'):
-                payload = (ROOT / "extracted/native/libil2cpp.so").read_bytes()
+                payload = lib_path.read_bytes()
             else:
                 raise RuntimeError(f"No virtual file: {path}")
             result = alloc(16)

@@ -9,9 +9,12 @@ import os
 import re
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-ASSETS = os.path.join(ROOT, "AllAssetsExport", "ExportedProject", "Assets")
-INDEX = os.path.join(ROOT, ".ldcap", "sprite_guid_index.json")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+ASSETS = str(project_cfg.EXPORTED_ASSETS_DIR)
+INDEX = str(project_cfg.TEMP_DIR / "sprite_guid_index.json")
 
 
 def build_index():

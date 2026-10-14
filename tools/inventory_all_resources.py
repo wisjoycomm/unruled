@@ -5,17 +5,21 @@ import json
 import re
 import shutil
 from pathlib import Path
+import sys
 import UnityPy
 from config_json import dumps
 
-ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+
+ROOT=project_cfg.ROOT
 
 
 def main():
     rows=[]; totals=collections.Counter(); config_count=0; failures=[]
-    out=ROOT/'ResourcesExport/Config/AllScriptables'
+    out=project_cfg.RESOURCES_CONFIG_DIR/'AllScriptables'
     out.mkdir(parents=True,exist_ok=True)
-    paths=sorted((ROOT/'decrypted/assets/data').glob('*.unity3d'))
+    paths=sorted(project_cfg.DECRYPTED_DIR.glob('*.unity3d'))
     for index,path in enumerate(paths):
         try:
             env=UnityPy.load(str(path)); counts=collections.Counter()
@@ -35,7 +39,7 @@ def main():
                         failures.append({'bundle':path.name,'path_id':obj.path_id,'error':str(exc)})
                 elif obj.type.name=='TextAsset' and path.name.startswith('config_language_'):
                     d=obj.read();name=re.sub(r'[^\w.-]+','_',d.m_Name)
-                    target=ROOT/'ResourcesExport/Config/Localization'/name
+                    target=project_cfg.RESOURCES_CONFIG_DIR/'Localization'/name
                     target.parent.mkdir(parents=True,exist_ok=True)
                     target.with_suffix('.txt').write_text(d.m_Script,encoding='utf8')
                     values={};last=None
@@ -49,10 +53,9 @@ def main():
             failures.append({'bundle':path.name,'error':str(exc)})
         if index%500==0:print(f'{index+1}/{len(paths)}',flush=True)
     report={'bundle_count':len(paths),'object_counts':dict(totals),'scriptables_exported':config_count,'failures':failures,'bundles':rows}
-    (ROOT/'reports/all_resources_inventory.json').write_text(json.dumps(report,indent=2)+'\n')
+    (project_cfg.REPORTS_DIR/'all_resources_inventory.json').write_text(json.dumps(report,indent=2)+'\n')
     for name in ['AllScriptables','Localization']:
-        import project_cfg
-        shutil.copytree(ROOT/'ResourcesExport/Config'/name,project_cfg.RECOVERED_ASSETS_ROOT/'Data'/name,dirs_exist_ok=True)
+        shutil.copytree(project_cfg.RESOURCES_CONFIG_DIR/name,project_cfg.RECOVERED_ASSETS_ROOT/'Data'/name,dirs_exist_ok=True)
     print('Counts',dict(totals));print('Scriptables',config_count,'failures',len(failures))
 
 

@@ -96,7 +96,7 @@ def main():
         rows.append(row)
 
     out = {
-        "_source": "ResourcesExport/Config/LuaJSON item_config + systemconfig.speed_up_give_change/init_item, i18n/en.json",
+        "_source": f"{project_cfg.CFG.get('LUA_CONFIG_DIR', 'Config/LuaJSON')} item_config + systemconfig.speed_up_give_change/init_item, i18n/en.json",
         "items": rows,
     }
     DST.parent.mkdir(parents=True, exist_ok=True)
