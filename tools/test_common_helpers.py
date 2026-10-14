@@ -45,23 +45,24 @@ class TestCommonHelpers(unittest.TestCase):
     def test_downsampled_1080p_and_at2_preview(self):
         import numpy as np
         with tempfile.TemporaryDirectory() as tmp:
-            # 1) 1080x1920 image with a white box at x=200..399, y=400..599
+            # 1) 1080x1920 image with a white box at x=240..479, y=480..719
             arr_full = np.full((1920, 1080, 3), 10, dtype=np.uint8)
-            arr_full[400:600, 200:400] = 240
+            arr_full[480:720, 240:480] = 240
             full_path = Path(tmp) / "full_1080p.png"
             Image.fromarray(arr_full).save(full_path)
 
             arr_small, rw, rh, scale = _img.load_cap_np(str(full_path))
-            self.assertEqual((rw, rh, scale), (1080, 1920, 2))
-            self.assertEqual(arr_small.shape, (960, 540, 3))
+            self.assertEqual((rw, rh), (1080, 1920))
+            self.assertAlmostEqual(scale, 2.4)
+            self.assertEqual(arr_small.shape, (800, 450, 3))
             box = _img.bright_bbox(arr_small, rw, rh, thresh=200, scale=scale)
-            self.assertEqual(box, (200, 399, 400, 599))
+            self.assertEqual(box, (240, 479, 480, 719))
 
-            # 2) @2.png preview (450x800 -> real 900x1600, scale=2)
+            # 2) @2.png preview (450x800 -> real 900x1600, scale=2.0)
             at2_path = Path(tmp) / "0001_test@2.png"
-            Image.fromarray(arr_small[:800, :450]).save(at2_path)
+            Image.fromarray(arr_small).save(at2_path)
             _, rw2, rh2, scale2 = _img.load_cap_np(str(at2_path))
-            self.assertEqual((rw2, rh2, scale2), (900, 1600, 2))
+            self.assertEqual((rw2, rh2, scale2), (900, 1600, 2.0))
 
     def test_arm64_vm_import_stubs_fallback(self):
         stubs = read_elf_import_stubs(Path("/nonexistent/libunity.so"))

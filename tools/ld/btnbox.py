@@ -11,7 +11,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _img import DW as DESIGN_W, load_cap_np  # noqa: E402
+from _img import DW as DESIGN_W, load_cap_np, to_real_span  # noqa: E402
 
 
 def main():
@@ -19,7 +19,7 @@ def main():
     frac = float(sys.argv[2]) if len(sys.argv) > 2 else 0.85
 
     arr, w, h, scale_factor = load_cap_np(path)
-    sh, _ = arr.shape[:2]
+    sh, sw = arr.shape[:2]
     sy0 = int(sh * frac)
     sub = arr[sy0:, :, :].astype(np.int16)
     r, g, b = sub[:, :, 0], sub[:, :, 1], sub[:, :, 2]
@@ -29,13 +29,11 @@ def main():
         return
 
     ys, xs = np.nonzero(mask)
-    l = int(xs.min()) * scale_factor
-    r_ = int(xs.max() + 1) * scale_factor - 1
-    t = int(ys.min() + sy0) * scale_factor
-    b_ = int(ys.max() + sy0 + 1) * scale_factor - 1
+    l, r_ = to_real_span(int(xs.min()), int(xs.max()), scale_factor)
+    t, b_ = to_real_span(int(ys.min() + sy0), int(ys.max() + sy0), scale_factor)
 
     scale = DESIGN_W / w
-    print(f"image {w}x{h} (analyzed at 1/{scale_factor}x)   scan from y={sy0 * scale_factor}")
+    print(f"image {w}x{h} (analyzed at {sw}x{sh})   scan from y={int(round(sy0 * scale_factor))}")
     print(f"box px      = ({l},{t})-({r_},{b_})  size {r_-l+1}x{b_-t+1}")
     print(f"center px   = ({(l+r_)/2:.1f}, {(t+b_)/2:.1f})")
     print(f"design size = {(r_-l+1)*scale:.1f} x {(b_-t+1)*scale:.1f}")

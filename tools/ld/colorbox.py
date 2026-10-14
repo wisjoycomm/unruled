@@ -8,7 +8,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _img import load_cap_np  # noqa: E402
+from _img import load_cap_np, to_real_span  # noqa: E402
 
 
 def main():
@@ -19,7 +19,7 @@ def main():
 
     arr, w, h, scale = load_cap_np(name)
     if len(sys.argv) > 7:
-        l, t, r, b = (int(v) // scale for v in sys.argv[4:8])
+        l, t, r, b = (int(round(int(v) / scale)) for v in sys.argv[4:8])
     else:
         l, t, r, b = 0, 0, arr.shape[1], arr.shape[0]
 
@@ -30,18 +30,16 @@ def main():
         return
 
     ys, xs = np.nonzero(mask)
-    x0 = int(xs.min() + l) * scale
-    x1 = int(xs.max() + l + 1) * scale - 1
-    y0 = int(ys.min() + t) * scale
-    y1 = int(ys.max() + t + 1) * scale - 1
+    x0, x1 = to_real_span(int(xs.min() + l), int(xs.max() + l), scale)
+    y0, y1 = to_real_span(int(ys.min() + t), int(ys.max() + t), scale)
     print(f"bbox l={x0} t={y0} r={x1} b={y1} "
-          f"w={x1-x0+1} h={y1-y0+1} px={int(mask.sum()) * scale * scale}")
+          f"w={x1-x0+1} h={y1-y0+1} px={int(round(int(mask.sum()) * scale * scale))}")
 
     # widest rows help identify the true panel body vs. stray matches
     row_sums = mask.sum(axis=1)
     nonzero_rows = np.nonzero(row_sums)[0]
     top_idx = nonzero_rows[np.argsort(-row_sums[nonzero_rows])[:5]]
-    print("widest rows:", ", ".join(f"y={(int(y) + t) * scale}:{int(row_sums[y]) * scale}px" for y in top_idx))
+    print("widest rows:", ", ".join(f"y={int(round((int(y) + t) * scale))}:{int(round(int(row_sums[y]) * scale))}px" for y in top_idx))
 
 
 if __name__ == "__main__":
