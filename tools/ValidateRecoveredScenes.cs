@@ -21,7 +21,7 @@ public static class ValidateRecoveredScenes
     public static void Run()
     {
         var report = new Report { unityVersion = Application.unityVersion };
-        foreach (string path in Directory.GetFiles("Assets/WhiteoutSurvival/Recovered3D/Scenes", "*.unity"))
+        foreach (string path in Directory.GetFiles("Assets/RecoveredAssets/Recovered3D/Scenes", "*.unity"))
         {
             var entry = new Entry { path = path };
             try

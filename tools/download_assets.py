@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read the shipped Whiteout manifest and download hash-verified missing files.
+"""Read the shipped reference game manifest and download hash-verified missing files.
 
 Examples:
   .venv/bin/python tools/download_assets.py inventory
@@ -168,7 +168,7 @@ def fetch(row, base_url, output, retries=3):
                     return {"path": row["path"], "status": "downloaded_verified"}
                 partial.write_bytes(b"")
                 offset = 0
-            headers = {"User-Agent": "WhiteoutAssetInventory/1.0", "Accept-Encoding": "identity"}
+            headers = {"User-Agent": "AssetInventory/1.0", "Accept-Encoding": "identity"}
             if offset:
                 headers["Range"] = f"bytes={offset}-"
             request = urllib.request.Request(url, headers=headers)
@@ -204,6 +204,8 @@ def fetch(row, base_url, output, retries=3):
 
 
 def main():
+    import project_cfg
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=["inventory", "download"])
     source = parser.add_mutually_exclusive_group()
@@ -219,7 +221,7 @@ def main():
     args = parser.parse_args()
     if args.limit < 0:
         parser.error("--limit must be nonnegative")
-    apk = args.apk or ROOT / "com.gof.global.apk"
+    apk = args.apk or project_cfg.REF_APK_PATH
     if args.manifest is not None:
         manifest = read_saved_manifest(args.manifest)
     elif args.apk is not None or apk.exists():

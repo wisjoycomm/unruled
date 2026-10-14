@@ -1,23 +1,23 @@
 # tools/ — what is here
 
-Run Python with `py` (Python 3.14; `python` is not on PATH in Git Bash).
-Paths below are relative to the repo root `D:\UnityProjects\endlesswinter`.
+Run Python with `python` (or `py`).
+All scripts load project paths, package names, and emulator settings from `project.config` (and optional `.env` / environment variable overrides) via `tools/project_cfg.py`.
 
 Cleaned 2026-10-14: one-off and superseded scripts were removed (promo*/solve*/stars* measurements,
-old cap.py/.sh capture helpers, duplicate dumpers). Everything listed below is current.
+old cap.py/.sh capture helpers, duplicate dumpers). Everything listed below is current and project-agnostic.
 
 ---
 
 ## 1. LDPlayer driver — `tools/ld/ldctl.py` (start here)
 
-One tool for playing the original game on LDPlayer: quick actions, smart capture,
+One tool for playing a reference game on LDPlayer: quick actions, smart capture,
 an action log, contact sheets and wireframe storyboards.
 
 ### Basics
 ```bash
-L="py tools/ld/ldctl.py"
+L="python tools/ld/ldctl.py"
 $L up                       # start LDPlayer + game if no device
-$L session ch6-ftue         # all output goes to UnityAssets/.temp/ld-captures/ch6-ftue/
+$L session ch6-ftue         # all output goes to .temp/ld-captures/ch6-ftue/
 $L shot intro               # capture now
 $L tap dialog               # tap a named point (tools/ld/points.json)
 $L tap 225 700 --s 2        # tap at preview coords (x2 = real 450,1400)
@@ -80,9 +80,9 @@ Other commands: `home`, `text "..."`, `note "..."`, `points`, `session` (no arg 
 ## 2. Wireframe from a continuous capture — `tools/ld/wire.py`
 
 For folders recorded as a continuous frame stream (`frames/NNNNN_<ms>.png` + `actions.log` + `beats.md`,
-e.g. `UnityAssets/.temp/ld-ch1`):
+e.g. `.temp/ld-ch1`):
 ```bash
-py tools/ld/wire.py UnityAssets/.temp/ld-ch1     # -> <folder>/wire/
+python tools/ld/wire.py .temp/ld-ch1     # -> <folder>/wire/
 ```
 - `actions_NN.jpg` — every logged action as **before -> after**: the tap/swipe drawn on the screen it was
   done on, the settled result next to it with the changed area boxed, the beat it belongs to as a yellow
@@ -113,7 +113,7 @@ py tools/ld/wire.py UnityAssets/.temp/ld-ch1     # -> <folder>/wire/
 
 ## 4. Config -> Unity data (`tools/config/`)
 
-Regenerate `Assets/_EndlessWinter/Data/...` from `ResourcesExport/Config/LuaJSON`.
+Regenerate `${DATA_DIR}/...` (configured in `project.config`) from `${LUA_CONFIG_DIR}`.
 
 | File | Output |
 |---|---|

@@ -8,9 +8,11 @@ using UnityEngine.Rendering;
 
 public static class BuildRecoveredGallery
 {
+    const string RecoveredRoot = "Assets/RecoveredAssets/Recovered3D";
+
     public static void Run()
     {
-        const string root = "Assets/WhiteoutSurvival/Recovered3D";
+        const string root = RecoveredRoot;
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         string[] names = {"blaster", "captain_hendrik", "chef", "cop", "doc", "explorer", "hunter", "hector", "molly", "eleonora", "freya", "beastmaster"};
         int count = 0;
@@ -56,8 +58,8 @@ public static class BuildRecoveredGallery
     }
     public static void Export()
     {
-        string destination = Path.GetFullPath(Path.Combine(Application.dataPath,"../../WhiteoutSurvival_3D.unitypackage"));
-        AssetDatabase.ExportPackage("Assets/WhiteoutSurvival/Recovered3D",destination,ExportPackageOptions.Recurse);
+        string destination = Path.GetFullPath(Path.Combine(Application.dataPath, $"../../{Application.productName}_3D.unitypackage"));
+        AssetDatabase.ExportPackage(RecoveredRoot, destination, ExportPackageOptions.Recurse);
         if (Application.isBatchMode) EditorApplication.Exit(0);
     }
     static Bounds VisibleBounds(GameObject instance)

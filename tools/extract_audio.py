@@ -14,8 +14,13 @@ import tempfile
 import wave
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "UnityAssets/Assets/WhiteoutSurvival/Audio"
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+
+ROOT = project_cfg.ROOT
+OUTPUT = project_cfg.RECOVERED_ASSETS_ROOT / "Audio"
 
 
 def afs2_streams(data, base):
@@ -67,7 +72,7 @@ def convert(job):
         return {**row, "status": "skipped_encrypted"}
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="whiteout-audio-") as temp:
+        with tempfile.TemporaryDirectory(prefix=f"{project_cfg.PROJECT_SLUG}-audio-") as temp:
             source = Path(temp) / "source.hca"
             wav = Path(temp) / "output.wav"
             source.write_bytes(payload)

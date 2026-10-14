@@ -54,6 +54,8 @@ def main():
             result.append(c)
         raise ValueError("Unterminated string")
 
+    import project_cfg
+    pkg_lib = f"/data/app/{project_cfg.REF_GAME_PACKAGE}/lib/arm64/libil2cpp.so"
     with (ROOT / "extracted/native/libil2cpp.so").open("rb") as f:
         elf = ELFFile(f)
         for segment in elf.iter_segments():
@@ -61,7 +63,7 @@ def main():
                 uc.mem_write(segment["p_vaddr"], segment.data())
                 start = segment['p_vaddr'] & ~4095
                 end = (segment['p_vaddr'] + segment['p_memsz'] + 4095) & ~4095
-                map_lines.append(f"{start:012x}-{end:012x} r-xp {segment['p_offset'] & ~4095:08x} 00:00 1 /data/app/com.gof.global/lib/arm64/libil2cpp.so\n")
+                map_lines.append(f"{start:012x}-{end:012x} r-xp {segment['p_offset'] & ~4095:08x} 00:00 1 {pkg_lib}\n")
         dyn = {t.entry.d_tag: t.entry.d_val for t in elf.get_section_by_name(".dynamic").iter_tags()}
         symbols = list(elf.get_section_by_name(".dynsym").iter_symbols())
         for address, size in [(dyn["DT_RELA"], dyn["DT_RELASZ"]), (dyn["DT_JMPREL"], dyn["DT_PLTRELSZ"])]:
@@ -185,7 +187,7 @@ def main():
             result = TLS + 128
         elif name == "dladdr":
             if a < 0x5000000:
-                uc.mem_write(b, struct.pack('<QQQQ',put_string('/data/app/com.gof.global/lib/arm64/libil2cpp.so'),0,0,0))
+                uc.mem_write(b, struct.pack('<QQQQ',put_string(pkg_lib),0,0,0))
                 result=1
         elif name == "dlopen":
             library = string(a).decode() if a else '<self>'

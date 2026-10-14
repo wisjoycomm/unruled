@@ -6,7 +6,13 @@ import json
 import tarfile
 from pathlib import Path, PurePosixPath
 
-ROOT = Path(__file__).resolve().parents[1]
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+
+ROOT = project_cfg.ROOT
+EXPECTED_PREFIX = f"Assets/{project_cfg.RECOVERED_SUBDIR}"
 
 
 def verify(path):
@@ -29,7 +35,7 @@ def verify(path):
             entries[key].add(kind)
             if kind == 'pathname':
                 name = archive.extractfile(member).read().decode('utf8').rstrip('\x00\r\n')
-                assert name.startswith('Assets/WhiteoutSurvival'), name
+                assert name.startswith(EXPECTED_PREFIX), name
                 assert '..' not in PurePosixPath(name).parts, name
                 paths[key] = name
     counts = collections.Counter()
@@ -56,7 +62,8 @@ def validate_counts(rows):
 
 
 def main():
-    rows = [verify(ROOT/name) for name in ['WhiteoutSurvival_3D.unitypackage', 'WhiteoutSurvival_MediaData.unitypackage']]
+    p = project_cfg.PROJECT_NAME
+    rows = [verify(ROOT/name) for name in [f'{p}_3D.unitypackage', f'{p}_MediaData.unitypackage']]
     validate_counts(rows)
     (ROOT/'reports/package_verification.json').write_text(json.dumps(rows, indent=2)+'\n')
     print(json.dumps(rows, indent=2))

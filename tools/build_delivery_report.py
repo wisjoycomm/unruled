@@ -4,8 +4,14 @@ import collections
 import hashlib
 import json
 from pathlib import Path
+import sys
 
-ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+
+ROOT=project_cfg.ROOT
+REC_SUBDIR=project_cfg.RECOVERED_SUBDIR
+PKG_PREFIX=project_cfg.PROJECT_NAME
 
 
 def report(name):
@@ -34,18 +40,18 @@ def main():
              'usable_animated_prefabs':sum(p['sampledClips']>0 and not p['problems'] for p in unity['prefabs']),
              'spine':dict(collections.Counter(r['status'] for r in spine))}
     (ROOT/'reports/delivery_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
-    manual=f'''WHITEOUT SURVIVAL — TÀI NGUYÊN CHO UNITY
+    manual=f'''{PKG_PREFIX.upper()} — TÀI NGUYÊN CHO UNITY
 Phiên bản nguồn: 1.33.9, build 304. Unity kiểm chứng: {unity['unityVersion']}.
 
 MỞ VÀ DÙNG
-1. Unity Hub > Add project from disk > chọn thư mục UnityAssets.
-2. Mở Assets/WhiteoutSurvival/Recovered3D/Demo/CharacterGallery.unity, nhấn Play.
-3. Prefab nhân vật: Assets/WhiteoutSurvival/Recovered3D/Prefabs/Characters.
+1. Unity Hub > Add project from disk > chọn thư mục dự án Unity ({project_cfg.UNITY_ROOT.name}).
+2. Mở Assets/{REC_SUBDIR}/Recovered3D/Demo/CharacterGallery.unity, nhấn Play.
+3. Prefab nhân vật: Assets/{REC_SUBDIR}/Recovered3D/Prefabs/Characters.
    Model môi trường: .../Prefabs/Environment. Clip: .../Animations.
    Controller mẫu: .../Playback. Scene: .../Scenes.
 4. Để chuyển sang project khác, dùng Assets > Import Package > Custom Package:
-   - WhiteoutSurvival_3D.unitypackage
-   - WhiteoutSurvival_MediaData.unitypackage
+   - {PKG_PREFIX}_3D.unitypackage
+   - {PKG_PREFIX}_MediaData.unitypackage
    Hai gói này được xuất bằng Unity Editor thật. Dùng Built-in Render Pipeline.
    Dung lượng: 3D {packages[0]['bytes']/1e9:.2f} GB; MediaData {packages[1]['bytes']/1e9:.2f} GB.
    Mesh ở dạng .asset, prefab .prefab, clip .anim; Unity dùng trực tiếp, không cần FBX.
@@ -88,7 +94,7 @@ ResourcesExport/Lua/32 và /64: LuaJIT bytecode nguyên gốc, có thể phân t
 
 GIỚI HẠN CẦN BIẾT
 - Bộ Recovered3D đã bỏ script gameplay và particle component để dùng độc lập.
-  Các prefab chưa đạt kiểm tra nằm trong UnityAssets/Assets/Incomplete3D; bản đầy đủ
+  Các prefab chưa đạt kiểm tra nằm trong Assets/Incomplete3D; bản đầy đủ
   vẫn còn trong AllAssetsExport. Chi tiết: reports/character_catalog.csv.
 - Shader riêng của game được thay bằng Standard trong bộ Recovered3D. Vật liệu,
   hiệu ứng, outline và ánh sáng có thể khác bản game; bản shader xuất gốc được giữ lại.

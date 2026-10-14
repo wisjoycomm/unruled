@@ -4,7 +4,7 @@ from AssetRipper's export into the Recovered3D art library, with every dependenc
 
 Assets already in the project (same GUID) are reused, not copied. Game scripts are stripped from the prefabs.
 Material shaders are left as exported (stubs, missing in the project); the Unity side remaps them with
-EndlessWinter/Exploration/Import Battle VFX (ExploreBattleFxImporter).
+the Editor Battle VFX Importer.
 """
 import argparse
 import collections
@@ -13,11 +13,15 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+import sys
 
-ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'AllAssetsExport/ExportedProject/Assets'
-PROJECT = ROOT / 'UnityAssets/Assets'
-DEST = PROJECT / 'WhiteoutSurvival/Recovered3D'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+
+ROOT = project_cfg.ROOT
+SOURCE = project_cfg.EXPORTED_ASSETS_DIR
+PROJECT = project_cfg.ASSETS_ROOT
+DEST = project_cfg.RECOVERED_ASSETS_ROOT / 'Recovered3D'
 GUID = re.compile(r'guid: ([a-f0-9]{32})')
 HEADER = re.compile(r'^--- !u!(\d+) &(-?\d+).*$', re.M)
 BUILTIN = {'0' * 32, '0000000000000000e000000000000000', '0000000000000000f000000000000000'}
@@ -114,7 +118,7 @@ def main():
             target = target.with_name(target.stem + '__' + GUID.search(path.with_suffix(path.suffix + '.meta').read_text())[1][:12] + target.suffix)
         if target.exists():
             raise ValueError(f'Output collision: {target}')
-        rows.append({'source': str(path.relative_to(SOURCE)), 'path': str(target.relative_to(ROOT / 'UnityAssets'))})
+        rows.append({'source': str(path.relative_to(SOURCE)), 'path': str(target.relative_to(project_cfg.UNITY_ROOT))})
         if args.dry_run:
             continue
         target.parent.mkdir(parents=True, exist_ok=True)

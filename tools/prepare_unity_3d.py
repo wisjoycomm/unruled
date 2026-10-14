@@ -7,9 +7,14 @@ import re
 import shutil
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+
+ROOT = project_cfg.ROOT
 SOURCE = ROOT/'AssetRipperExport/ExportedProject/Assets'
-DEST = ROOT/'UnityAssets/Assets/WhiteoutSurvival/Recovered3D'
+DEST = project_cfg.RECOVERED_ASSETS_ROOT/'Recovered3D'
 GUID = re.compile(r'guid: ([a-f0-9]{32})')
 HEADER = re.compile(r'^--- !u!(\d+) &(-?\d+).*$', re.M)
 # Geometry, skeleton, renderers, animation and colliders. Game scripts, effects,
@@ -120,7 +125,7 @@ def main():
         # Do not retain Android bundle assignments in a reusable art library.
         meta = re.sub(r'^  assetBundleName:.*$', '  assetBundleName:', meta, flags=re.M)
         Path(str(target)+'.meta').write_text(meta)
-        rows.append({'source':str(p.relative_to(SOURCE)),'path':str(target.relative_to(ROOT/'UnityAssets')), 'bundle':bundle})
+        rows.append({'source':str(p.relative_to(SOURCE)),'path':str(target.relative_to(project_cfg.UNITY_ROOT)), 'bundle':bundle})
     report = {'counts':dict(collections.Counter(Path(r['path']).parts[3] for r in rows)),
               'missing_references':missing, 'assets':rows,
               'material_note':'Built-in Standard replaces proprietary mobile shaders; original shaders remain in AssetRipperExport.'}

@@ -51,7 +51,8 @@ def main():
     report={'bundle_count':len(paths),'object_counts':dict(totals),'scriptables_exported':config_count,'failures':failures,'bundles':rows}
     (ROOT/'reports/all_resources_inventory.json').write_text(json.dumps(report,indent=2)+'\n')
     for name in ['AllScriptables','Localization']:
-        shutil.copytree(ROOT/'ResourcesExport/Config'/name,ROOT/'UnityAssets/Assets/WhiteoutSurvival/Data'/name,dirs_exist_ok=True)
+        import project_cfg
+        shutil.copytree(ROOT/'ResourcesExport/Config'/name,project_cfg.RECOVERED_ASSETS_ROOT/'Data'/name,dirs_exist_ok=True)
     print('Counts',dict(totals));print('Scriptables',config_count,'failures',len(failures))
 
 

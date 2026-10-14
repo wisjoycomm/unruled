@@ -5,8 +5,13 @@ import json
 import subprocess
 from pathlib import Path
 
-ROOT=Path(__file__).resolve().parents[1]
-OUTPUT=ROOT/'UnityAssets/Assets/WhiteoutSurvival/Video'
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+
+ROOT=project_cfg.ROOT
+OUTPUT=project_cfg.RECOVERED_ASSETS_ROOT/'Video'
 
 
 def convert(path):

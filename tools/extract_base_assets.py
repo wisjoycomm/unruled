@@ -13,21 +13,25 @@ import zipfile
 from collections import Counter
 from pathlib import Path
 
+import sys
 import UnityPy
 
-ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import project_cfg  # noqa: E402
+
+ROOT = project_cfg.ROOT
 
 
 def main():
     base = ROOT / "extracted/base/assets/bin/Data"
     base.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(ROOT / "com.gof.global.apk") as archive:
+    with zipfile.ZipFile(project_cfg.REF_APK_PATH) as archive:
         for name in archive.namelist():
             if name.startswith("assets/bin/Data/") and not name.endswith("/"):
                 path = ROOT / "extracted/base" / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(archive.read(name))
-    output = ROOT / "UnityAssets/Assets/WhiteoutSurvival/BaseAPK"
+    output = project_cfg.RECOVERED_ASSETS_ROOT / "BaseAPK"
     rows = []
     for path in sorted(base.iterdir()):
         if not re.fullmatch(r"[0-9a-f]{32}", path.name):

@@ -21,6 +21,9 @@ class DownloadTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
+        tls_patcher = patch.object(tool, "tls_context", return_value=None)
+        tls_patcher.start()
+        self.addCleanup(tls_patcher.stop)
         self.root = Path(self.temp.name)
         self.payload = b"UnityFS\0verified-test-payload"
         self.row = {"path": "data/test.unity3d", "size": len(self.payload),
