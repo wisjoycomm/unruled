@@ -1,32 +1,22 @@
 """Summarize an exported Unity TimelineAsset (.playable): tracks, clips, timing, referenced assets."""
-import os, re, sys, glob
+import os, re, sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import project_cfg  # noqa: E402
+from unity_yaml import field, load_guid_map, parse_documents  # noqa: E402
 
 EXPORT = str(project_cfg.EXPORTED_ASSETS_DIR)
-_guid_cache = {}
+_guid_map = None
 
 def guid_name(guid):
-    if guid not in _guid_cache:
-        import subprocess
-        r = subprocess.run(["grep", "-rl", "--include=*.meta", "guid: " + guid, EXPORT], capture_output=True, text=True)
-        first = r.stdout.splitlines()[:1]
-        _guid_cache[guid] = os.path.relpath(first[0][:-5], EXPORT) if first else guid
-    return _guid_cache[guid]
+    global _guid_map
+    if _guid_map is None:
+        _guid_map = load_guid_map(EXPORT)
+    rel = _guid_map.get(guid)
+    return rel[:-5] if rel and rel.endswith(".meta") else (rel or guid)
 
 def docs(text):
-    out = {}
-    for block in re.split(r"^--- ", text, flags=re.M)[1:]:
-        head, _, body = block.partition("\n")
-        m = re.search(r"&(-?\d+)", head)
-        if m:
-            out[m.group(1)] = body
-    return out
-
-def field(body, name):
-    m = re.search(r"^\s*" + re.escape(name) + r": (.*)$", body, flags=re.M)
-    return m.group(1).strip() if m else None
+    return {fid: body for fid, (_, body) in parse_documents(text).items()}
 
 def main(path):
     text = open(path, encoding="utf-8").read()

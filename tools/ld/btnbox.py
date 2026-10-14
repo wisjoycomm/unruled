@@ -6,20 +6,18 @@ Usage:
 Scans the lower part of the image for the saturated blue button plate and
 reports its box in source pixels and in 640x1136 canvas design units.
 """
+import os
 import sys
 
-from PIL import Image
-
-DESIGN_W = 640.0
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import DW as DESIGN_W, load_cap  # noqa: E402
 
 
 def main():
     path = sys.argv[1]
     frac = float(sys.argv[2]) if len(sys.argv) > 2 else 0.85
 
-    im = Image.open(path).convert("RGB")
-    w, h = im.size
-    px = im.load()
+    _, px, w, h = load_cap(path)
 
     y0 = int(h * frac)
     xs, ys = [], []

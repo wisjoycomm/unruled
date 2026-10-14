@@ -7,9 +7,8 @@ Usage:
 import os
 import sys
 
-from PIL import Image
-
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".ldcap"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import load_cap  # noqa: E402
 
 
 def main():
@@ -19,8 +18,7 @@ def main():
     thresh = int(sys.argv[4]) if len(sys.argv) > 4 else 26
     gap = int(sys.argv[5]) if len(sys.argv) > 5 else 6
 
-    im = Image.open(os.path.join(OUT, f"{name}.png")).convert("RGB")
-    px = im.load()
+    im, px, _, _ = load_cap(name)
 
     hits = []
     for x in range(im.width):

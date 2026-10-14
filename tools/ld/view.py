@@ -9,12 +9,13 @@ import sys
 
 from PIL import Image
 
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".ldcap"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import OUT, load_cap  # noqa: E402
 
 
 def main():
     name = sys.argv[1]
-    im = Image.open(os.path.join(OUT, f"{name}.png")).convert("RGB")
+    im, _, _, _ = load_cap(name)
 
     if len(sys.argv) > 2 and sys.argv[2] == "box":
         l, t, r, b = (int(v) for v in sys.argv[3:7])

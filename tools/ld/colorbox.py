@@ -6,9 +6,8 @@ Usage:
 import os
 import sys
 
-from PIL import Image
-
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".ldcap"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import load_cap  # noqa: E402
 
 
 def main():
@@ -17,12 +16,11 @@ def main():
     target = tuple(int(hexv[i:i + 2], 16) for i in (0, 2, 4))
     tol = int(sys.argv[3]) if len(sys.argv) > 3 else 12
 
-    im = Image.open(os.path.join(OUT, f"{name}.png")).convert("RGB")
-    px = im.load()
+    _, px, w, h = load_cap(name)
     if len(sys.argv) > 7:
         l, t, r, b = (int(v) for v in sys.argv[4:8])
     else:
-        l, t, r, b = 0, 0, im.width, im.height
+        l, t, r, b = 0, 0, w, h
 
     xs, ys = [], []
     rowcount = {}

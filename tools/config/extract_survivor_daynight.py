@@ -6,19 +6,13 @@ into Data/Survivors/survivor_daynight.json.
 Run:
     python tools/config/extract_survivor_daynight.py
 """
-import json
-import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import project_cfg  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import DATA_DIR, load_lua_json as load_json, write_json  # noqa: E402
 
-# Setup paths relative to repo root
-ROOT = project_cfg.ROOT
-SRC = project_cfg.LUA_CONFIG_DIR
-LUA = project_cfg.RESOURCES_EXPORT_DIR / "Lua" / "32"
-DST = project_cfg.DATA_DIR / "Survivors"
+DST = DATA_DIR / "Survivors"
 
 # ==============================================================================
 # Default rows decoded from Lua/32/*.bytes
@@ -55,12 +49,6 @@ DEFAULT_ATTRIBUTE = {
 # Decoded from Lua/32/game_config_default_innercity_tips_config.bytes
 # Table default row: is_permanent is [2, 720]
 DEFAULT_TIP_IS_PERMANENT = [2, 720]
-
-
-def load_json(name: str):
-    path = SRC / f"game_config_default_{name}.json"
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 def extract_schedule(raw_rows):
@@ -338,8 +326,7 @@ def main():
     }
 
     out_file = DST / "survivor_daynight.json"
-    DST.mkdir(parents=True, exist_ok=True)
-    out_file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    write_json(out_file, data, indent=2)
     print(f"Successfully wrote {out_file} ({out_file.stat().st_size} bytes)")
 
 

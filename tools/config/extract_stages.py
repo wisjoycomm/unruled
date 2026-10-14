@@ -4,12 +4,9 @@ import re
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import project_cfg  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import DATA_DIR as DATA, load_lua_json as load, project_cfg  # noqa: E402
 
-ROOT = project_cfg.ROOT
-SRC = project_cfg.LUA_CONFIG_DIR
-DATA = project_cfg.DATA_DIR
 RESOURCE_TYPES = project_cfg.SCRIPTS_ROOT / "Contracts/Economy/ResourceType.cs"
 STAGE_COUNT = 50
 # drop_conf chests have no item owner yet. Do not send their ids to ItemService or the wallet.
@@ -21,10 +18,6 @@ MONSTER_DEFAULTS = {"attack": 138, "hp": 2160}
 # Stages 35 and 36 are the only rows without a power, so they share the dropped default, which lies between stage 34
 # (145442) and stage 37 (154970). ESTIMATE (midpoint) until an LD capture of stage 35 shows the real value.
 STAGE_POWER_ESTIMATES = {35: 150206, 36: 150206}
-
-
-def load(name):
-    return json.loads((SRC / f"game_config_default_{name}.json").read_text(encoding="utf-8"))
 
 
 def main():

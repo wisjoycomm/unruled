@@ -10,12 +10,13 @@ from collections import Counter
 
 from PIL import Image
 
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".ldcap"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import cap_path  # noqa: E402
 
 
 def main():
     for name in sys.argv[1:]:
-        path = os.path.join(OUT, f"{name}.png")
+        path = cap_path(name)
         if not os.path.exists(path):
             print(f"{name}: MISSING")
             continue

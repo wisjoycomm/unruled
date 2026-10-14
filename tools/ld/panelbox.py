@@ -10,13 +10,8 @@ Usage:
 import os
 import sys
 
-from PIL import Image
-
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".ldcap"))
-
-
-def load(name):
-    return Image.open(os.path.join(OUT, f"{name}.png")).convert("RGB")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import load_cap  # noqa: E402
 
 
 def runs(pixels, start):
@@ -38,8 +33,7 @@ def runs(pixels, start):
 
 def main():
     name = sys.argv[1]
-    im = load(name)
-    px = im.load()
+    _, px, _, _ = load_cap(name)
     mode = sys.argv[2]
 
     if mode == "px":

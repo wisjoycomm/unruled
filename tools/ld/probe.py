@@ -7,16 +7,13 @@ Usage:
 import os
 import sys
 
-from PIL import Image
-
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".ldcap"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import load_cap  # noqa: E402
 
 
 def main():
     name = sys.argv[1]
-    im = Image.open(os.path.join(OUT, f"{name}.png")).convert("RGB")
-    px = im.load()
-    w, h = im.size
+    _, px, w, h = load_cap(name)
 
     if len(sys.argv) > 5:
         xlo, ylo, xhi, yhi = (int(v) for v in sys.argv[2:6])

@@ -18,15 +18,13 @@ Per-mission reward when the row has none: 20 gems + 100 wood (capture 071).
 
 Run:  python tools/config/extract_chapters.py
 """
-import json, os, sys
+import os, sys
 
 sys.stdout.reconfigure(encoding="utf-8")
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import project_cfg  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import DATA_DIR, load_lua_json as load, write_json  # noqa: E402
 
-ROOT = str(project_cfg.ROOT)
-SRC = str(project_cfg.LUA_CONFIG_DIR)
-DST = str(project_cfg.DATA_DIR / "Missions")
+DST = str(DATA_DIR / "Missions")
 
 CHAPTERS = {
     "1001": ("Chapter 1", "A Place to Call Home"),
@@ -47,11 +45,6 @@ TROOP_NAMES = {1: "Infantry", 2: "Lancers", 3: "Marksmen"}
 FURNITURE_TYPE_NAMES = {1: ("Bunk Bed", "Bunk Beds"), 2: ("Desk", "Desks"), 18: ("Hunters' Station", "Hunters' Stations"),
                         24: ("Workbench", "Workbenches"), 30: ("Sorting Station", "Sorting Stations")}
 DEFAULT_REWARD = [101, 20, 103, 100]
-
-
-def load(name):
-    with open(os.path.join(SRC, name), encoding="utf-8") as f:
-        return json.load(f)
 
 
 def decode(task_id, row):
@@ -125,10 +118,8 @@ def main():
             m["reward"] = row.get("reward") or DEFAULT_REWARD
             missions.append(m)
         chapters.append({"id": int(cid), "title": title, "name": name, "reward": c["rewards"], "missions": missions})
-    os.makedirs(DST, exist_ok=True)
     path = os.path.join(DST, "chapters_ch1-3.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"_source": "chapter_quest_conf + chapter_task (extract_chapters.py)", "chapters": chapters}, f, indent=1, ensure_ascii=False)
+    write_json(path, {"_source": "chapter_quest_conf + chapter_task (extract_chapters.py)", "chapters": chapters})
     print("wrote", path)
     for ch in chapters:
         print(ch["title"], ch["name"], ch["reward"])

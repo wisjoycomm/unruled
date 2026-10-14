@@ -19,13 +19,10 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import project_cfg  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import DATA_DIR, load_i18n, load_lua_json as cfg  # noqa: E402
 
-ROOT = str(project_cfg.ROOT)
-CFG = str(project_cfg.LUA_CONFIG_DIR)
-HEROES = str(project_cfg.DATA_DIR / "Heroes" / "heroes.json")
-I18N = str(project_cfg.RESOURCES_CONFIG_DIR / "i18n" / "en.json")
+HEROES = str(DATA_DIR / "Heroes" / "heroes.json")
 
 # hero_config.quality, matching HeroDefinition.QualityLabel: 3 R, 4 SR, >=5 SSR.
 QUALITY = {3: "R", 4: "SR", 5: "SSR"}
@@ -37,10 +34,6 @@ BANNER_TYPE = {1: 1, 2: 2}
 def jload(path):
     with open(path, encoding="utf-8") as fh:
         return json.load(fh)
-
-
-def cfg(name):
-    return jload(os.path.join(CFG, f"game_config_default_{name}.json"))
 
 
 def quality_label(q):
@@ -66,7 +59,10 @@ def main():
     drops = cfg("drop_conf")
     client = cfg("hero_search_client")
     search = cfg("hero_search_config")
-    i18n = jload(I18N) if os.path.exists(I18N) else {}
+    try:
+        i18n = load_i18n()
+    except FileNotFoundError:
+        i18n = {}
 
     names = {b.get("order"): i18n.get(b.get("name"), b.get("name")) for b in client}
 

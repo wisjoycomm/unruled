@@ -15,18 +15,15 @@ build fails loudly rather than substituting placeholder text.
 
 Run: python tools/config/extract_i18n.py && python tools/config/extract_heroes.py
 """
-import json
+import math
 import os
 import re
 import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import project_cfg  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import DATA_DIR, i18n_text as i18n, load_lua_json, project_cfg, write_json  # noqa: E402
 
-ROOT = str(project_cfg.ROOT)
-CFG = str(project_cfg.LUA_CONFIG_DIR)
-I18N = str(project_cfg.RESOURCES_CONFIG_DIR / "i18n" / "en.json")
-OUT = str(project_cfg.DATA_DIR / "Heroes" / "heroes.json")
+OUT = str(DATA_DIR / "Heroes" / "heroes.json")
 
 # The 17 released heroes, in roster/quality order: 4 R (quality 3) + 9 SR (quality 4) + 4 SSR (quality 5).
 # SSR (quality 5) heroes omit the "quality" field in hero_config (it is implied by the 5xx order block);
@@ -64,23 +61,6 @@ UI_KEYS = [
     "hero_story_ui_01",   # "Ascend Hero to %{num}-Star to unlock story"
     "soldier_type_01", "soldier_type_02", "soldier_type_03",      # Infantry / Lancer / Marksman
 ]
-
-# --- Localization -----------------------------------------------------------------
-# hero_config stores only localization keys (hero_name_50001, hero_skill_desc_500011, ...).
-# The real English strings come from the game's own table, recovered by tools/config/extract_i18n.py.
-
-_i18n = None
-
-
-def i18n(key):
-    """Required localization lookup; raises if absent so missing text never ships silently."""
-    global _i18n
-    if _i18n is None:
-        with open(I18N, encoding="utf-8") as fh:
-            _i18n = json.load(fh)
-    if key not in _i18n:
-        raise KeyError("missing localization key: " + key)
-    return _i18n[key]
 
 
 # The source writes values as %{n1} / %{n2} wrapped in <color=#00f183>; TMP understands the colour
@@ -305,14 +285,14 @@ def star_rows(hero_star):
 
 
 def main():
-    hero_cfg = json.load(open(os.path.join(CFG, "game_config_default_hero_config.json"), encoding="utf-8"))
-    hero_level = json.load(open(os.path.join(CFG, "game_config_default_hero_level.json"), encoding="utf-8"))
-    hero_star = json.load(open(os.path.join(CFG, "game_config_default_hero_star.json"), encoding="utf-8"))
-    skill_cfg = json.load(open(os.path.join(CFG, "game_config_default_skill_config.json"), encoding="utf-8"))
-    skill_unlock = json.load(open(os.path.join(CFG, "game_config_default_hero_skill_unlock.json"), encoding="utf-8"))
-    hero_story = json.load(open(os.path.join(CFG, "game_config_default_hero_story.json"), encoding="utf-8"))
-    skill_upgrade = json.load(open(os.path.join(CFG, "game_config_default_hero_skill_upgrade.json"), encoding="utf-8"))
-    item_cfg = json.load(open(os.path.join(CFG, "game_config_default_item_config.json"), encoding="utf-8"))
+    hero_cfg = load_lua_json("hero_config")
+    hero_level = load_lua_json("hero_level")
+    hero_star = load_lua_json("hero_star")
+    skill_cfg = load_lua_json("skill_config")
+    skill_unlock = load_lua_json("hero_skill_unlock")
+    hero_story = load_lua_json("hero_story")
+    skill_upgrade = load_lua_json("hero_skill_upgrade")
+    item_cfg = load_lua_json("item_config")
 
     heroes = []
     for hid in BASE_IDS:
@@ -390,9 +370,7 @@ def main():
         "skillPowerCurve": skill_power_curve(skill_upgrade),
     }
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=1, ensure_ascii=False)
+    write_json(OUT, out)
     print("[extract_heroes] {} heroes, {} levels, {} star tiers -> {}".format(
         len(heroes), len(out["levelCurve"]), len(out["starCurve"]), OUT))
 

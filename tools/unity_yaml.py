@@ -17,6 +17,7 @@ import project_cfg  # noqa: E402
 
 GUID_RE = re.compile(r"guid: ([a-f0-9]{32})")
 DOC_HEADER_RE = re.compile(r"^--- !u!(\d+) &(-?\d+).*$", re.M)
+HEADER_RE = DOC_HEADER_RE
 NUM_RE = r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
 
 SPRITE_ENTRY_RE = re.compile(
@@ -140,6 +141,18 @@ def build_guid_map(assets_root: str | Path) -> dict[str, Path]:
     return by_guid
 
 
+def load_guid_map(assets_root: str | Path | None = None) -> dict[str, str]:
+    """Build or load cached `{guid: rel_asset_path}` in `.temp/guid_cache.json`."""
+    root = Path(assets_root) if assets_root else project_cfg.EXPORTED_ASSETS_DIR
+    cache_path = project_cfg.TEMP_DIR / "guid_cache.json"
+    if cache_path.exists():
+        return json.loads(cache_path.read_text(encoding="utf-8"))
+    by_guid = {guid: str(p.relative_to(root)) for guid, p in build_guid_map(root).items()}
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps(by_guid), encoding="utf-8")
+    return by_guid
+
+
 def cached_sprite_guid_index(assets_root: str | Path | None = None) -> dict[str, dict]:
     """Build or load cached `{guid: {'file': filename, 'names': {fileID: sprite_name}}}` in `.temp/`."""
     root = Path(assets_root) if assets_root else project_cfg.EXPORTED_ASSETS_DIR
@@ -156,3 +169,7 @@ def cached_sprite_guid_index(assets_root: str | Path | None = None) -> dict[str,
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps(idx), encoding="utf-8")
     return idx
+
+
+parse_documents = parse_yaml_docs
+field = yaml_field

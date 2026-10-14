@@ -2,3 +2,4 @@
 
 - 2026-10-14 - Antigravity - Centralize agent rules (`CLAUDE.md`, `AGENTS.md`, `.claude/`, `.agents/`, `.codex/`, `.cursor/`) via `project.config`, `.agents/templates/`, and `.agents/sync-rules.py` for the Unruled architecture.
 - 2026-10-14 - Antigravity - Refactor `tools/` (LDPlayer driver, UI/art/sprite helpers, config extractors, asset recovery pipeline, C# editor validators, and `tools/README.md`) to be project-agnostic using `project.config` and `tools/project_cfg.py`.
+- 2026-10-14 - Antigravity - Optimize and deduplicate `tools/` by centralizing intermediate directories in `project.config`, extracting shared modules (`tools/arm64_vm.py`, `tools/unityfs.py`, `tools/unity_yaml.py`, `tools/config/_common.py`, `tools/ld/_img.py`), removing tracked `tools/ui/.guid_cache.json`, and adding unit tests.

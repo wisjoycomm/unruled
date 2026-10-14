@@ -6,16 +6,14 @@ only has boot strings).
 
 Run:  python tools/config/extract_city.py
 """
-import json, math, os, re, sys
+import math, os, re, sys
 
 sys.stdout.reconfigure(encoding="utf-8")
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import project_cfg  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import DATA_DIR, EXPORTED_ASSETS_DIR, load_lua_json as load, project_cfg, write_json  # noqa: E402
 
-ROOT = str(project_cfg.ROOT)
-SRC = str(project_cfg.LUA_CONFIG_DIR)
-DST = str(project_cfg.DATA_DIR)
-EXPORT_PREFABS = str(project_cfg.EXPORTED_ASSETS_DIR / "GameObject")
+DST = str(DATA_DIR)
+EXPORT_PREFABS = str(EXPORTED_ASSETS_DIR / "GameObject")
 # Levels stop at the first one the remake cannot reach: a requirement on a building it does not have
 # (Furnace Lv8 needs 321) or a fire-crystal step (pre_wish, cost item 100081). That is Lv7 for every building now.
 RESOURCES = {101, 102, 103, 104, 105, 106, 107, 108}
@@ -71,11 +69,6 @@ FURNITURE_TEXT = {
 # "Forging Bench" with Production [iron] 4.2 at Lv1 (= attribute 40013 / 10), like the other stations.
 FORGING_BENCH = ("furniture_name_601", "furniture_pic_601", "2;195")
 UNNAMED_STATIONS = {601: FORGING_BENCH, 602: FORGING_BENCH, 603: FORGING_BENCH, 604: FORGING_BENCH}
-
-
-def load(name):
-    with open(os.path.join(SRC, name), encoding="utf-8") as f:
-        return json.load(f)
 
 
 def pairs(v):
@@ -301,10 +294,8 @@ def main():
         "buildings": buildings,
         "furniture": furniture,
     }
-    os.makedirs(os.path.join(DST, "Buildings"), exist_ok=True)
     path = os.path.join(DST, "Buildings", "city_buildings_ch1-3.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=1, ensure_ascii=False)
+    write_json(path, out)
     print("wrote", path, len(buildings), "buildings,", len(furniture), "furniture types")
 
 

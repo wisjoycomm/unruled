@@ -10,10 +10,8 @@ Usage:
 import os
 import sys
 
-from PIL import Image
-
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".ldcap"))
-DW, DH = 640.0, 1136.0
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import DH, DW, load_cap  # noqa: E402
 
 
 def bands(counts, lo, floor):
@@ -36,9 +34,7 @@ def main():
     xlo, ylo, xhi, yhi = (int(v) for v in sys.argv[2:6])
     tol = int(sys.argv[6]) if len(sys.argv) > 6 else 40
 
-    im = Image.open(os.path.join(OUT, f"{name}.png")).convert("RGB")
-    px = im.load()
-    w, h = im.size
+    _, px, w, h = load_cap(name)
     xhi, yhi = min(xhi, w), min(yhi, h)
 
     # Background = the most common colour inside the window (the flat sheet).

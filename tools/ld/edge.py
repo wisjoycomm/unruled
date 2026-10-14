@@ -8,17 +8,13 @@ Usage:
 import os
 import sys
 
-from PIL import Image
-
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".ldcap"))
-DW, DH = 640.0, 1136.0
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import DH, DW, load_cap  # noqa: E402
 
 
 def main():
     name, mode, idx = sys.argv[1], sys.argv[2], int(sys.argv[3])
-    im = Image.open(os.path.join(OUT, f"{name}.png")).convert("RGB")
-    px = im.load()
-    w, h = im.size
+    _, px, w, h = load_cap(name)
 
     if mode == "row":
         lo = int(sys.argv[4]) if len(sys.argv) > 4 else 0

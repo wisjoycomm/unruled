@@ -13,12 +13,10 @@ Run:  python tools/config/extract_world.py
 """
 import json, os, sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import project_cfg  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import DATA_DIR, load_lua_json as load, write_json  # noqa: E402
 
-ROOT = str(project_cfg.ROOT)
-SRC = str(project_cfg.LUA_CONFIG_DIR)
-DST = str(project_cfg.DATA_DIR / "World" / "world.json")
+DST = str(DATA_DIR / "World" / "world.json")
 
 ROOKIES = [10100]                 # Infantry Camp (321) is the only camp the remake builds.
 CAMPS = [321]
@@ -32,11 +30,6 @@ STAMINA_CAP = 100                 # ESTIMATE until an LD capture shows "Chief St
 INTEL_KINDS = {2: 0, 1: 1, 3: 2}
 SEARCHLIGHT_LEVELS = 6
 CAPACITY_BUFF = 10503
-
-
-def load(name):
-    with open(os.path.join(SRC, "game_config_default_%s.json" % name), encoding="utf-8") as f:
-        return json.load(f)
 
 
 def main():

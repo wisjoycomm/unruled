@@ -8,17 +8,13 @@ Bahiti shard 500006, owned by the hero code) are not exported here, so a reward 
 Run:
     python tools/config/extract_items.py
 """
-import json
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import project_cfg  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import DATA_DIR, i18n_text, load_lua_json as load, project_cfg, write_json  # noqa: E402
 
-ROOT = project_cfg.ROOT
-SRC = project_cfg.LUA_CONFIG_DIR
-I18N = project_cfg.RESOURCES_CONFIG_DIR / "i18n" / "en.json"
-DST = project_cfg.DATA_DIR / "Items" / "items.json"
+DST = DATA_DIR / "Items" / "items.json"
 
 # Items met in chapter 1-5 mission and exploration stage rewards (task 006 research, 2026-10-09).
 ITEM_IDS = [
@@ -45,27 +41,9 @@ ITEM_IDS = [
 CONSTRUCTION_SPEEDUP_KIND = "3"
 
 
-def load(name):
-    with open(SRC / f"game_config_default_{name}.json", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def text(en, key):
-    """Resolves 'key||arg' (packs) by substituting %<1> with arg."""
-    if not key:
-        return ""
-    base, _, arg = key.partition("||")
-    value = en.get(base)
-    if value is None:
-        raise KeyError(f"Missing i18n key {base}")
-    return value.replace("%<1>", arg) if arg else value
-
-
 def main():
     items = load("item_config")
     system = load("systemconfig")
-    with open(I18N, encoding="utf-8") as f:
-        en = json.load(f)
 
     construction_item = system["speed_up_give_change"][CONSTRUCTION_SPEEDUP_KIND]
     # systemconfig.init_item: flat [id, amount, ...] the original grants a new player (resources included;
@@ -82,7 +60,7 @@ def main():
         row = {
             "id": item_id,
             # Display text for reference only; the client reads it from localization, not the config bundle.
-            "_name": text(en, src.get("name")),
+            "_name": i18n_text(src.get("name")),
             "quality": src.get("quality", 1),
             "useType": use_type,
             # use_type 3: speedup seconds; 0 otherwise.
@@ -99,10 +77,7 @@ def main():
         "_source": f"{project_cfg.CFG.get('LUA_CONFIG_DIR', 'Config/LuaJSON')} item_config + systemconfig.speed_up_give_change/init_item, i18n/en.json",
         "items": rows,
     }
-    DST.parent.mkdir(parents=True, exist_ok=True)
-    with open(DST, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(out, f, ensure_ascii=False, indent=1)
-        f.write("\n")
+    write_json(DST, out, indent=1, ensure_ascii=False)
     print(f"Wrote {len(rows)} items to {DST}")
 
 

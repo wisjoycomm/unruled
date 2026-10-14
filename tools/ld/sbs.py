@@ -12,8 +12,8 @@ import sys
 
 from PIL import Image
 
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".ldcap"))
-DW, DH = 640.0, 1136.0
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import DH, DW, OUT  # noqa: E402
 
 
 def band(path, dy0, dy1, dx0, dx1, width):

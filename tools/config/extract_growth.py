@@ -7,12 +7,10 @@ import json
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import project_cfg  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import DATA_DIR, load_i18n, load_lua_json as load  # noqa: E402
 
-ROOT = project_cfg.ROOT
-CONFIG = project_cfg.RESOURCES_CONFIG_DIR
-DEST = project_cfg.DATA_DIR / "Missions" / "growth.json"
+DEST = DATA_DIR / "Missions" / "growth.json"
 # Bounded to the confirmed opening goals and their immediate successors.
 CHAINS = (
     (True, (1330001, 1330002, 1330003)),
@@ -23,13 +21,9 @@ CHAINS = (
 )
 
 
-def load(name):
-    return json.loads((CONFIG / "LuaJSON" / f"game_config_default_{name}.json").read_text(encoding="utf-8"))
-
-
 def main():
     tasks, system = load("growth_task"), load("systemconfig")
-    texts = json.loads((CONFIG / "i18n/en.json").read_text(encoding="utf-8"))
+    texts = load_i18n()
     chains = []
     for is_main, ids in CHAINS:
         entries = []

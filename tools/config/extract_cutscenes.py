@@ -5,19 +5,17 @@ the recorded transform clip (AssetRipper keeps its GUID), animator-state clips (
 state) and the notify events (bubble / dialog / pause / wait). Output:
 Data/Cutscenes/cutscenes_ftue.json
 """
-import json
 import os
 import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from _common import DATA_DIR, EXPORTED_ASSETS_DIR, project_cfg, write_json  # noqa: E402
 import dump_guides  # noqa: E402  (English language table for bubble lines)
-import project_cfg  # noqa: E402
+from unity_yaml import field as _yaml_field, parse_documents  # noqa: E402
 
-ROOT = str(project_cfg.ROOT)
-EXPORT = str(project_cfg.EXPORTED_ASSETS_DIR)
-OUT = str(project_cfg.DATA_DIR / "Cutscenes" / "cutscenes_ftue.json")
+EXPORT = str(EXPORTED_ASSETS_DIR)
+OUT = str(DATA_DIR / "Cutscenes" / "cutscenes_ftue.json")
 TIMELINES = ["guide_anim_01_1", "guide_anim_01_2", "guide_anim_01_3", "guide_anim_05", "guide_anim_03", "guide_anim_07", "guide_anim_04"]
 
 _meta = {}
@@ -38,19 +36,11 @@ def meta_path(guid):
 
 
 def docs(text):
-    out = {}
-    for block in re.split(r"^--- ", text, flags=re.M)[1:]:
-        head, _, body = block.partition("\n")
-        m = re.search(r"&(-?\d+)", head)
-        if m:
-            out[m.group(1)] = body
-    return out
+    return {fid: body for fid, (_, body) in parse_documents(text).items()}
 
 
 def field(body, name):
-    m = re.search(r"^\s*" + re.escape(name) + r": ?(.*)$", body, flags=re.M)
-    value = m.group(1).strip() if m else ""
-    # YAML quotes names with edge spaces ('city_anim_building_explorer_cabin_mammoth '); the name is the inner text.
+    value = _yaml_field(body, name) or ""
     if len(value) > 1 and value[0] == value[-1] == "'":
         value = value[1:-1].replace("''", "'").strip()
     return value
@@ -179,10 +169,8 @@ def main():
             cut = extract(name)
             cut["name"] = name
             result.append(cut)
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, "w", encoding="utf-8") as f:
-        json.dump({"_source": f"{project_cfg.CFG.get('EXPORTED_ASSETS_DIR', 'ExportedAssets')} TimelineAssets guide_anim_* + prefab PlayableDirector bindings",
-                   "cutscenes": result}, f, indent=1, ensure_ascii=False)
+    write_json(OUT, {"_source": f"{project_cfg.CFG.get('EXPORTED_ASSETS_DIR', 'ExportedAssets')} TimelineAssets guide_anim_* + prefab PlayableDirector bindings",
+                     "cutscenes": result})
     print("wrote", OUT)
 
 

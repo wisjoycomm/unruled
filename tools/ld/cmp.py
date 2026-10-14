@@ -10,7 +10,8 @@ import sys
 
 from PIL import Image
 
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".ldcap"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import load_cap  # noqa: E402
 
 
 def grid_stats(im, rows=8, cols=4):
@@ -32,7 +33,7 @@ def grid_stats(im, rows=8, cols=4):
 
 
 def main():
-    cap = Image.open(os.path.join(OUT, f"{sys.argv[1]}.png")).convert("RGB")
+    cap, _, _, _ = load_cap(sys.argv[1])
     ref = Image.open(sys.argv[2]).convert("RGB")
     ref = ref.resize(cap.size, Image.LANCZOS)
 

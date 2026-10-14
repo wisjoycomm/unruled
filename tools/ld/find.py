@@ -12,7 +12,8 @@ import sys
 import numpy as np
 from PIL import Image
 
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".ldcap"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _img import OUT  # noqa: E402
 
 
 def _box_sums(img, h, w):

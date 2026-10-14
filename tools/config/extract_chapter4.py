@@ -3,16 +3,10 @@ import json
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import project_cfg  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import DATA_DIR, load_lua_json as load, write_json  # noqa: E402
 
-ROOT = project_cfg.ROOT
-SRC = project_cfg.LUA_CONFIG_DIR
-DST = project_cfg.DATA_DIR / 'Heroes'
-
-
-def load(name):
-    return json.loads((SRC / ('game_config_default_' + name + '.json')).read_text(encoding='utf-8'))
+DST = DATA_DIR / 'Heroes'
 
 
 def main():
