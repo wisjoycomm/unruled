@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Regenerates UnityAssets/Assets/_EndlessWinter/Data/Heroes/heroes.json from the original LuaJSON config:
+Regenerates Data/Heroes/heroes.json from the original LuaJSON config:
   - game_config_default_hero_config.json  (roster, quality, model/codename, skill slot ids, pv video)
   - game_config_default_hero_level.json   (80-level stat curve + Hero XP cost)
   - game_config_default_hero_star.json    (31 star tiers + debris/shard cost)
@@ -18,11 +18,15 @@ Run: python tools/config/extract_i18n.py && python tools/config/extract_heroes.p
 import json
 import os
 import re
+import sys
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-CFG = os.path.join(ROOT, "ResourcesExport", "Config", "LuaJSON")
-I18N = os.path.join(ROOT, "ResourcesExport", "Config", "i18n", "en.json")
-OUT = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter", "Data", "Heroes", "heroes.json")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+CFG = str(project_cfg.LUA_CONFIG_DIR)
+I18N = str(project_cfg.RESOURCES_CONFIG_DIR / "i18n" / "en.json")
+OUT = str(project_cfg.DATA_DIR / "Heroes" / "heroes.json")
 
 # The 17 released heroes, in roster/quality order: 4 R (quality 3) + 9 SR (quality 4) + 4 SSR (quality 5).
 # SSR (quality 5) heroes omit the "quality" field in hero_config (it is implied by the 5xx order block);

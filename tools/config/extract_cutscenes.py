@@ -3,7 +3,7 @@
 For every timeline: the bound GameObject path of each track (from the prefab PlayableDirector),
 the recorded transform clip (AssetRipper keeps its GUID), animator-state clips (start, duration,
 state) and the notify events (bubble / dialog / pause / wait). Output:
-UnityAssets/Assets/_EndlessWinter/Data/Cutscenes/cutscenes_ftue.json
+Data/Cutscenes/cutscenes_ftue.json
 """
 import json
 import os
@@ -11,11 +11,13 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import dump_guides  # noqa: E402  (English language table for bubble lines)
+import project_cfg  # noqa: E402
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-EXPORT = os.path.join(ROOT, "AllAssetsExport", "ExportedProject", "Assets")
-OUT = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter", "Data", "Cutscenes", "cutscenes_ftue.json")
+ROOT = str(project_cfg.ROOT)
+EXPORT = str(project_cfg.EXPORTED_ASSETS_DIR)
+OUT = str(project_cfg.DATA_DIR / "Cutscenes" / "cutscenes_ftue.json")
 TIMELINES = ["guide_anim_01_1", "guide_anim_01_2", "guide_anim_01_3", "guide_anim_05", "guide_anim_03", "guide_anim_07", "guide_anim_04"]
 
 _meta = {}

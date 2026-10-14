@@ -1,6 +1,6 @@
 """
 Chapter Missions 1-3 from the original config (chapter_quest_conf + chapter_task) →
-UnityAssets/Assets/_EndlessWinter/Data/Missions/chapters_ch1-3.json.
+Data/Missions/chapters_ch1-3.json.
 
 Condition decoding (checked against the LD captures):
   task_type 109 or jump 40002  → build: [200, building]               "Build: Sawmill"
@@ -21,9 +21,12 @@ Run:  python tools/config/extract_chapters.py
 import json, os, sys
 
 sys.stdout.reconfigure(encoding="utf-8")
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-SRC = os.path.join(ROOT, "ResourcesExport", "Config", "LuaJSON")
-DST = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter", "Data", "Missions")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+SRC = str(project_cfg.LUA_CONFIG_DIR)
+DST = str(project_cfg.DATA_DIR / "Missions")
 
 CHAPTERS = {
     "1001": ("Chapter 1", "A Place to Call Home"),

@@ -1,5 +1,5 @@
 """
-World systems that chapter 7 asks for, from the original config → UnityAssets/Assets/_EndlessWinter/Data/World/world.json.
+World systems that chapter 7 asks for, from the original config → Data/World/world.json.
 
   soldiers      Rookie troops (soldiers, lv 1) whose camp the remake has: training time per troop and cost per troop.
   camps         Training capacity per camp level (build321 buff_effect 10503, barrack_training_capacity_increase).
@@ -11,11 +11,14 @@ World systems that chapter 7 asks for, from the original config → UnityAssets/
 
 Run:  python tools/config/extract_world.py
 """
-import json, os
+import json, os, sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-SRC = os.path.join(ROOT, "ResourcesExport", "Config", "LuaJSON")
-DST = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter", "Data", "World", "world.json")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+SRC = str(project_cfg.LUA_CONFIG_DIR)
+DST = str(project_cfg.DATA_DIR / "World" / "world.json")
 
 ROOKIES = [10100]                 # Infantry Camp (321) is the only camp the remake builds.
 CAMPS = [321]

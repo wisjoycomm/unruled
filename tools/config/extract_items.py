@@ -1,22 +1,24 @@
 """
 Extracts the non-resource items granted by chapter 1-5 rewards (item_config + en.json text)
-into UnityAssets/Assets/_EndlessWinter/Data/Items/items.json.
+into Data/Items/items.json.
 
 Ids that the client already keeps as ResourceType wallet entries (keys 600001/600002 and the
 Bahiti shard 500006, owned by the hero code) are not exported here, so a reward has exactly one owner.
 
 Run:
     python tools/config/extract_items.py
-or from UnityAssets:
-    python ../tools/config/extract_items.py
 """
 import json
 from pathlib import Path
+import sys
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "ResourcesExport" / "Config" / "LuaJSON"
-I18N = ROOT / "ResourcesExport" / "Config" / "i18n" / "en.json"
-DST = ROOT / "UnityAssets" / "Assets" / "_EndlessWinter" / "Data" / "Items" / "items.json"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import project_cfg  # noqa: E402
+
+ROOT = project_cfg.ROOT
+SRC = project_cfg.LUA_CONFIG_DIR
+I18N = project_cfg.RESOURCES_CONFIG_DIR / "i18n" / "en.json"
+DST = project_cfg.DATA_DIR / "Items" / "items.json"
 
 # Items met in chapter 1-5 mission and exploration stage rewards (task 006 research, 2026-10-09).
 ITEM_IDS = [

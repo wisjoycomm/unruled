@@ -1,23 +1,24 @@
 """
 Extracts survivor day/night config data (schedule, furnace calendar, attribute curves,
 survivor/infirmary settings, sickbed stats, tips) from LuaJSON exports and decoded Lua defaults
-into UnityAssets/Assets/_EndlessWinter/Data/Survivors/survivor_daynight.json.
+into Data/Survivors/survivor_daynight.json.
 
 Run:
     python tools/config/extract_survivor_daynight.py
-or from UnityAssets:
-    python ../tools/config/extract_survivor_daynight.py
 """
 import json
 import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import project_cfg  # noqa: E402
+
 # Setup paths relative to repo root
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "ResourcesExport" / "Config" / "LuaJSON"
+ROOT = project_cfg.ROOT
+SRC = project_cfg.LUA_CONFIG_DIR
 LUA = ROOT / "ResourcesExport" / "Lua" / "32"
-DST = ROOT / "UnityAssets" / "Assets" / "_EndlessWinter" / "Data" / "Survivors"
+DST = project_cfg.DATA_DIR / "Survivors"
 
 # ==============================================================================
 # Default rows decoded from ResourcesExport/Lua/32/*.bytes

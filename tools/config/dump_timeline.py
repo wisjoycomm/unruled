@@ -1,7 +1,10 @@
 """Summarize an exported Unity TimelineAsset (.playable): tracks, clips, timing, referenced assets."""
 import os, re, sys, glob
 
-EXPORT = r"D:\UnityProjects\endlesswinter\AllAssetsExport\ExportedProject\Assets"
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+EXPORT = str(project_cfg.EXPORTED_ASSETS_DIR)
 _guid_cache = {}
 
 def guid_name(guid):

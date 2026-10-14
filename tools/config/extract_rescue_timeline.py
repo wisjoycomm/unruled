@@ -7,8 +7,8 @@ Also cross-references AllAssetsExport (guide_anim_04.playable + guide_anim_04.pr
 present to resolve PlayableDirector scene bindings and ControlTrack exposed references.
 
 Outputs:
-  UnityAssets/.temp/agy/guide_anim_04_cues.json
-  UnityAssets/.temp/agy/guide_anim_04_cues.md
+  .temp/agy/guide_anim_04_cues.json
+  .temp/agy/guide_anim_04_cues.md
 """
 import glob
 import json
@@ -17,18 +17,18 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import dump_guides  # noqa: E402
+import project_cfg  # noqa: E402
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TIMELINE_DIR = os.path.join(
-    ROOT,
-    "ResourcesExport",
-    "Config",
-    "AllScriptables",
-    "scene_city_plot_guide_anim_04_507f715315c40ca06ff087677265e3f0",
+ROOT = str(project_cfg.ROOT)
+TIMELINE_DIR = str(
+    project_cfg.RESOURCES_CONFIG_DIR
+    / "AllScriptables"
+    / "scene_city_plot_guide_anim_04_507f715315c40ca06ff087677265e3f0"
 )
-EXPORT_ASSETS = os.path.join(ROOT, "AllAssetsExport", "ExportedProject", "Assets")
-OUT_DIR = os.path.join(ROOT, "UnityAssets", ".temp", "agy")
+EXPORT_ASSETS = str(project_cfg.EXPORTED_ASSETS_DIR)
+OUT_DIR = str(project_cfg.TEMP_DIR / "agy")
 OUT_JSON = os.path.join(OUT_DIR, "guide_anim_04_cues.json")
 OUT_MD = os.path.join(OUT_DIR, "guide_anim_04_cues.md")
 

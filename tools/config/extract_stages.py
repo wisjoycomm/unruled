@@ -2,11 +2,15 @@
 import json
 import re
 from pathlib import Path
+import sys
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "ResourcesExport" / "Config" / "LuaJSON"
-DATA = ROOT / "UnityAssets" / "Assets" / "_EndlessWinter" / "Data"
-RESOURCE_TYPES = ROOT / "UnityAssets/Assets/_EndlessWinter/Scripts/Contracts/Economy/ResourceType.cs"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import project_cfg  # noqa: E402
+
+ROOT = project_cfg.ROOT
+SRC = project_cfg.LUA_CONFIG_DIR
+DATA = project_cfg.DATA_DIR
+RESOURCE_TYPES = project_cfg.SCRIPTS_ROOT / "Contracts/Economy/ResourceType.cs"
 STAGE_COUNT = 50
 # drop_conf chests have no item owner yet. Do not send their ids to ItemService or the wallet.
 SKIPPED_REWARDS = {800005: "Unregistered drop_conf chest; omitted until chest support exists.",

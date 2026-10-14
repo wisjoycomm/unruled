@@ -1,6 +1,6 @@
 """
 Extracts the chapter 1-3 city data from the original config export into the human-editable JSON the
-Unity importers read (UnityAssets/Assets/_EndlessWinter/Data/...). Only values that exist in the
+Unity importers read (Data/...). Only values that exist in the
 original config are written; names/descriptions come from the LD capture log (localization export
 only has boot strings).
 
@@ -9,10 +9,13 @@ Run:  python tools/config/extract_city.py
 import json, math, os, re, sys
 
 sys.stdout.reconfigure(encoding="utf-8")
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-SRC = os.path.join(ROOT, "ResourcesExport", "Config", "LuaJSON")
-DST = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter", "Data")
-EXPORT_PREFABS = os.path.join(ROOT, "AllAssetsExport", "ExportedProject", "Assets", "GameObject")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+SRC = str(project_cfg.LUA_CONFIG_DIR)
+DST = str(project_cfg.DATA_DIR)
+EXPORT_PREFABS = str(project_cfg.EXPORTED_ASSETS_DIR / "GameObject")
 # Levels stop at the first one the remake cannot reach: a requirement on a building it does not have
 # (Furnace Lv8 needs 321) or a fire-crystal step (pre_wish, cost item 100081). That is Lv7 for every building now.
 RESOURCES = {101, 102, 103, 104, 105, 106, 107, 108}

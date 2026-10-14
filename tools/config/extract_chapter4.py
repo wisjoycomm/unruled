@@ -1,10 +1,14 @@
 """Chapter 4 defaults: exported recruitment tables plus observed first pulls (LD log 15.18-27)."""
 import json
 from pathlib import Path
+import sys
 
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / 'ResourcesExport/Config/LuaJSON'
-DST = ROOT / 'UnityAssets/Assets/_EndlessWinter/Data/Heroes'
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import project_cfg  # noqa: E402
+
+ROOT = project_cfg.ROOT
+SRC = project_cfg.LUA_CONFIG_DIR
+DST = project_cfg.DATA_DIR / 'Heroes'
 
 
 def load(name):

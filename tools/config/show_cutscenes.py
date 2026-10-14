@@ -1,9 +1,13 @@
 """Print a readable summary of Data/Cutscenes/cutscenes_ftue.json."""
 import json
 import os
+import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-PATH = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter", "Data", "Cutscenes", "cutscenes_ftue.json")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+PATH = str(project_cfg.DATA_DIR / "Cutscenes" / "cutscenes_ftue.json")
 
 data = json.load(open(PATH, encoding="utf-8"))["cutscenes"]
 for cut in data:

@@ -19,11 +19,13 @@ import json
 import os
 import sys
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-CFG = os.path.join(ROOT, "ResourcesExport", "Config", "LuaJSON")
-HEROES = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter",
-                      "Data", "Heroes", "heroes.json")
-I18N = os.path.join(ROOT, "ResourcesExport", "Config", "i18n", "en.json")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import project_cfg  # noqa: E402
+
+ROOT = str(project_cfg.ROOT)
+CFG = str(project_cfg.LUA_CONFIG_DIR)
+HEROES = str(project_cfg.DATA_DIR / "Heroes" / "heroes.json")
+I18N = str(project_cfg.RESOURCES_CONFIG_DIR / "i18n" / "en.json")
 
 # hero_config.quality, matching HeroDefinition.QualityLabel: 3 R, 4 SR, >=5 SSR.
 QUALITY = {3: "R", 4: "SR", 5: "SSR"}

@@ -5,19 +5,20 @@ follows nextIndex exactly like the game. Each talker id (new_player_talker_confi
 its character (5xx Sean, 6xx Buster, 7xx Bill, 8xx Alina...) with the original avatar; pos_type 2
 puts the portrait on the right. Text comes from the English language table.
 
-Output: UnityAssets/Assets/_EndlessWinter/Data/Dialog/ftue_plot_dialog.json (same schema as
-ftue_dialog_ch1-3.json, imported by EndlessWinter/Dialog/Import Dialog Data).
+Output: Data/Dialog/ftue_plot_dialog.json (same schema as ftue_dialog_ch1-3.json).
 """
 import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import dump_guides as g  # noqa: E402  (language table + plot chain helpers)
+import project_cfg  # noqa: E402
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LUA = os.path.join(ROOT, "ResourcesExport", "Config", "LuaJSON")
-OUT = os.path.join(ROOT, "UnityAssets", "Assets", "_EndlessWinter", "Data", "Dialog", "ftue_plot_dialog.json")
+ROOT = str(project_cfg.ROOT)
+LUA = str(project_cfg.LUA_CONFIG_DIR)
+OUT = str(project_cfg.DATA_DIR / "Dialog" / "ftue_plot_dialog.json")
 
 # Dialog lists played by Guide_Plot_StoryLine_* / guide_anim_* in chapters 1-3, in story order.
 PLOTS = [1000101, 1000102, 1000168, 1000113, 1000173, 1000179, 1000187, 1000154, 1000194, 1000195, 1000197]
