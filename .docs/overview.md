@@ -3,8 +3,9 @@
 Unity 6000.5.7f1. Design: `.docs/unruled_master_gdd.md`; numbers: `.docs/unruled_master_data_sheets.md`;
 rules: `.claude/rules/architecture.md`; decisions and exceptions: `.docs/plan/roadmap.md`.
 
-State after Sprint 3: the engine-free simulation core (economy, board, weather, latency, radar, fleets, salvo
-combat, capital relocation) and its tests.
+State after Sprint 4: the engine-free simulation core (economy, board, weather, latency, radar, fleets, salvo
+combat, capital relocation, credits, WTO market and escrow contracts, STA tolls, leaderboard audit, THE SYSTEM's
+bulletins and Call-to-Arms, Utility AI) and its tests.
 No views, scenes or networking yet.
 
 ## Assemblies
@@ -21,23 +22,31 @@ No views, scenes or networking yet.
 `SimulationWorld(GameBalanceConfig, worldSeed)` is the composition root. It creates the `World`, every component
 store, the `StarlaneGraph`, every system and the `CommandRouter`, and registers the systems on `SimClock` in the
 fixed order below. `GenerateSystem(systemSeed, clusterId)` creates a star system's sites, lanes and weather
-components, then rebuilds the graph. `CreateFleet(unit, site)` delegates to `FleetFactory`, which adds every fleet
-component and an empty cargo hold. Orders enter through `CommandIssuer.Issue`, which stamps the signal latency
-and queues them; when due, `SimClock` sends them through `CommandRouter` to the owning system.
+components, then rebuilds the graph. `CreatePlayer(playerId, coreBase)` creates the HQ with its `PlayerHq`,
+`Wallet` (starting credits) and unrated `PlayerStanding`. `CreateFleet(unit, site)` delegates to `FleetFactory`,
+which adds every fleet component and an empty cargo hold. Orders enter through `CommandIssuer.Issue`, which stamps
+the signal latency and queues them; when due, `SimClock` sends them through `CommandRouter` to the owning system.
+`UtilityAiEngine` (`Ai`) is not on the clock: the host calls `Ai.Think(tick)` (every 10 ticks, Server 2), and it
+issues orders only through `CommandIssuer`. `NoaaForecast` (`Forecast`) is a read-only query for the views.
 
 ## Tick order
 
 1. `NoaaWeatherEngine`: expires and rolls storm fronts, writes `SiteWeather` and `LaneWeather`.
 2. `MiningSystem`: ore into site `Stockpile`s.
 3. `PlanetLifecycleSystem`: depletion states and ESI; also nuclear strikes and the `Terraform` command.
-4. `RefinerySystem`: recipes and brownouts (reads `SiteWeather`).
-5. `WhoQuarantineSystem`: export lock when water or oxygen runs out.
-6. `FleetUpkeepSystem`: hourly per-ship upkeep from the cargo hold; `Mothball` / `Activate` and warm-up.
-7. `FleetMovementSystem`: lane travel with fuel paid at departure; `Move`, `Hold`, `Reverse`.
-8. `SalvoCombatEngine`: a salvo every 5 ticks between hostile fleets at one site or lane; `SetRof`, `SetFocus`,
-   `VentCoolant`.
-9. `CapitalRelocationSystem`: teardown → capital convoy → bootstrap; `RelocateBase`.
-10. `FocusedRadarSystem`: scan timelines and the Tier-5 IAEA reveal; `ScanBelt`, `CancelScan`, `EcmJam`.
+4. `RefinerySystem`: recipes and brownouts (reads `SiteWeather`); upkeep paid from the owner's wallet.
+5. `WtoMarketEngine`: limit orders, matching, VWAP; `PlaceBuyOrder`, `PlaceSellOrder`, `CancelOrder`. Matches go to
+   `WtoContractSystem` through `ITradeSettlement`.
+6. `WhoQuarantineSystem`: export lock when water or oxygen runs out.
+7. `FleetUpkeepSystem`: hourly per-ship upkeep from the cargo hold; `Mothball` / `Activate` and warm-up.
+8. `FleetMovementSystem`: routed travel with fuel and STA tolls paid at each departure; `Move`, `Hold`, `Reverse`.
+9. `SalvoCombatEngine`: a salvo every 5 ticks between hostile fleets at one site or lane; loot and piracy
+   reports; `SetRof`, `SetFocus`, `VentCoolant`.
+10. `CapitalRelocationSystem`: teardown → capital convoy → bootstrap; `RelocateBase`.
+11. `FocusedRadarSystem`: scan timelines and the Tier-5 IAEA reveal; `ScanBelt`, `CancelScan`, `EcmJam`.
+12. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
+13. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
+14. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms) and WTO defence fleets.
 
 `MiningSystem` also handles `RetractDrills` and `PlanetLifecycleSystem` handles `Terraform`.
 
@@ -58,8 +67,13 @@ methods, in this order (rule 4).
   - `StarlaneEdge` (3 tiers), `StarlaneBalance` (tab 04 rules), `StarlaneGenerator` (orbit-chain highways plus
     seeded bypasses and shortcuts) and `StarlaneGraph` (CSR adjacency).
   - `StormFront`, `SiteWeather`, `LaneWeather`, `NoaaWeatherEngine` + `NoaaBalance`.
-- **Economy/**: `ItemId`, `Stockpile`, `RecipeDatabase`, `MiningSystem` + `MineralDeposit` (drill retract:
-  rigs freed 180 ticks after `RetractDrills`), `RefinerySystem` + `Refinery`.
+- **Economy/**:
+  - `ItemId`, `Stockpile`, `RecipeDatabase`, `MiningSystem` + `MineralDeposit` (drill retract: rigs freed 180
+    ticks after `RetractDrills`), `RefinerySystem` + `Refinery`.
+  - `Wallet` (credits as `long` cents on player HQs and the three pools: WTO fees, STA tolls, WTO escrow) and
+    `Ledger` (`Transfer` never overdraws or creates money; `Grant` only for world setup).
+  - `WtoMarketEngine` + `WtoOrder` / `ItemMarket` (VWAP ring) + `WtoBalance`; `IMarketRates` (bracket fees and
+    escrow), `IMarketAccess` (Call-to-Arms bar), `ITradeSettlement`; `ContractCargo` and `StolenGoods` components.
 - **Military/**:
   - `PlayerHq` (core base, capital convoy flag), `RelayStation`, `CapitalRelocation` (phase, convoy, cooldown,
     paralysis).
@@ -73,16 +87,26 @@ methods, in this order (rule 4).
     costs, convoy loss → order paralysis, 48 h cooldown).
   - `SignalLatencySolver`: Dijkstra over lanes, (15 + hops × 35, or × 8 when relayed) × 2 during relocation; an
     R3+ storm blocks the order.
-  - `CommandIssuer` (refuses every order while the player is paralysed).
+  - `CommandIssuer` (targets: site, lane, fleet or deposit; refuses every order while the player is paralysed).
+  - `RoutePlanner` (shortest legal route by travel time, fuel per lane), `ITollGate`, `IOffenceLog`.
   - `FocusedRadarSystem` + `RadarScan` + `RadarBalance`.
-- **SystemFactions/**: `WhoQuarantineSystem` + `SiteQuarantine`.
+- **SystemFactions/**:
+  - `WhoQuarantineSystem` + `SiteQuarantine`.
+  - `StaTollGate` + `StaBalance` (tolls into the STA pool, bracket discount).
+  - `WtoContractSystem` + `WtoContract` (seller convoy, pro-rata settlement, deposit).
+  - `PlayerStanding`, `LeaderboardBalance` (tab 05), `BracketRates`, `LeaderboardAuditSystem`.
+  - `SystemAgency`, `SystemBulletin`, `SystemSanction`, `SystemAuthorityManager` + `SystemAuthorityBalance`,
+    `NoaaForecast`.
+- **AI/**: `UtilityAiEngine` + `AiController` (on an AI-run HQ) + `AiBalance` / `AiPreset` (tab 06).
 
 ## Tests
 
 `Assets/Tests/Core/` covers the clock, ECS, maths, generators, graph, weather, lifecycle, mining, refinery,
-quarantine, latency, radar, fleet movement/upkeep, salvo combat, drill retract, relocation and an end-to-end `SimulationWorld` run (same seeds → same state).
-`DataSheetConsistencyTests` parses the markdown data sheet (tabs 01, 02, 04) and fails if `DefaultGameBalance`
-drifts from it (tab 03 included). Run EditMode tests for `Unruled.Tests.Core`.
+quarantine, latency, radar, fleet movement/upkeep/routes, salvo combat, drill retract, relocation, ledger, WTO
+market and contracts, STA tolls, leaderboard audit, Call-to-Arms, NOAA forecast, Utility AI and an end-to-end
+`SimulationWorld` run (same seeds → same state).
+`DataSheetConsistencyTests` parses the markdown data sheet (tabs 01–06) and fails if `DefaultGameBalance`
+drifts from it. Run EditMode tests for `Unruled.Tests.Core`.
 
 ## Tooling
 
