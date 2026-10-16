@@ -25,6 +25,7 @@ namespace Unruled.Core.Simulation
         public readonly StaBalance Sta;
         public readonly LeaderboardBalance Leaderboard;
         public readonly WtoBalance Wto;
+        public readonly WtoContractBalance Contracts;
         public readonly SystemFactionBalance SystemFactions;
 
         public GameBalanceConfig(
@@ -32,7 +33,7 @@ namespace Unruled.Core.Simulation
             RefineryBalance refinery, MiningBalance mining,
             LifecycleBalance lifecycle, LatencyBalance latency, RadarBalance radar, FleetBalance fleets, CombatBalance combat,
             RelocationBalance relocation, LedgerBalance ledger, StaBalance sta, LeaderboardBalance leaderboard,
-            WtoBalance wto,
+            WtoBalance wto, WtoContractBalance contracts,
             SystemFactionBalance systemFactions)
         {
             Recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
@@ -51,6 +52,7 @@ namespace Unruled.Core.Simulation
             Sta = sta ?? throw new ArgumentNullException(nameof(sta));
             Leaderboard = leaderboard ?? throw new ArgumentNullException(nameof(leaderboard));
             Wto = wto ?? throw new ArgumentNullException(nameof(wto));
+            Contracts = contracts ?? throw new ArgumentNullException(nameof(contracts));
             SystemFactions = systemFactions ?? throw new ArgumentNullException(nameof(systemFactions));
         }
     }

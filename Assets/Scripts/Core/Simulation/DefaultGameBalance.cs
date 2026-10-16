@@ -18,6 +18,7 @@ namespace Unruled.Core.Simulation
                 CreateLifecycleBalance(), CreateLatencyBalance(), CreateRadarBalance(), CreateFleetBalance(),
                 CreateCombatBalance(), CreateRelocationBalance(), CreateLedgerBalance(),
                 CreateStaBalance(), CreateLeaderboardBalance(), CreateWtoBalance(),
+                CreateWtoContractBalance(),
                 CreateSystemFactionBalance());
 
         /// <summary>
@@ -133,6 +134,10 @@ namespace Unruled.Core.Simulation
 
         /// <summary>GDD §2.2 B: VWAP over the last 100 ticks, price band 0.8x-1.2x.</summary>
         public static WtoBalance CreateWtoBalance() => new WtoBalance(vwapWindowTicks: 100, priceBandPercent: 20);
+
+        /// <summary>PROVISIONAL: a contract convoy has twice its planned travel time plus 10 minutes to deliver.</summary>
+        public static WtoContractBalance CreateWtoContractBalance() =>
+            new WtoContractBalance(deadlineTravelPercent: 200, deadlineGraceTicks: 10 * 60);
 
         /// <summary>
         /// Data sheet tab 05, one row per bracket. "Current Storm Path" = no lead but sees storms now; the unrated

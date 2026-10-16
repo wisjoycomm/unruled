@@ -30,5 +30,7 @@ namespace Unruled.Core.SystemFactions
         }
 
         public int FeeBasisPoints(int playerId) => For(playerId).MarketFeeBasisPoints;
+
+        public int EscrowRatePercent(int playerId) => For(playerId).EscrowRatePercent;
     }
 }

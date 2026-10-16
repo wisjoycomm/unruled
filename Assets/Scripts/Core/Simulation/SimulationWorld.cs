@@ -43,6 +43,9 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<PlayerStanding> Standings;
         public readonly ComponentStore<WtoOrder> WtoOrders;
         public readonly ComponentStore<ItemMarket> ItemMarkets;
+        public readonly ComponentStore<WtoContract> Contracts;
+        public readonly ComponentStore<ContractCargo> ContractCargo;
+        public readonly ComponentStore<StolenGoods> StolenGoods;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly Ledger Ledger;
@@ -51,6 +54,7 @@ namespace Unruled.Core.Simulation
         public readonly EntityId WtoEscrow;
         public readonly BracketRates Rates;
         public readonly WtoMarketEngine Market;
+        public readonly WtoContractSystem ContractSystem;
         public readonly PlanetLifecycleSystem Lifecycle;
         public readonly FleetFactory FleetFactory;
         public readonly RoutePlanner Routes;
@@ -91,6 +95,9 @@ namespace Unruled.Core.Simulation
             Standings = World.CreateStore<PlayerStanding>();
             WtoOrders = World.CreateStore<WtoOrder>();
             ItemMarkets = World.CreateStore<ItemMarket>();
+            Contracts = World.CreateStore<WtoContract>();
+            ContractCargo = World.CreateStore<ContractCargo>();
+            StolenGoods = World.CreateStore<StolenGoods>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -114,6 +121,10 @@ namespace Unruled.Core.Simulation
             Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, FleetMotions, Players, Relocations);
             FleetFactory = new FleetFactory(
                 World, Sites, Fleets, FleetMotions, FleetRoutes, FleetSensors, FleetReadiness, FleetCombat, Stockpiles, balance.Combat);
+            Routes = new RoutePlanner(Graph, Starlanes, balance.Starlanes, balance.Fleets);
+            ContractSystem = new WtoContractSystem(
+                World, Contracts, ContractCargo, FleetMotions, Starlanes, Stockpiles, Ledger, WtoEscrow, WtoFeePool, Rates,
+                FleetFactory, Routes, Clock, balance.Fleets, balance.Contracts);
 
             // Fixed tick order: weather first, then producers before consumers, watchers last.
             Clock.Register(new NoaaWeatherEngine(
@@ -127,7 +138,8 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Terraform, Lifecycle);
             Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, Sites, Ledger, balance.Recipes, balance.Refinery));
             Market = new WtoMarketEngine(
-                World, WtoOrders, ItemMarkets, Sites, Stockpiles, Ledger, WtoEscrow, WtoFeePool, Rates, balance.Wto);
+                World, WtoOrders, ItemMarkets, Sites, Stockpiles, StolenGoods, Ledger, WtoEscrow, Rates, ContractSystem,
+                balance.Wto);
             Clock.Register(Market);
             Commands.Register(CommandType.PlaceBuyOrder, Market);
             Commands.Register(CommandType.PlaceSellOrder, Market);
@@ -139,7 +151,6 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Mothball, upkeep);
             Commands.Register(CommandType.Activate, upkeep);
 
-            Routes = new RoutePlanner(Graph, Starlanes, balance.Starlanes, balance.Fleets);
             Tolls = new StaTollGate(Ledger, Standings, StaTollPool, balance.Starlanes, balance.Leaderboard, balance.Sta);
             Movement = new FleetMovementSystem(
                 Fleets, FleetMotions, FleetRoutes, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, Routes,
@@ -151,7 +162,7 @@ namespace Unruled.Core.Simulation
 
             var combat = new SalvoCombatEngine(
                 World, Fleets, FleetMotions, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, Players, Relocations,
-                balance.Combat, balance.Fleets, balance.Relocation);
+                ContractCargo, StolenGoods, balance.Combat, balance.Fleets, balance.Relocation);
             Clock.Register(combat);
             Commands.Register(CommandType.SetRof, combat);
             Commands.Register(CommandType.SetFocus, combat);
@@ -170,6 +181,7 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.ScanBelt, radar);
             Commands.Register(CommandType.CancelScan, radar);
             Commands.Register(CommandType.EcmJam, radar);
+            Clock.Register(ContractSystem);
         }
 
         /// <summary>

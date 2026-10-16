@@ -20,7 +20,9 @@ namespace Unruled.Core.Military
     /// <item>Thermal: T += heat x ROF² - passive - vent; above the overheat line guns lock and ammo cooks off a share of
     /// hull per salvo until T drops below the release line.</item>
     /// </list>
-    /// Fleets left with no ships are destroyed. SetRof, SetFocus (ParamA) and VentCoolant target an own fleet.
+    /// Fleets left with no ships are destroyed. Their hold goes to the surviving hostile fleet with the lowest entity id
+    /// at the same site or lane (PROVISIONAL loot rule); WTO contract cargo and goods already stolen become
+    /// <see cref="StolenGoods"/> of the taker. With no hostile fleet left there, the hold is lost. SetRof, SetFocus (ParamA) and VentCoolant target an own fleet.
     /// </summary>
     public sealed class SalvoCombatEngine : ISimSystem, ICommandHandler
     {
@@ -34,6 +36,8 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly ComponentStore<PlayerHq> _players;
         private readonly ComponentStore<CapitalRelocation> _relocations;
+        private readonly ComponentStore<ContractCargo> _cargo;
+        private readonly ComponentStore<StolenGoods> _stolen;
         private readonly CombatBalance _balance;
         private readonly RelocationBalance _relocationBalance;
         private readonly FleetBalance _fleetBalance;
@@ -57,7 +61,8 @@ namespace Unruled.Core.Military
             World world, ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions,
             ComponentStore<FleetReadiness> readiness, ComponentStore<FleetCombatState> combat,
             ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes, ComponentStore<Stockpile> stockpiles,
-            ComponentStore<PlayerHq> players, ComponentStore<CapitalRelocation> relocations, CombatBalance balance,
+            ComponentStore<PlayerHq> players, ComponentStore<CapitalRelocation> relocations,
+            ComponentStore<ContractCargo> cargo, ComponentStore<StolenGoods> stolen, CombatBalance balance,
             FleetBalance fleetBalance, RelocationBalance relocationBalance)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
@@ -70,6 +75,8 @@ namespace Unruled.Core.Military
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _players = players ?? throw new ArgumentNullException(nameof(players));
             _relocations = relocations ?? throw new ArgumentNullException(nameof(relocations));
+            _cargo = cargo ?? throw new ArgumentNullException(nameof(cargo));
+            _stolen = stolen ?? throw new ArgumentNullException(nameof(stolen));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
             _fleetBalance = fleetBalance ?? throw new ArgumentNullException(nameof(fleetBalance));
             _relocationBalance = relocationBalance ?? throw new ArgumentNullException(nameof(relocationBalance));
@@ -97,7 +104,10 @@ namespace Unruled.Core.Military
                 UpdateThermal(i, tick);
 
             for (int i = 0; i < _deadCount; i++)
+            {
+                Loot(_dead[i]);
                 _world.Destroy(_dead[i]);
+            }
             _deadCount = 0;
         }
 
@@ -432,6 +442,45 @@ namespace Unruled.Core.Military
                 var shipClass = (TargetFocusClass)pass;
                 if (unit.Count(shipClass) > 0)
                     cookOff = Hit(denseIndex, shipClass, cookOff, _balance.Hp(shipClass) * 100L);
+            }
+        }
+
+        private void Loot(EntityId dead)
+        {
+            var at = _motions.Get(dead);
+            int owner = _units.Get(dead).OwnerPlayerId;
+            EntityId taker = default;
+            for (int i = 0; i < _units.Count; i++)
+            {
+                ref var unit = ref _units.At(i);
+                if (unit.TotalShips == 0 || unit.OwnerPlayerId == owner)
+                    continue;
+                var fleet = _units.EntityAt(i);
+                ref var motion = ref _motions.Get(fleet);
+                bool here = at.Lane.IsNull ? motion.Lane.IsNull && motion.Site == at.Site : motion.Lane == at.Lane;
+                if (here && (taker.IsNull || fleet.Index < taker.Index))
+                    taker = fleet;
+            }
+            if (taker.IsNull)
+                return;
+
+            if (!_stolen.Has(taker))
+                _stolen.Add(taker, default);
+            ref var stolen = ref _stolen.Get(taker);
+            ref var hold = ref _stockpiles.Get(dead);
+            ref var into = ref _stockpiles.Get(taker);
+            for (int slot = 0; slot < ItemIds.Count; slot++)
+            {
+                var item = ItemIds.FromSlot(slot);
+                int quantity = hold.Get(item);
+                if (quantity == 0)
+                    continue;
+                hold.Add(item, -quantity);
+                into.Add(item, quantity);
+                long tagged = _stolen.Has(dead) ? _stolen.Get(dead).Get(item) : 0;
+                if (_cargo.Has(dead) && _cargo.Get(dead).Item == item)
+                    tagged += _cargo.Get(dead).Quantity;
+                stolen.Add(item, (int)Math.Min(quantity, tagged));
             }
         }
 

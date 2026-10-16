@@ -23,5 +23,8 @@ namespace Unruled.Core.Economy
     {
         /// <summary>The fee on a sale, in 1/100 of a percent, taken from the seller's proceeds.</summary>
         int FeeBasisPoints(int playerId);
+
+        /// <summary>The share of a sale's value the seller locks as a deposit until delivery.</summary>
+        int EscrowRatePercent(int playerId);
     }
 }

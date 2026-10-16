@@ -12,7 +12,8 @@ namespace Unruled.Core.Economy
     /// <summary>
     /// ECS component: a resting WTO limit order, on its own entity. A sell order holds the goods it still offers
     /// (taken from <see cref="Site"/>'s stockpile); a buy order's <see cref="Remaining"/> x <see cref="PriceCents"/>
-    /// sits in the WTO escrow wallet, and the goods are delivered to <see cref="Site"/>.
+    /// sits in the WTO escrow wallet, and the goods are delivered to <see cref="Site"/>. A sell order also keeps the
+    /// seller's escrow deposit for what is left in the WTO escrow wallet.
     /// </summary>
     public struct WtoOrder
     {
@@ -23,6 +24,57 @@ namespace Unruled.Core.Economy
         public int Remaining;
         public EntityId Site;
         public long PlacedTick;
+        public long DepositCents; // sell orders: deposit still locked for Remaining
+    }
+
+    /// <summary>A match handed from the order book to settlement. Value and deposit are already in WTO escrow.</summary>
+    public struct TradeMatch
+    {
+        public int BuyerPlayerId;
+        public int SellerPlayerId;
+        public ItemId Item;
+        public int Quantity;
+        public long PriceCents;
+        public long DepositCents;
+        public EntityId SellerSite;
+        public EntityId BuyerSite;
+    }
+
+    /// <summary>Takes over a matched trade: ships the goods (held by the order book until now) and settles the money.</summary>
+    public interface ITradeSettlement
+    {
+        void Open(in TradeMatch trade, long tick);
+    }
+
+    /// <summary>
+    /// ECS component on a fleet carrying WTO contract goods: which item and how many belong to the contract. Goods
+    /// taken from it in combat become <see cref="StolenGoods"/>.
+    /// </summary>
+    public struct ContractCargo
+    {
+        public ItemId Item;
+        public int Quantity;
+    }
+
+    /// <summary>
+    /// ECS component next to a <see cref="Stockpile"/>: how many of its units of each item are Stolen_WTO_Cargo, which
+    /// the WTO won't list. Counts above what the stockpile still holds mean the stolen units were used first.
+    /// </summary>
+    public unsafe struct StolenGoods
+    {
+        private fixed int _quantities[ItemIds.Count];
+
+        public int Get(ItemId id) => _quantities[ItemIds.ToSlot(id)];
+
+        public void Add(ItemId id, int quantity)
+        {
+            if (quantity < 0) throw new ArgumentOutOfRangeException(nameof(quantity));
+            int slot = ItemIds.ToSlot(id);
+            _quantities[slot] = checked(_quantities[slot] + quantity);
+        }
+
+        /// <summary>Units of <paramref name="id"/> in <paramref name="stock"/> that may be sold on the WTO.</summary>
+        public int Clean(in Stockpile stock, ItemId id) => Math.Max(0, stock.Get(id) - Get(id));
     }
 
     /// <summary>

@@ -105,12 +105,7 @@ namespace Unruled.Core.Military
         }
 
         /// <summary>Fuel a fleet pays to cross a lane, in whole units (rounded up).</summary>
-        public int FuelFor(in FleetUnit unit, in StarlaneEdge edge)
-        {
-            long milli = (long)unit.TotalShips * _balance.FuelPerShipPer100UnitsMilli * edge.Length *
-                         _laneBalance.Get(edge.Tier).FuelMultiplierMilli / (100L * 1000L);
-            return (int)((milli + 999) / 1000);
-        }
+        public int FuelFor(in FleetUnit unit, in StarlaneEdge edge) => _planner.FuelFor(unit, edge);
 
         private long SpeedMilli(StarlaneTier tier) =>
             (long)_balance.BaseSpeedMilliPerTick * _laneBalance.Get(tier).SpeedPercent / 100;

@@ -39,6 +39,14 @@ namespace Unruled.Core.Military
             return (edge.Length * 1000L + speed - 1) / speed;
         }
 
+        /// <summary>Fuel a fleet pays to cross a lane, in whole units: ships x fuel per 100 units x length x tier fuel multiplier, rounded up.</summary>
+        public int FuelFor(in FleetUnit unit, in StarlaneEdge edge)
+        {
+            long milli = (long)unit.TotalShips * _fleetBalance.FuelPerShipPer100UnitsMilli * edge.Length *
+                         _laneBalance.Get(edge.Tier).FuelMultiplierMilli / (100L * 1000L);
+            return (int)((milli + 999) / 1000);
+        }
+
         /// <summary>
         /// Writes the lanes from <paramref name="from"/> to <paramref name="to"/> into <paramref name="route"/>.
         /// False (route cleared) if they are the same site, unreachable at this tech tier, or more than

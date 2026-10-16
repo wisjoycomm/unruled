@@ -9,13 +9,14 @@ namespace Unruled.Core.Economy
     /// Owns <see cref="WtoOrder"/> and <see cref="ItemMarket"/>: the WTO limit order book (GDD §2.2 B).
     /// PlaceBuyOrder / PlaceSellOrder (target: own site with a stockpile; ParamA item, ParamB quantity, ParamC price in
     /// cents per unit) are refused outside +/- the price band of the item's reference price (VWAP of the window, see
-    /// <see cref="ItemMarket"/>). A sell order takes its goods from the site's stockpile; a buy order pays quantity x
-    /// price into the WTO escrow wallet. CancelOrder (target: the order's site; ParamEntity: the order) returns what is
-    /// left. Invalid or unaffordable orders change nothing.
+    /// <see cref="ItemMarket"/>). A sell order takes its goods from the site's stockpile (never units flagged as
+    /// <see cref="StolenGoods"/>) and locks the seller's escrow deposit (bracket rate x quantity x price); a buy order
+    /// pays quantity x price. Both go into the WTO escrow wallet. CancelOrder (target: the order's site; ParamEntity:
+    /// the order) returns what is left. Invalid or unaffordable orders change nothing.
     /// Each tick every item's book is matched: best buy against best sell while they cross, priority price, then
-    /// placement tick, then entity id. A match trades at the earlier order's price; the buyer gets back the
-    /// difference to their limit and the goods at their site; the seller gets the value less their bracket fee, which
-    /// goes to the WTO fee pool.
+    /// placement tick, then entity id. A match trades at the earlier order's price: the buyer gets back the
+    /// difference to their limit, and the goods, value and the matched share of the deposit go to
+    /// <see cref="ITradeSettlement"/>.
     /// </summary>
     public sealed class WtoMarketEngine : ISimSystem, ICommandHandler
     {
@@ -24,28 +25,29 @@ namespace Unruled.Core.Economy
         private readonly ComponentStore<ItemMarket> _markets;
         private readonly ComponentStore<SiteInfo> _sites;
         private readonly ComponentStore<Stockpile> _stockpiles;
+        private readonly ComponentStore<StolenGoods> _stolen;
         private readonly Ledger _ledger;
         private readonly EntityId _escrow;
-        private readonly EntityId _feePool;
         private readonly IMarketRates _rates;
+        private readonly ITradeSettlement _settlement;
         private readonly WtoBalance _balance;
 
         public WtoMarketEngine(
             World world, ComponentStore<WtoOrder> orders, ComponentStore<ItemMarket> markets,
-            ComponentStore<SiteInfo> sites, ComponentStore<Stockpile> stockpiles, Ledger ledger, EntityId escrow,
-            EntityId feePool, IMarketRates rates, WtoBalance balance)
+            ComponentStore<SiteInfo> sites, ComponentStore<Stockpile> stockpiles, ComponentStore<StolenGoods> stolen,
+            Ledger ledger, EntityId escrow, IMarketRates rates, ITradeSettlement settlement, WtoBalance balance)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _orders = orders ?? throw new ArgumentNullException(nameof(orders));
             _markets = markets ?? throw new ArgumentNullException(nameof(markets));
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
+            _stolen = stolen ?? throw new ArgumentNullException(nameof(stolen));
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             if (escrow.IsNull) throw new ArgumentException("WTO escrow wallet required.", nameof(escrow));
-            if (feePool.IsNull) throw new ArgumentException("WTO fee pool required.", nameof(feePool));
             _escrow = escrow;
-            _feePool = feePool;
             _rates = rates ?? throw new ArgumentNullException(nameof(rates));
+            _settlement = settlement ?? throw new ArgumentNullException(nameof(settlement));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
         }
 
@@ -101,10 +103,13 @@ namespace Unruled.Core.Economy
             if (!_ledger.TryFindPlayerWallet(command.PlayerId, out var wallet) || !IsInBand(item, price, tick))
                 return;
 
+            long deposit = 0;
             if (side == OrderSide.Sell)
             {
                 ref var stock = ref _stockpiles.Get(site);
-                if (!stock.Has(item, quantity))
+                int clean = _stolen.Has(site) ? _stolen.Get(site).Clean(stock, item) : stock.Get(item);
+                deposit = price * quantity * _rates.EscrowRatePercent(command.PlayerId) / 100;
+                if (clean < quantity || !_ledger.Transfer(wallet, _escrow, deposit))
                     return;
                 stock.Add(item, -quantity);
             }
@@ -117,7 +122,7 @@ namespace Unruled.Core.Economy
             _orders.Add(order, new WtoOrder
             {
                 OwnerPlayerId = command.PlayerId, Item = item, Side = side, PriceCents = price, Remaining = quantity,
-                Site = site, PlacedTick = tick
+                Site = site, PlacedTick = tick, DepositCents = deposit
             });
         }
 
@@ -127,7 +132,10 @@ namespace Unruled.Core.Economy
                 return;
             ref var o = ref _orders.Get(order);
             if (o.Side == OrderSide.Sell)
+            {
                 _stockpiles.Get(o.Site).Add(o.Item, o.Remaining);
+                Pay(_escrow, Wallet(o.OwnerPlayerId), o.DepositCents);
+            }
             else
                 Pay(_escrow, Wallet(o.OwnerPlayerId), o.PriceCents * o.Remaining);
             _world.Destroy(order);
@@ -139,14 +147,16 @@ namespace Unruled.Core.Economy
             ref var sell = ref _orders.Get(sellOrder);
             long price = IsEarlier(sell, sellOrder, buy, buyOrder) ? sell.PriceCents : buy.PriceCents;
             int quantity = Math.Min(buy.Remaining, sell.Remaining);
-            long value = price * quantity;
-            long fee = value * _rates.FeeBasisPoints(sell.OwnerPlayerId) / 10_000;
+            long deposit = sell.DepositCents * quantity / sell.Remaining;
+            sell.DepositCents -= deposit;
 
-            _stockpiles.Get(buy.Site).Add(buy.Item, quantity);
             Pay(_escrow, Wallet(buy.OwnerPlayerId), (buy.PriceCents - price) * quantity);
-            Pay(_escrow, Wallet(sell.OwnerPlayerId), value - fee);
-            Pay(_escrow, _feePool, fee);
             _markets.Get(Market(buy.Item)).Record(tick, price, quantity, _balance.VwapWindowTicks);
+            _settlement.Open(new TradeMatch
+            {
+                BuyerPlayerId = buy.OwnerPlayerId, SellerPlayerId = sell.OwnerPlayerId, Item = buy.Item, Quantity = quantity,
+                PriceCents = price, DepositCents = deposit, SellerSite = sell.Site, BuyerSite = buy.Site
+            }, tick);
 
             buy.Remaining -= quantity;
             sell.Remaining -= quantity;
