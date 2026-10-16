@@ -166,6 +166,19 @@
     flex-grow: 1;
 }
 
+.board-label {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 11px;
+    padding: 0;
+    margin: 0;
+    white-space: nowrap;
+}
+
+.board-label--strong {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-SemiBold.asset");
+    font-size: 12px;
+}
+
 .board__tabs {
     position: absolute;
     left: 16px;

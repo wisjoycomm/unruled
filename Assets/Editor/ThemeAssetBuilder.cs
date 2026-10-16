@@ -19,7 +19,6 @@ namespace Unruled.Editor
         public const string PanelSettingsPath = ThemeFolder + "/UnruledPanelSettings.asset";
 
         private static readonly Vector2Int ReferenceResolution = new Vector2Int(1440, 900);
-        private static readonly Color Void = new Color32(0x0B, 0x12, 0x20, 0xFF);
 
         [MenuItem("Unruled/Build UI Theme Assets")]
         public static void Build()
@@ -84,8 +83,7 @@ namespace Unruled.Editor
             settings.referenceResolution = ReferenceResolution;
             settings.screenMatchMode = PanelScreenMatchMode.MatchWidthOrHeight;
             settings.match = 0.5f;
-            settings.clearColor = true;
-            settings.colorClearValue = Void;
+            settings.clearColor = false; // the board camera clears to void; the UI leaves the board area see-through
             AssetDatabase.CreateAsset(settings, PanelSettingsPath);
             return true;
         }

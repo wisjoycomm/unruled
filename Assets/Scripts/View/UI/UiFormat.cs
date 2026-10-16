@@ -71,6 +71,15 @@ namespace Unruled.View.UI
                    s.ToString("00", Invariant);
         }
 
+        /// <summary>A span of ticks as "h:mm:ss".</summary>
+        public static string Duration(long ticks)
+        {
+            long h = ticks / SimTick.TicksPerHour;
+            long m = ticks % SimTick.TicksPerHour / SimTick.TicksPerMinute;
+            long s = ticks % SimTick.TicksPerMinute;
+            return Number(h) + ":" + m.ToString("00", Invariant) + ":" + s.ToString("00", Invariant);
+        }
+
         public static string SiteName(in SiteInfo site) => StarName(site.ClusterId) + "-" + Number(site.OrbitIndex + 1);
 
         public static string StarName(int clusterId)
