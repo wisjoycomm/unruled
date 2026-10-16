@@ -67,3 +67,4 @@
 - 2026-10-16 - Claude - Save games: SaveGame write/load of the whole world as MessagePack (in-house codec, explicit append-only formatters, SchemaVersion 1); World/ComponentStore restore hooks; round-trip, lockstep and schema tests.
 - 2026-10-16 - Claude - GameSession continues the saved game at start-up and autosaves every sim hour and on pause/quit; an unreadable save is kept aside and reported.
 - 2026-10-16 - Claude - Phone layout: CompactLayout switches below 1100 px to a full-width board with a STOCK / BOARD / FLEET · OPS bottom bar; the top bar wraps.
+- 2026-10-16 - Claude - AI Citadel assault: besieging presets send Tier 3+ fleets at an outgunned or unguarded Citadel and hold it while bombarding; tests.

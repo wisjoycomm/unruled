@@ -63,12 +63,13 @@ namespace Unruled.Core.AI
         public readonly int CoreSupplyReserve; // fuel and coolant fleets leave at the core base for its drills
         public readonly int RawStockCap; // a site holding this much of a deposit's ore pauses its drills
         public readonly int LoadUpkeepIntervals; // upkeep intervals of oxygen and rations a fleet loads at the core base
+        public readonly byte CitadelAssaultTier; // besieging presets send fleets of this tech tier or higher at the Citadel
         private readonly AiPreset[] _presets;
 
         public AiBalance(
             int thinkIntervalTicks, int fullBatteryScans, int resupplyAmmoPerLineShip, int loadAmmoPerLineShip, int loadFuel,
             int outpostRigs, int convoyShips, int convoyBatch, int refineryInputStock, int coreSupplyReserve,
-            int rawStockCap, int loadUpkeepIntervals, AiPreset[] presets)
+            int rawStockCap, int loadUpkeepIntervals, byte citadelAssaultTier, AiPreset[] presets)
         {
             if (thinkIntervalTicks < 1) throw new ArgumentOutOfRangeException(nameof(thinkIntervalTicks));
             if (fullBatteryScans < 1) throw new ArgumentOutOfRangeException(nameof(fullBatteryScans));
@@ -82,6 +83,7 @@ namespace Unruled.Core.AI
             if (coreSupplyReserve < 0) throw new ArgumentOutOfRangeException(nameof(coreSupplyReserve));
             if (rawStockCap < 2) throw new ArgumentOutOfRangeException(nameof(rawStockCap));
             if (loadUpkeepIntervals < 1) throw new ArgumentOutOfRangeException(nameof(loadUpkeepIntervals));
+            if (citadelAssaultTier < 1 || citadelAssaultTier > 5) throw new ArgumentOutOfRangeException(nameof(citadelAssaultTier));
             if (presets == null || presets.Length == 0) throw new ArgumentException("Presets required.", nameof(presets));
             for (int i = 0; i < presets.Length; i++)
             {
@@ -100,6 +102,7 @@ namespace Unruled.Core.AI
             CoreSupplyReserve = coreSupplyReserve;
             RawStockCap = rawStockCap;
             LoadUpkeepIntervals = loadUpkeepIntervals;
+            CitadelAssaultTier = citadelAssaultTier;
             _presets = (AiPreset[])presets.Clone();
         }
 

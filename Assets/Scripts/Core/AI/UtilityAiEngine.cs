@@ -35,7 +35,8 @@ namespace Unruled.Core.AI
         SetConvoyRoute = 16,
         BuildRefinery = 17,
         PauseDrills = 18,
-        AuditOptIn = 19
+        AuditOptIn = 19,
+        AssaultCitadel = 20
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -115,6 +116,7 @@ namespace Unruled.Core.AI
         private readonly ComponentStore<ShipBuildOrder> _shipOrders;
         private readonly ComponentStore<Refinery> _refineries;
         private readonly ComponentStore<PlayerStanding> _standings;
+        private readonly ComponentStore<SystemCitadel> _citadels;
         private readonly CommandIssuer _issuer;
         private readonly RoutePlanner _routes;
         private readonly ITechGates _tech;
@@ -144,8 +146,8 @@ namespace Unruled.Core.AI
             ComponentStore<SiteWeather> weather, ComponentStore<MineralDeposit> deposits, ComponentStore<StarlaneEdge> lanes,
             ComponentStore<RadarScan> scans, ComponentStore<TechProgress> progress, ComponentStore<JumpGate> gates,
             ComponentStore<ConvoyRoute> convoyRoutes, ComponentStore<ShipBuildOrder> shipOrders,
-            ComponentStore<Refinery> refineries, ComponentStore<PlayerStanding> standings, CommandIssuer issuer, RoutePlanner routes, ITechGates tech,
-            GameBalanceConfig config)
+            ComponentStore<Refinery> refineries, ComponentStore<PlayerStanding> standings, ComponentStore<SystemCitadel> citadels,
+            CommandIssuer issuer, RoutePlanner routes, ITechGates tech, GameBalanceConfig config)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             _controllers = controllers ?? throw new ArgumentNullException(nameof(controllers));
@@ -166,6 +168,7 @@ namespace Unruled.Core.AI
             _shipOrders = shipOrders ?? throw new ArgumentNullException(nameof(shipOrders));
             _refineries = refineries ?? throw new ArgumentNullException(nameof(refineries));
             _standings = standings ?? throw new ArgumentNullException(nameof(standings));
+            _citadels = citadels ?? throw new ArgumentNullException(nameof(citadels));
             _issuer = issuer ?? throw new ArgumentNullException(nameof(issuer));
             _routes = routes ?? throw new ArgumentNullException(nameof(routes));
             _tech = tech ?? throw new ArgumentNullException(nameof(tech));
@@ -279,7 +282,7 @@ namespace Unruled.Core.AI
 
             bool docked = motion.Lane.IsNull && !motion.Site.IsNull && state.EngagedUntilTick <= tick;
             bool ready = docked && (!_readiness.Has(fleet) || _readiness.Get(fleet).CanAct(tick));
-            EntityId raidTarget = default, siegeTarget = default, rigDeposit = default;
+            EntityId raidTarget = default, siegeTarget = default, citadelTarget = default, rigDeposit = default;
             var loadItem = ItemId.None;
             int loadQuantity = 0;
             if (docked && motion.Site == player.CoreBase)
@@ -299,9 +302,13 @@ namespace Unruled.Core.AI
                     if (preset.SiegeConquestWeight > 0 && CarriesClaimCost(ref hold) &&
                         FindTarget(player, in unit, fuel, raid: false, out siegeTarget, out int siegeEdge))
                         Consider(AiAction.Siege, Score(preset.SiegeConquestWeight, siegeEdge), ref best, ref bestScore);
+                    if (preset.SiegeConquestWeight > 0 && FindCitadel(player, in unit, fuel, out citadelTarget, out int citadelEdge))
+                        Consider(AiAction.AssaultCitadel, Score(preset.SiegeConquestWeight, citadelEdge), ref best, ref bestScore);
                 }
             }
-            else if (ready && IsAway(motion.Site, player.PlayerId) && Power(motion.Site, player.PlayerId, mine: false) == 0)
+            // At a standing Citadel the fleet stays: its docked line ships bombard the shield until ammo runs low.
+            else if (ready && IsAway(motion.Site, player.PlayerId) && Power(motion.Site, player.PlayerId, mine: false) == 0 &&
+                     !IsStandingCitadel(motion.Site))
             {
                 if (preset.SiegeConquestWeight > 0 && IsClaimable(motion.Site, player.PlayerId) && CarriesClaimCost(ref hold))
                     Consider(AiAction.ClaimSite, Score(preset.SiegeConquestWeight, Full), ref best, ref bestScore);
@@ -341,6 +348,10 @@ namespace Unruled.Core.AI
                 case AiAction.Siege:
                     command.CommandType = CommandType.Move;
                     command.ParamEntity = siegeTarget;
+                    break;
+                case AiAction.AssaultCitadel:
+                    command.CommandType = CommandType.Move;
+                    command.ParamEntity = citadelTarget;
                     break;
                 case AiAction.ClaimSite:
                     command.CommandType = CommandType.ClaimSite;
@@ -645,6 +656,34 @@ namespace Unruled.Core.AI
             }
             return !target.IsNull;
         }
+
+        // A standing Citadel whose garrison (if formed) the fleet outguns, within a round trip of fuel; edge as in FindTarget.
+        private bool FindCitadel(in PlayerHq player, in FleetUnit unit, int fuel, out EntityId target, out int edge)
+        {
+            target = default;
+            edge = 0;
+            if (unit.TechTier < _balance.CitadelAssaultTier || unit.LineShips == 0)
+                return false;
+            long power = FleetPower(in unit);
+            for (int c = 0; c < _citadels.Count; c++)
+            {
+                var site = _citadels.EntityAt(c);
+                if (_citadels.At(c).FallenTick > 0)
+                    continue;
+                long hostile = Power(site, player.PlayerId, mine: false);
+                if (hostile >= power || !_routes.TryPlan(player.CoreBase, site, unit.TechTier, ref _route) ||
+                    2L * RouteFuel(in unit) > fuel)
+                    continue;
+                int advantage = Severity(power - hostile, power);
+                if (advantage <= edge)
+                    continue;
+                target = site;
+                edge = advantage;
+            }
+            return !target.IsNull;
+        }
+
+        private bool IsStandingCitadel(EntityId site) => _citadels.Has(site) && _citadels.Get(site).FallenTick == 0;
 
         // Bit per raw item slot the player has rigs on somewhere.
         private int MinedOres(int playerId)

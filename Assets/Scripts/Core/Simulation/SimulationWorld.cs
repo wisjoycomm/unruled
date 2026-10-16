@@ -262,8 +262,8 @@ namespace Unruled.Core.Simulation
 
             Ai = new UtilityAiEngine(
                 AiControllers, Players, Fleets, FleetMotions, FleetCombat, FleetReadiness, Stockpiles, Sites, Weather, Deposits,
-                Starlanes, RadarScans, TechProgress, JumpGates, ConvoyRoutes, ShipOrders, Refineries, Standings, Issuer, Routes, TechGates,
-                balance);
+                Starlanes, RadarScans, TechProgress, JumpGates, ConvoyRoutes, ShipOrders, Refineries, Standings, Citadels, Issuer, Routes,
+                TechGates, balance);
         }
 
         /// <summary>

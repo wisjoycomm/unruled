@@ -6,6 +6,7 @@ using Unruled.Core.Economy;
 using Unruled.Core.Military;
 using Unruled.Core.Research;
 using Unruled.Core.Simulation;
+using Unruled.Core.SystemFactions;
 
 namespace Unruled.Tests.Core.AI
 {
@@ -43,9 +44,9 @@ namespace Unruled.Tests.Core.AI
             return site;
         }
 
-        private EntityId Fleet(int owner, EntityId site, int lineShips, bool loaded)
+        private EntityId Fleet(int owner, EntityId site, int lineShips, bool loaded, byte tier = 1)
         {
-            var fleet = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = owner, TechTier = 1, LineShips = lineShips }, site);
+            var fleet = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = owner, TechTier = tier, LineShips = lineShips }, site);
             if (!loaded)
                 return fleet;
             ref var hold = ref _sim.Stockpiles.Get(fleet);
@@ -155,6 +156,52 @@ namespace Unruled.Tests.Core.AI
             _sim.TechProgress.Get(_hq).TechTier = 2;
             Assert.IsFalse(Find(Sentinel, AiAction.OpenGate).HasValue, "the Sentinel stays sealed");
             Assert.IsTrue(Find(Warlord, AiAction.OpenGate).HasValue);
+        }
+
+        // The target becomes THE SYSTEM's Citadel; its garrison is struck down and not due back during the test.
+        private void MakeTargetAnUnguardedCitadel()
+        {
+            _sim.Defense.CreateCitadel(_target);
+            ref var citadel = ref _sim.Citadels.Get(_target);
+            _sim.World.Destroy(citadel.Garrison);
+            citadel.Garrison = default;
+            citadel.GarrisonDueTick = long.MaxValue;
+        }
+
+        [Test]
+        public void Warlord_AssaultsAnUnguardedCitadel_ThenHoldsItAndBombards()
+        {
+            MakeTargetAnUnguardedCitadel();
+            var fleet = Fleet(Me, _home, 4, loaded: true, tier: 3);
+
+            var order = Find(Warlord, AiAction.AssaultCitadel);
+            Assert.IsTrue(order.HasValue);
+            Assert.AreEqual(IssueResult.Issued, order.Value.Result);
+            for (int i = 0; i < 2_000 && _sim.FleetMotions.Get(fleet).Site != _target; i++)
+                _sim.Clock.Advance(1);
+            Assert.AreEqual(_target, _sim.FleetMotions.Get(fleet).Site, "arrived");
+
+            Assert.IsFalse(Find(Warlord, AiAction.ReturnHome).HasValue, "holds the Citadel while it has ammo");
+            int shield = _sim.Citadels.Get(_target).Integrity;
+            _sim.Clock.Advance(_sim.Balance.Citadel.CheckIntervalTicks);
+            Assert.Less(_sim.Citadels.Get(_target).Integrity, shield, "bombarded");
+        }
+
+        [Test]
+        public void NobodyAssaultsTheCitadel_BelowTheTier_OrAgainstAStrongerGarrison()
+        {
+            _sim.Defense.CreateCitadel(_target);
+            Fleet(Me, _home, 4, loaded: true, tier: 3);
+            Assert.IsFalse(Find(Warlord, AiAction.AssaultCitadel).HasValue, "the garrison outguns 4 ships");
+
+            SetUp();
+            MakeTargetAnUnguardedCitadel();
+            var fleet = Fleet(Me, _home, 4, loaded: true, tier: 2);
+            Assert.IsFalse(Find(Warlord, AiAction.AssaultCitadel).HasValue, "tier 2");
+
+            _sim.Fleets.Get(fleet).TechTier = 3;
+            Assert.IsFalse(Find(Sentinel, AiAction.AssaultCitadel).HasValue, "the Sentinel never besieges");
+            Assert.IsTrue(Find(Warlord, AiAction.AssaultCitadel).HasValue);
         }
     }
 }
