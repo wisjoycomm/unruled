@@ -6,15 +6,16 @@ rules: `.claude/rules/architecture.md`; decisions and exceptions: `.docs/plan/ro
 State after Sprint 4: the engine-free simulation core (economy, board, weather, latency, radar, fleets, salvo
 combat, capital relocation, credits, WTO market and escrow contracts, STA tolls, leaderboard audit, THE SYSTEM's
 bulletins and Call-to-Arms, Utility AI) and its tests.
-The style-guide UI theme exists (`Unruled.View`); no game screens, scenes or networking yet.
+A playable local build: `Assets/Scenes/Main.unity` runs a generated game in-process (1 tick = 1 s) with the
+main-screen HUD and the board renderer. No networking, research or galaxy map yet.
 
 ## Assemblies
 
 | Assembly | Folder | Notes |
 |---|---|---|
 | `Unruled.Core` | `Assets/Scripts/Core/` | `noEngineReferences`, `allowUnsafeCode` (fixed buffers). All rules and state. |
-| `Unruled.View` | `Assets/Scripts/View/` | References Core only. `UI/Theme/`: `Unruled.uss` (palette variables, type and component classes), `UnruledTheme.tss`, `UnruledPanelSettings`, OFL fonts + FontAssets, `DashedFrame`, `ThemePreview.uxml`. |
-| `Unruled.Editor` | `Assets/Editor/` | Editor-only. `ThemeAssetBuilder` (menu Unruled/Build UI Theme Assets) creates missing FontAssets and the PanelSettings. |
+| `Unruled.View` | `Assets/Scripts/View/` | References Core only. `UI/Theme/`: `Unruled.uss` (palette variables, type and component classes), `UnruledTheme.tss`, `UnruledPanelSettings`, OFL fonts + FontAssets, `DashedFrame`, `ItemIcon`, `UnruledPalette`, `ThemePreview.uxml`. `UI/`: `MainScreen.uxml/.uss`, `MainScreenView` (binds and refreshes once per tick) and its controllers `TopTelemetryHud`, `LeftInventoryDock`, `ContractAndMarketUI`, `FleetCard`, `InFlightStrip`, `UiFormat`, `HudQueries`. `MapBoardRenderer` + `BoardMesh` draw one star system as a vertex-coloured mesh. `GameSession` hosts the game: `NewGameSetup`, binds the views, advances the clock and runs AI. |
+| `Unruled.Editor` | `Assets/Editor/` | Editor-only. `ThemeAssetBuilder` (menu Unruled/Build UI Theme Assets) creates missing FontAssets and the PanelSettings; `BoardAssetBuilder` the board material; `MainSceneBuilder` (menu Unruled/Build Main Scene) rebuilds `Main.unity` and puts it first in the build list. |
 | `Unruled.Tests.Core` | `Assets/Tests/Core/` | EditMode NUnit tests, one folder per Core folder. |
 
 ## Composition
@@ -28,6 +29,8 @@ which adds every fleet component and an empty cargo hold. Orders enter through `
 the signal latency and queues them; when due, `SimClock` sends them through `CommandRouter` to the owning system.
 `UtilityAiEngine` (`Ai`) is not on the clock: the host calls `Ai.Think(tick)` (every 10 ticks, Server 2), and it
 issues orders only through `CommandIssuer`. `NoaaForecast` (`Forecast`) is a read-only query for the views.
+`NewGameSetup.Create(sim, playerId)` lays out a new game from `NewGameBalance`: a home system per participant,
+stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a starting fleet and AI rivals.
 
 ## Tick order
 
@@ -58,7 +61,7 @@ methods, in this order (rule 4).
 - **Simulation/**: `SimTick`, `SimClock`, `DelayedPlayerCommand` (target = entity index + generation),
   `CommandRouter`, `SimulationWorld`. `SplitMix64` is the only RNG; `FixedMath` provides Q16 sin/cos and an exact
   integer sqrt. `GameBalanceConfig` holds every balance object, and `DefaultGameBalance` is the one place sheet
-  values are written.
+  values are written. `NewGameSetup` + `NewGameBalance` lay out a new game.
 - **Ecs/**: `EntityId`, `World` (create/destroy, owns the stores) and `ComponentStore<T>` (sorted sparse set,
   iterated in ascending entity order).
 - **Board/**:
