@@ -54,13 +54,6 @@ namespace Unruled.Core.Research
             _worldSeed = worldSeed;
         }
 
-        /// <summary>The player's tech tier (1 if the player has no HQ or no research yet).</summary>
-        public byte TechTierOf(int playerId)
-        {
-            var hq = FindHq(playerId);
-            return !hq.IsNull && _progress.Has(hq) ? _progress.Get(hq).TechTier : (byte)1;
-        }
-
         public void OnTick(long tick)
         {
             for (int i = 0; i < _progress.Count; i++)

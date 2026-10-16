@@ -82,7 +82,7 @@ namespace Unruled.Tests.Core.Research
         {
             Assert.AreEqual(1, Progress.TechTier);
             Assert.AreEqual(ResearchStage.FieldTelemetry, Progress.Stage);
-            Assert.AreEqual(1, _sim.Research.TechTierOf(Player));
+            Assert.AreEqual(1, _sim.TechGates.TechTierOf(Player));
         }
 
         [Test]
@@ -173,7 +173,7 @@ namespace Unruled.Tests.Core.Research
             Run(1);
             Assert.AreEqual(2, Progress.TechTier);
             Assert.AreEqual(ResearchStage.FieldTelemetry, Progress.Stage);
-            Assert.AreEqual(2, _sim.Research.TechTierOf(Player));
+            Assert.AreEqual(2, _sim.TechGates.TechTierOf(Player));
         }
 
         [Test]

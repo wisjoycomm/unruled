@@ -1,6 +1,7 @@
 using System;
-using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
+using Unruled.Core.Ecs;
+using Unruled.Core.Research;
 using Unruled.Core.Simulation;
 
 namespace Unruled.Core.Board
@@ -17,6 +18,7 @@ namespace Unruled.Core.Board
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly MiningBalance _mining;
         private readonly LifecycleBalance _balance;
+        private readonly ITechGates _tech;
 
         // Per-site totals for the depletion pass, indexed by site entity index. Grows only when new indices appear.
         private long[] _surfaceLeft = new long[64];
@@ -25,13 +27,14 @@ namespace Unruled.Core.Board
 
         public PlanetLifecycleSystem(
             ComponentStore<SiteInfo> sites, ComponentStore<MineralDeposit> deposits,
-            ComponentStore<Stockpile> stockpiles, MiningBalance mining, LifecycleBalance balance)
+            ComponentStore<Stockpile> stockpiles, MiningBalance mining, LifecycleBalance balance, ITechGates tech)
         {
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _deposits = deposits ?? throw new ArgumentNullException(nameof(deposits));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _mining = mining ?? throw new ArgumentNullException(nameof(mining));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
+            _tech = tech ?? throw new ArgumentNullException(nameof(tech));
         }
 
         public void OnTick(long tick)
@@ -123,7 +126,8 @@ namespace Unruled.Core.Board
             if (!_sites.Has(siteId) || !_stockpiles.Has(siteId))
                 return;
             ref var site = ref _sites.Get(siteId);
-            if (site.OwnerPlayerId != command.PlayerId || site.LifecycleState != PlanetLifecycleState.IrradiatedDeadWorld)
+            if (site.OwnerPlayerId != command.PlayerId || site.LifecycleState != PlanetLifecycleState.IrradiatedDeadWorld ||
+                !_tech.Unlocks(command.PlayerId, TechGate.Terraform))
                 return;
 
             ref var stock = ref _stockpiles.Get(siteId);

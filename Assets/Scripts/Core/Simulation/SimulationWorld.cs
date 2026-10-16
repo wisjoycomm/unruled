@@ -75,6 +75,7 @@ namespace Unruled.Core.Simulation
         public readonly SignalLatencySolver Latency;
         public readonly CommandIssuer Issuer;
         public readonly ResearchSystem Research;
+        public readonly TechGates TechGates;
 
         public SimulationWorld(GameBalanceConfig balance, ulong worldSeed, long startTick = 0)
         {
@@ -132,8 +133,9 @@ namespace Unruled.Core.Simulation
                 });
             }
 
+            TechGates = new TechGates(TechProgress, Players, balance.Research);
             Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, FleetMotions,
-                balance.Latency);
+                balance.Latency, TechGates);
             Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, FleetMotions, Deposits, Players, Relocations);
             FleetFactory = new FleetFactory(
                 World, Sites, Fleets, FleetMotions, FleetRoutes, FleetSensors, FleetReadiness, FleetCombat, Stockpiles, balance.Combat);
@@ -150,10 +152,10 @@ namespace Unruled.Core.Simulation
                 balance.Lifecycle, worldSeed);
             Clock.Register(WeatherEngine);
             Forecast = new NoaaForecast(WeatherEngine, Rates);
-            var mining = new MiningSystem(Deposits, Sites, Stockpiles, balance.Mining);
+            var mining = new MiningSystem(Deposits, Sites, Stockpiles, balance.Mining, TechGates);
             Clock.Register(mining);
             Commands.Register(CommandType.RetractDrills, mining);
-            Lifecycle = new PlanetLifecycleSystem(Sites, Deposits, Stockpiles, balance.Mining, balance.Lifecycle);
+            Lifecycle = new PlanetLifecycleSystem(Sites, Deposits, Stockpiles, balance.Mining, balance.Lifecycle, TechGates);
             Clock.Register(Lifecycle);
             Commands.Register(CommandType.Terraform, Lifecycle);
             Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, Sites, Ledger, balance.Recipes, balance.Refinery));

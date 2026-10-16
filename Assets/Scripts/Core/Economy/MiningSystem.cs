@@ -1,12 +1,14 @@
 using System;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
+using Unruled.Core.Research;
 using Unruled.Core.Simulation;
 
 namespace Unruled.Core.Economy
 {
     /// <summary>
-    /// Mines every deposit once per cycle (GDD §2.1 B): surface, then deep crust, then core fracture once unlocked.
+    /// Mines every deposit once per cycle (GDD §2.1 B): surface, then deep crust, then core fracture once unlocked
+    /// (only for a site owner with the Tier-4 core-fracture gate).
     /// A deposit whose site lacks the fuel or coolant for this cycle stalls. A depth is never mixed in one cycle.
     /// Depletion lifecycle changes belong to <see cref="Board.PlanetLifecycleSystem"/>, which runs next.
     /// RetractDrills (target: a deposit on a site the player owns) stops the rigs at once; they are gone from the
@@ -20,15 +22,17 @@ namespace Unruled.Core.Economy
         private readonly ComponentStore<SiteInfo> _sites;
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly MiningBalance _balance;
+        private readonly ITechGates _tech;
 
         public MiningSystem(
             ComponentStore<MineralDeposit> deposits, ComponentStore<SiteInfo> sites, ComponentStore<Stockpile> stockpiles,
-            MiningBalance balance)
+            MiningBalance balance, ITechGates tech)
         {
             _deposits = deposits ?? throw new ArgumentNullException(nameof(deposits));
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
+            _tech = tech ?? throw new ArgumentNullException(nameof(tech));
         }
 
         public void OnTick(long tick)
@@ -81,7 +85,8 @@ namespace Unruled.Core.Economy
                 rules = _balance.DeepCrust;
                 reserve = deposit.DeepCrustReserve;
             }
-            else if (deposit.IsCoreFractureUnlocked && deposit.CoreFractureReserve > 0)
+            else if (deposit.IsCoreFractureUnlocked && deposit.CoreFractureReserve > 0 &&
+                     _tech.Unlocks(_sites.Get(deposit.Site).OwnerPlayerId, TechGate.CoreFractureMining))
             {
                 depth = Depth.CoreFracture;
                 rules = _balance.CoreFracture;

@@ -25,7 +25,8 @@ namespace Unruled.Core.Simulation
                 CreateResearchBalance());
 
         /// <summary>
-        /// GDD §2.3: P_base tier 2/3/4/5 = 60/45/30/20%, +18% per failed test; stress-test items follow tab 03's
+        /// GDD §2.3: P_base tier 2/3/4/5 = 60/45/30/20%, +18% per failed test; gates from GDD §1.2 / §2.1 B / tab 02:
+        /// laser comms and core-fracture mining at Tier 4, terraforming at Tier 5; stress-test items follow tab 03's
         /// Build_And_Repair_Items per tier. PROVISIONAL: 1,000 milli of telemetry at 1 milli per storm level per tick
         /// (about 17 min in a level-1 storm), 5 microchips aboard to measure, 10 of each test item, retooling
         /// 1/2/4/8 h for tiers 2..5.
@@ -35,6 +36,9 @@ namespace Unruled.Core.Simulation
             telemetryMilliPerStormLevel: 1,
             telemetryMinMicrochips: 5,
             pityPermillePerFailure: 180,
+            laserCommsTier: 4,
+            coreFractureMiningTier: 4,
+            terraformTier: 5,
             tiers: new[]
             {
                 new TierResearchRules(600, new[] { new ItemStack(ItemId.ItemSteel, 10), new ItemStack(ItemId.ItemBattery, 10) },

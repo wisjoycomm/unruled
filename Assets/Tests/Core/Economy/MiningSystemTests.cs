@@ -1,8 +1,9 @@
 using NUnit.Framework;
 using Unruled.Core.Board;
-using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
+using Unruled.Core.Ecs;
 using Unruled.Core.Simulation;
+using Unruled.Tests.Core.Research;
 
 namespace Unruled.Tests.Core.Economy
 {
@@ -20,6 +21,8 @@ namespace Unruled.Tests.Core.Economy
 
         private const int StartEsi = 800;
 
+        private FixedTechGates _tech;
+
         [SetUp]
         public void SetUp()
         {
@@ -28,9 +31,10 @@ namespace Unruled.Tests.Core.Economy
             _stockpiles = _world.CreateStore<Stockpile>();
             _deposits = _world.CreateStore<MineralDeposit>();
             _balance = DefaultGameBalance.CreateMiningBalance();
-            _system = new MiningSystem(_deposits, _sites, _stockpiles, _balance);
+            _tech = new FixedTechGates(5);
+            _system = new MiningSystem(_deposits, _sites, _stockpiles, _balance, _tech);
             _lifecycle = new PlanetLifecycleSystem(
-                _sites, _deposits, _stockpiles, _balance, DefaultGameBalance.CreateLifecycleBalance());
+                _sites, _deposits, _stockpiles, _balance, DefaultGameBalance.CreateLifecycleBalance(), _tech);
             _tick = 0;
 
             _site = _world.Create();
@@ -183,6 +187,23 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(Yield(_balance.CoreFracture, 1), Stock.Get(ItemId.RawIron));
             Assert.AreEqual(1000 - Fuel(_balance.CoreFracture, 1), Stock.Get(ItemId.ItemFuel));
             Assert.AreEqual(PlanetLifecycleState.IrradiatedDeadWorld, Site.LifecycleState);
+        }
+
+        [Test]
+        public void CoreFracture_NeedsTheOwnersTierFourGate()
+        {
+            var deposit = AddDeposit(surface: 0, deep: 0);
+            _deposits.Get(deposit).CoreFractureReserve = 1000;
+            _deposits.Get(deposit).IsCoreFractureUnlocked = true;
+            Site.LifecycleState = PlanetLifecycleState.IrradiatedDeadWorld;
+            _tech.Tier = 3;
+
+            RunCycles(1);
+            Assert.AreEqual(0, Stock.Get(ItemId.RawIron));
+
+            _tech.Tier = 4;
+            RunCycles(1);
+            Assert.AreEqual(Yield(_balance.CoreFracture, 1), Stock.Get(ItemId.RawIron));
         }
 
         [Test]

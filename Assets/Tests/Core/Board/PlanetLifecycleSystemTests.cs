@@ -1,8 +1,9 @@
 using NUnit.Framework;
 using Unruled.Core.Board;
-using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
+using Unruled.Core.Ecs;
 using Unruled.Core.Simulation;
+using Unruled.Tests.Core.Research;
 
 namespace Unruled.Tests.Core.Board
 {
@@ -21,6 +22,8 @@ namespace Unruled.Tests.Core.Board
         private EntityId _biomass;
         private EntityId _tungsten;
 
+        private FixedTechGates _tech;
+
         [SetUp]
         public void SetUp()
         {
@@ -29,8 +32,9 @@ namespace Unruled.Tests.Core.Board
             _deposits = _world.CreateStore<MineralDeposit>();
             _stockpiles = _world.CreateStore<Stockpile>();
             _balance = DefaultGameBalance.CreateLifecycleBalance();
+            _tech = new FixedTechGates(5);
             _system = new PlanetLifecycleSystem(
-                _sites, _deposits, _stockpiles, DefaultGameBalance.CreateMiningBalance(), _balance);
+                _sites, _deposits, _stockpiles, DefaultGameBalance.CreateMiningBalance(), _balance, _tech);
 
             _site = _world.Create();
             _sites.Add(_site, new SiteInfo
@@ -154,12 +158,28 @@ namespace Unruled.Tests.Core.Board
         }
 
         [Test]
+        public void Terraform_BelowTheTerraformTier_IsRefused()
+        {
+            _system.ApplyNuclearStrike(_site, StrikeTick);
+            PayTerraformCost();
+            _tech.Tier = 4;
+            var command = Terraform(Owner);
+
+            _system.Handle(in command, StrikeTick + 50);
+
+            Assert.AreEqual(PlanetLifecycleState.IrradiatedDeadWorld, Site.LifecycleState);
+            Assert.AreEqual(_balance.TerraformNuclearCores, Stock.Get(ItemId.ItemNuclearCore), "nothing charged");
+        }
+
+        [Test]
         public void TerraformCommand_IsRoutedThroughSimulationWorld()
         {
             var sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 1);
             var site = sim.World.Create();
             sim.Sites.Add(site, new SiteInfo { OwnerPlayerId = Owner, LifecycleState = PlanetLifecycleState.PristineWorld });
             sim.Stockpiles.Add(site, default);
+            var hq = sim.CreatePlayer(Owner, site);
+            sim.TechProgress.Get(hq).TechTier = 5;
             sim.Lifecycle.ApplyNuclearStrike(site, 0);
             ref var stock = ref sim.Stockpiles.Get(site);
             stock.Add(ItemId.RawWater, _balance.TerraformWater);

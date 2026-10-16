@@ -30,11 +30,15 @@ namespace Unruled.Core.Research
         public readonly int TelemetryMilliPerStormLevel; // gathered per tick per storm level at the fleet's location
         public readonly int TelemetryMinMicrochips; // a fleet needs this many microchips aboard to measure
         public readonly int PityPermillePerFailure; // +18% per failed test
+        public readonly byte LaserCommsTier;
+        public readonly byte CoreFractureMiningTier;
+        public readonly byte TerraformTier;
         private readonly TierResearchRules[] _tiers; // index 0 = tier 2
 
         public ResearchBalance(
             int telemetryTargetMilli, int telemetryMilliPerStormLevel, int telemetryMinMicrochips,
-            int pityPermillePerFailure, TierResearchRules[] tiers)
+            int pityPermillePerFailure, byte laserCommsTier, byte coreFractureMiningTier, byte terraformTier,
+            TierResearchRules[] tiers)
         {
             if (telemetryTargetMilli < 1) throw new ArgumentOutOfRangeException(nameof(telemetryTargetMilli));
             if (telemetryMilliPerStormLevel < 1) throw new ArgumentOutOfRangeException(nameof(telemetryMilliPerStormLevel));
@@ -44,11 +48,30 @@ namespace Unruled.Core.Research
                 throw new ArgumentException($"Rules for tiers 2..{TopTier} required.", nameof(tiers));
             for (int i = 0; i < tiers.Length; i++)
                 if (tiers[i] == null) throw new ArgumentException($"Tier {i + 2} rules missing.", nameof(tiers));
+            if (laserCommsTier < 1 || laserCommsTier > TopTier) throw new ArgumentOutOfRangeException(nameof(laserCommsTier));
+            if (coreFractureMiningTier < 1 || coreFractureMiningTier > TopTier)
+                throw new ArgumentOutOfRangeException(nameof(coreFractureMiningTier));
+            if (terraformTier < 1 || terraformTier > TopTier) throw new ArgumentOutOfRangeException(nameof(terraformTier));
+            LaserCommsTier = laserCommsTier;
+            CoreFractureMiningTier = coreFractureMiningTier;
+            TerraformTier = terraformTier;
             TelemetryTargetMilli = telemetryTargetMilli;
             TelemetryMilliPerStormLevel = telemetryMilliPerStormLevel;
             TelemetryMinMicrochips = telemetryMinMicrochips;
             PityPermillePerFailure = pityPermillePerFailure;
             _tiers = (TierResearchRules[])tiers.Clone();
+        }
+
+        /// <summary>The tech tier that unlocks <paramref name="gate"/>.</summary>
+        public byte GateTier(TechGate gate)
+        {
+            switch (gate)
+            {
+                case TechGate.LaserComms: return LaserCommsTier;
+                case TechGate.CoreFractureMining: return CoreFractureMiningTier;
+                case TechGate.Terraform: return TerraformTier;
+                default: throw new ArgumentOutOfRangeException(nameof(gate));
+            }
         }
 
         /// <summary>Rules for researching <paramref name="tier"/> (2..5).</summary>

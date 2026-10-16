@@ -1,6 +1,7 @@
 using System;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
+using Unruled.Core.Research;
 
 namespace Unruled.Core.Military
 {
@@ -30,6 +31,7 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<FleetUnit> _units;
         private readonly ComponentStore<FleetMotion> _motions;
         private readonly LatencyBalance _balance;
+        private readonly ITechGates _tech;
 
         // Stamp arrays: an entry counts only when it equals the current query's stamp, so nothing is cleared per query.
         private int _stamp;
@@ -45,7 +47,7 @@ namespace Unruled.Core.Military
             StarlaneGraph graph, ComponentStore<StarlaneEdge> lanes, ComponentStore<SiteWeather> siteWeather,
             ComponentStore<LaneWeather> laneWeather, ComponentStore<PlayerHq> players,
             ComponentStore<RelayStation> relays, ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions,
-            LatencyBalance balance)
+            LatencyBalance balance, ITechGates tech)
         {
             _graph = graph ?? throw new ArgumentNullException(nameof(graph));
             _lanes = lanes ?? throw new ArgumentNullException(nameof(lanes));
@@ -56,12 +58,14 @@ namespace Unruled.Core.Military
             _units = units ?? throw new ArgumentNullException(nameof(units));
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
+            _tech = tech ?? throw new ArgumentNullException(nameof(tech));
         }
 
         public LatencyStatus TryComputeToSite(int playerId, EntityId site, out int latencyTicks)
         {
             latencyTicks = 0;
-            if (_siteWeather.Has(site) && _siteWeather.Get(site).RadioBlackoutLevel >= _balance.BlackoutRadioLevel)
+            if (_siteWeather.Has(site) && _siteWeather.Get(site).RadioBlackoutLevel >= _balance.BlackoutRadioLevel &&
+                !_tech.Unlocks(playerId, TechGate.LaserComms))
                 return LatencyStatus.Blackout;
             if (!Prepare(playerId, out var hq))
                 return LatencyStatus.NoHq;
@@ -79,7 +83,8 @@ namespace Unruled.Core.Military
             latencyTicks = 0;
             if (!_lanes.Has(lane))
                 return LatencyStatus.Unreachable;
-            if (_laneWeather.Has(lane) && _laneWeather.Get(lane).RadioBlackoutLevel >= _balance.BlackoutRadioLevel)
+            if (_laneWeather.Has(lane) && _laneWeather.Get(lane).RadioBlackoutLevel >= _balance.BlackoutRadioLevel &&
+                !_tech.Unlocks(playerId, TechGate.LaserComms))
                 return LatencyStatus.Blackout;
             if (!Prepare(playerId, out var hq))
                 return LatencyStatus.NoHq;
