@@ -20,7 +20,39 @@ namespace Unruled.Core.Simulation
                 CreateCombatBalance(), CreateRelocationBalance(), CreateLedgerBalance(),
                 CreateStaBalance(), CreateLeaderboardBalance(), CreateWtoBalance(),
                 CreateWtoContractBalance(), CreateSystemAuthorityBalance(),
-                CreateSystemFactionBalance(), CreateAiBalance());
+                CreateSystemFactionBalance(), CreateAiBalance(), CreateNewGameBalance());
+
+        /// <summary>
+        /// GDD §1 and §2.1 A: own home system with no tungsten or uranium, deposits by preferred ESI window.
+        /// PROVISIONAL: 4 AI rivals (archetypes 1..4), 2 deposits per site of 2,000 / 4,000 / 1,000 ore, 2 rigs per
+        /// core-base deposit, the core-base refineries and stock below, and a Tier-1 fleet of 10 line, 2 EW, 2 supply.
+        /// </summary>
+        public static NewGameBalance CreateNewGameBalance() => new NewGameBalance(
+            rivalCount: 4,
+            depositsPerSite: 2,
+            surfaceReserve: 2_000,
+            deepCrustReserve: 4_000,
+            coreFractureReserve: 1_000,
+            startingRigsPerDeposit: 2,
+            fleetTechTier: 1,
+            fleetLineShips: 10,
+            fleetEwShips: 2,
+            fleetSupplyTenders: 2,
+            fleetCargoConvoys: 0,
+            homeExcludedRaws: new[] { ItemId.RawTungsten, ItemId.RawUranium },
+            startingRefineries: new[] { ItemId.ItemOxygen, ItemId.ItemCoolant, ItemId.ItemFuel, ItemId.ItemSteel, ItemId.ItemBattery },
+            coreBaseStock: new[]
+            {
+                new ItemStack(ItemId.ItemFuel, 400), new ItemStack(ItemId.ItemCoolant, 400),
+                new ItemStack(ItemId.ItemOxygen, 200), new ItemStack(ItemId.ItemRations, 200),
+                new ItemStack(ItemId.ItemSteel, 150), new ItemStack(ItemId.ItemBattery, 40),
+                new ItemStack(ItemId.ItemAmmo, 300), new ItemStack(ItemId.RawMethane, 100)
+            },
+            fleetStock: new[]
+            {
+                new ItemStack(ItemId.ItemAmmo, 120), new ItemStack(ItemId.ItemFuel, 80), new ItemStack(ItemId.ItemCoolant, 60),
+                new ItemStack(ItemId.ItemRations, 40)
+            });
 
         /// <summary>
         /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,

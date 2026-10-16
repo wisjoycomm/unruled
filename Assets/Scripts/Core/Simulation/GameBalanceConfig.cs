@@ -30,6 +30,7 @@ namespace Unruled.Core.Simulation
         public readonly SystemAuthorityBalance Authority;
         public readonly SystemFactionBalance SystemFactions;
         public readonly AiBalance Ai;
+        public readonly NewGameBalance NewGame;
 
         public GameBalanceConfig(
             RecipeDatabase recipes, UniverseGenBalance universe, StarlaneBalance starlanes, NoaaBalance weather,
@@ -37,7 +38,7 @@ namespace Unruled.Core.Simulation
             LifecycleBalance lifecycle, LatencyBalance latency, RadarBalance radar, FleetBalance fleets, CombatBalance combat,
             RelocationBalance relocation, LedgerBalance ledger, StaBalance sta, LeaderboardBalance leaderboard,
             WtoBalance wto, WtoContractBalance contracts, SystemAuthorityBalance authority,
-            SystemFactionBalance systemFactions, AiBalance ai)
+            SystemFactionBalance systemFactions, AiBalance ai, NewGameBalance newGame)
         {
             Recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
             Universe = universe ?? throw new ArgumentNullException(nameof(universe));
@@ -59,6 +60,7 @@ namespace Unruled.Core.Simulation
             Authority = authority ?? throw new ArgumentNullException(nameof(authority));
             SystemFactions = systemFactions ?? throw new ArgumentNullException(nameof(systemFactions));
             Ai = ai ?? throw new ArgumentNullException(nameof(ai));
+            NewGame = newGame ?? throw new ArgumentNullException(nameof(newGame));
         }
     }
 }
