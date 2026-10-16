@@ -45,15 +45,17 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
 6. `WhoQuarantineSystem`: export lock when water or oxygen runs out.
 7. `FleetUpkeepSystem`: hourly per-ship upkeep from the cargo hold; `Mothball` / `Activate` and warm-up.
 8. `FleetMovementSystem`: routed travel with fuel and STA tolls paid at each departure; `Move`, `Hold`, `Reverse`.
-9. `SalvoCombatEngine`: a salvo every 5 ticks between hostile fleets at one site or lane; loot and piracy
-   reports; `SetRof`, `SetFocus`, `VentCoolant`.
-10. `CapitalRelocationSystem`: teardown → capital convoy → bootstrap; `RelocateBase`.
-11. `FocusedRadarSystem`: scan timelines and the Tier-5 IAEA reveal; `ScanBelt`, `CancelScan`, `EcmJam`.
-12. `ResearchSystem`: retooling ends, storm telemetry; `StressTest`.
-13. `ShipyardSystem`: delivers finished `ShipBuildOrder`s; `BuildShips`, `Retrofit`.
-14. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
-15. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
-16. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
+9. `ConvoyRouteSystem`: standing supply runs between a hub and an outpost (fuel and coolant out, goods home);
+   `SetConvoyRoute`.
+10. `SalvoCombatEngine`: a salvo every 5 ticks between hostile fleets at one site or lane; loot and piracy
+    reports; `SetRof`, `SetFocus`, `VentCoolant`.
+11. `CapitalRelocationSystem`: teardown → capital convoy → bootstrap; `RelocateBase`.
+12. `FocusedRadarSystem`: scan timelines and the Tier-5 IAEA reveal; `ScanBelt`, `CancelScan`, `EcmJam`.
+13. `ResearchSystem`: retooling ends, storm telemetry; `StressTest`.
+14. `ShipyardSystem`: delivers finished `ShipBuildOrder`s; `BuildShips`, `Retrofit`.
+15. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
+16. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
+17. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
 
 `MiningSystem` also handles `RetractDrills` and `BuildRig`, `RefinerySystem` handles `BuildRefinery`, and
 `PlanetLifecycleSystem` handles `Terraform`. `SiteControlSystem` (`ClaimSite`), `JumpGateSystem` (`OpenJumpGate`) and
@@ -90,8 +92,10 @@ methods, in this order (rule 4).
     (`FleetUnit.Gain`) and raises fleet tiers.
   - `SiteControlSystem` + `SiteControlBalance`: the only writer of `SiteInfo.OwnerPlayerId` during play; a docked
     fleet unloads the claim cost to take a neutral site or an undefended rival site (never a core base).
-  - `CargoTransferSystem`: loads or unloads a docked fleet's hold at an own site; stolen tags travel with the
-    stolen units (moved first); WTO contract convoys can't transfer.
+  - `CargoTransferSystem`: loads or unloads a docked fleet's hold at an own site (or fills it up to a total);
+    stolen tags travel with the stolen units (moved first, `CargoMover`); WTO contract convoys can't transfer.
+  - `ConvoyRouteSystem` + `ConvoyBalance`: owns `ConvoyRoute`; a fleet with cargo convoys works a hub ↔ outpost run on
+    its own, sending departures through `FleetMovementSystem.TryMoveTo`.
   - `JumpGateSystem`: owns `JumpGate` (Board) and the lanes it opens; at the jump-gate tech tier it charges the core
     base, adds the gate lane into the contested cluster and rebuilds `StarlaneGraph`. Dormant gates keep homes sealed.
   - Fleet components (`FleetComponents.cs`), one owner each: `FleetUnit` (ship counts by class; combat),

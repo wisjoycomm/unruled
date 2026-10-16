@@ -125,10 +125,27 @@ namespace Unruled.Core.Military
                 TryDepart(fleet, ref motion, lane);
                 return;
             }
-            if (!_sites.Has(lane) || !_planner.TryPlan(motion.Site, lane, _units.Get(fleet).TechTier, ref route))
-                return;
-            if (!TryDepart(fleet, ref motion, route.LaneAt(route.Next++)))
-                route.Clear();
+            TryMoveTo(fleet, lane, tick);
+        }
+
+        /// <summary>
+        /// Sends a docked fleet that can act to a site along a planned route, as a Move order to a destination does.
+        /// For standing orders run by other systems (convoy routes); false if it could not leave.
+        /// </summary>
+        public bool TryMoveTo(EntityId fleet, EntityId site, long tick)
+        {
+            if (!_units.Has(fleet) || !_readiness.Get(fleet).CanAct(tick) || !_sites.Has(site))
+                return false;
+            ref var motion = ref _motions.Get(fleet);
+            if (motion.Site.IsNull)
+                return false;
+            ref var route = ref _routes.Get(fleet);
+            if (!_planner.TryPlan(motion.Site, site, _units.Get(fleet).TechTier, ref route))
+                return false;
+            if (TryDepart(fleet, ref motion, route.LaneAt(route.Next++)))
+                return true;
+            route.Clear();
+            return false;
         }
 
         private bool TryDepart(EntityId fleet, ref FleetMotion motion, EntityId lane)

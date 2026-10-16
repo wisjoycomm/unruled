@@ -20,7 +20,8 @@ namespace Unruled.View.UI
             "", "Move", "Hold", "Reverse", "ScanBelt", "Set ROF", "Relocate base", "Terraform", "Cancel scan", "ECM jam",
             "Mothball", "Activate", "Set focus", "Vent coolant", "Retract drills", "Buy order", "Sell order",
             "Cancel order", "Audit opt-in", "Stress test",
-            "Build ships", "Retrofit", "Claim site", "Build rig", "Build refinery", "Open jump gate", "Transfer cargo"
+            "Build ships", "Retrofit", "Claim site", "Build rig", "Build refinery", "Open jump gate", "Transfer cargo",
+            "Convoy route"
         };
 
         private readonly DashedFrame[] _rows = new DashedFrame[Slots];

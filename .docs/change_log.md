@@ -60,3 +60,4 @@
 - 2026-10-16 - Claude - Cargo transfer: TransferCargo loads/unloads a docked fleet at an own site (stolen units first, tags follow; no contract convoys); StolenGoods.Remove; tests.
 - 2026-10-16 - Claude - AI expansion: rivals load up at the core base, stealth-raid and besiege sites they outgun with round-trip fuel, claim them, stress-test and open gates; TransferCargo fill-to mode; start fuel/microchips raised (provisional); 6-hour soak test.
 - 2026-10-16 - Claude - Economy pacing: refineries run up to N batches per check; mining every 60 ticks with larger reserves; the core base always mines water/nitrogen/methane (provisional numbers); tests updated.
+- 2026-10-16 - Claude - Convoy routes: SetConvoyRoute gives a cargo-convoy fleet a standing hub/outpost run (fuel and coolant out, goods home a batch at a time); FleetMovementSystem.TryMoveTo; CargoMover shared with cargo transfer; tests.

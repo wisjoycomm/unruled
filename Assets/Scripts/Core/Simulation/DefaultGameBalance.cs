@@ -23,7 +23,10 @@ namespace Unruled.Core.Simulation
                 CreateWtoContractBalance(), CreateSystemAuthorityBalance(),
                 CreateSystemFactionBalance(), CreateAiBalance(), CreateNewGameBalance(),
                 CreateResearchBalance(), CreateShipyardBalance(), CreateSiteControlBalance(),
-                CreateJumpGateBalance());
+                CreateJumpGateBalance(), CreateConvoyBalance());
+
+        /// <summary>GDD §1: CargoConvoys feed remote mines. PROVISIONAL: 250 of each item per convoy ship, checked every 10 ticks.</summary>
+        public static ConvoyBalance CreateConvoyBalance() => new ConvoyBalance(capacityPerConvoy: 250, checkIntervalTicks: 10);
 
         /// <summary>
         /// GDD §1.2: Tier 2 plus an energy charge opens the home gate. PROVISIONAL: 50 batteries + 50 fuel from the core

@@ -68,18 +68,7 @@ namespace Unruled.Core.Military
             }
             if (!source.Has(item, quantity))
                 return;
-
-            int tagged = 0;
-            if (_stolen.Has(from))
-                tagged = Math.Min(quantity, Math.Min(_stolen.Get(from).Get(item), source.Get(item)));
-            source.Add(item, -quantity);
-            _stockpiles.Get(to).Add(item, quantity);
-            if (tagged == 0)
-                return;
-            _stolen.Get(from).Remove(item, tagged);
-            if (!_stolen.Has(to))
-                _stolen.Add(to, default);
-            _stolen.Get(to).Add(item, tagged);
+            CargoMover.Move(_stockpiles, _stolen, from, to, item, quantity);
         }
     }
 }

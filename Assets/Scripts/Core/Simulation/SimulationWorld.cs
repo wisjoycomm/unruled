@@ -54,6 +54,7 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<TechProgress> TechProgress;
         public readonly ComponentStore<ShipBuildOrder> ShipOrders;
         public readonly ComponentStore<JumpGate> JumpGates;
+        public readonly ComponentStore<ConvoyRoute> ConvoyRoutes;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly Ledger Ledger;
@@ -119,6 +120,7 @@ namespace Unruled.Core.Simulation
             TechProgress = World.CreateStore<TechProgress>();
             ShipOrders = World.CreateStore<ShipBuildOrder>();
             JumpGates = World.CreateStore<JumpGate>();
+            ConvoyRoutes = World.CreateStore<ConvoyRoute>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -189,6 +191,11 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Move, Movement);
             Commands.Register(CommandType.Hold, Movement);
             Commands.Register(CommandType.Reverse, Movement);
+            var convoys = new ConvoyRouteSystem(
+                ConvoyRoutes, Fleets, FleetMotions, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, ContractCargo,
+                StolenGoods, Routes, Movement, balance.Convoys);
+            Clock.Register(convoys);
+            Commands.Register(CommandType.SetConvoyRoute, convoys);
 
             var combat = new SalvoCombatEngine(
                 World, Fleets, FleetMotions, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, Players, Relocations,
