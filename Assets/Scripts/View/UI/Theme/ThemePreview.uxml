@@ -1,0 +1,115 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:theme="Unruled.View.UI.Theme">
+    <Style src="Unruled.uss" />
+    <ui:ScrollView class="u-screen" style="padding: 40px 48px;">
+        <ui:VisualElement style="flex-direction: row; justify-content: space-between; align-items: flex-end; padding-bottom: 24px; border-bottom-width: 1px; border-color: var(--u-rule);">
+            <ui:VisualElement>
+                <ui:Label class="u-caption" text="VISUAL DIRECTION · THEME PREVIEW" />
+                <ui:Label class="u-h1" text="UNRULED" />
+                <ui:Label class="u-text u-text--lead" style="color: var(--u-ink-soft);" text="Mission-control schematic. The screen is the player's command terminal." />
+            </ui:VisualElement>
+            <ui:VisualElement style="flex-direction: row;">
+                <ui:Label class="u-tag u-tag--sta" text="STA" style="margin-left: 8px;" />
+                <ui:Label class="u-tag u-tag--wto" text="WTO" style="margin-left: 8px;" />
+                <ui:Label class="u-tag u-tag--who" text="WHO" style="margin-left: 8px;" />
+                <ui:Label class="u-tag u-tag--iaea" text="IAEA" style="margin-left: 8px;" />
+                <ui:Label class="u-tag u-tag--noaa" text="NOAA" style="margin-left: 8px;" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:Label class="u-h2" text="02 · COLOUR" style="margin-top: 32px; margin-bottom: 12px;" />
+        <ui:VisualElement style="flex-direction: row; flex-wrap: wrap;">
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-void);" /><ui:Label class="u-num" text="Void #0B1220" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-panel);" /><ui:Label class="u-num" text="Panel #111B2E" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-raised);" /><ui:Label class="u-num" text="Raised #172440" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-rule);" /><ui:Label class="u-num" text="Rule #2A3A5C" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-ink);" /><ui:Label class="u-num" text="Ink #E6EDF7" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-ink-dim);" /><ui:Label class="u-num" text="Ink dim #9AA8C0" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-you);" /><ui:Label class="u-num" text="You #4DA3FF" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-hostile);" /><ui:Label class="u-num" text="Hostile #FF8A3D" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-unclaimed);" /><ui:Label class="u-num" text="Unclaimed #8796B0" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-sta);" /><ui:Label class="u-num" text="STA #F2B634" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-wto);" /><ui:Label class="u-num" text="WTO #2EC4B6" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-who);" /><ui:Label class="u-num" text="WHO #5BD47A" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-iaea);" /><ui:Label class="u-num" text="IAEA #FFE14D" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-noaa);" /><ui:Label class="u-num" text="NOAA #F39237" style="padding: 6px;" /></ui:VisualElement>
+            <ui:VisualElement class="u-panel" style="width: 140px; margin: 0 8px 8px 0;"><ui:VisualElement style="height: 40px; background-color: var(--u-danger);" /><ui:Label class="u-num" text="Danger #E5543B" style="padding: 6px;" /></ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement style="flex-direction: row; margin-top: 8px;">
+            <ui:VisualElement style="flex-grow: 1; margin-right: 32px;">
+                <ui:Label class="u-caption" text="NOAA STORM SCALE · R / S / G 1–5" style="margin-bottom: 8px;" />
+                <ui:VisualElement style="flex-direction: row;">
+                    <ui:Label class="u-noaa u-noaa--1" text="1 MINOR" style="flex-grow: 1; height: 48px;" />
+                    <ui:Label class="u-noaa u-noaa--2" text="2 MODERATE" style="flex-grow: 1; height: 48px;" />
+                    <ui:Label class="u-noaa u-noaa--3" text="3 STRONG" style="flex-grow: 1; height: 48px;" />
+                    <ui:Label class="u-noaa u-noaa--4" text="4 SEVERE" style="flex-grow: 1; height: 48px;" />
+                    <ui:Label class="u-noaa u-noaa--5" text="5 EXTREME" style="flex-grow: 1; height: 48px;" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement style="flex-grow: 1;">
+                <ui:Label class="u-caption" text="THERMAL · FLEET GUN TEMPERATURE" style="margin-bottom: 8px;" />
+                <ui:VisualElement class="u-thermal" style="height: 48px;">
+                    <ui:Label class="u-thermal__nominal u-num u-num--strong" text="20–75 °C" style="padding: 6px;" />
+                    <ui:Label class="u-thermal__hot u-num u-num--strong" text="75–90" style="padding: 6px; color: var(--u-void);" />
+                    <ui:Label class="u-thermal__locked u-num u-num--strong" text="&gt;90 LOCKED" style="padding: 6px; color: var(--u-void);" />
+                    <ui:VisualElement class="u-thermal__marker" style="left: 62%;" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:Label class="u-h2" text="03 · TYPE" style="margin-top: 32px; margin-bottom: 12px;" />
+        <ui:VisualElement style="flex-direction: row;">
+            <ui:VisualElement class="u-panel u-panel--padded" style="flex-grow: 1; flex-basis: 0; margin-right: 16px;">
+                <ui:Label class="u-caption" text="DISPLAY · Chakra Petch 600/700" />
+                <ui:Label class="u-display" text="CAPITAL CONVOY DESTROYED" style="white-space: normal; margin-top: 12px;" />
+            </ui:VisualElement>
+            <ui:VisualElement class="u-panel u-panel--padded" style="flex-grow: 1; flex-basis: 0; margin-right: 16px;">
+                <ui:Label class="u-caption" text="UI · IBM Plex Sans 400/500/600" />
+                <ui:Label class="u-text u-text--lead" text="Teardown has started at Kepler-3. The base keeps half its fortification until the convoy leaves." style="margin-top: 12px;" />
+            </ui:VisualElement>
+            <ui:VisualElement class="u-panel u-panel--padded" style="flex-grow: 1; flex-basis: 0;">
+                <ui:Label class="u-caption" text="NUMBERS · IBM Plex Mono 400/600" />
+                <ui:Label class="u-num u-num--large" text="T+224,527&#10;Ψ 120 · Ω 117&#10;ESI 0.742" style="margin-top: 12px;" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:Label class="u-h2" text="06 · UI COMPONENTS" style="margin-top: 32px; margin-bottom: 12px;" />
+        <ui:VisualElement style="flex-direction: row;">
+            <ui:VisualElement class="u-panel u-panel--padded" style="flex-grow: 1; flex-basis: 0; margin-right: 16px;">
+                <ui:Label class="u-caption" text="BUTTONS" style="margin-bottom: 14px;" />
+                <ui:VisualElement style="flex-direction: row;">
+                    <ui:Button class="u-btn" text="Move" style="margin-right: 10px;" />
+                    <ui:Button class="u-btn u-btn--secondary" text="Hold" style="margin-right: 10px;" />
+                    <ui:Button class="u-btn u-btn--danger" text="Vent coolant" />
+                </ui:VisualElement>
+                <ui:Label class="u-text u-text--dim" text="Square corners, 44 px tall. Filled = main action, outlined = secondary, red = costly or risky." style="margin-top: 14px;" />
+            </ui:VisualElement>
+            <ui:VisualElement class="u-panel u-panel--padded" style="flex-grow: 1; flex-basis: 0; margin-right: 16px;">
+                <ui:Label class="u-caption" text="DATA ROWS &amp; ORDERS IN FLIGHT" style="margin-bottom: 14px;" />
+                <ui:VisualElement class="u-row">
+                    <ui:Label class="u-text" text="ITEM_BATTERY" />
+                    <ui:VisualElement style="flex-direction: row;"><ui:Label class="u-num" text="1,240 " /><ui:Label class="u-num u-up" text="+36/h" /></ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="u-row" style="margin-top: 8px;">
+                    <ui:Label class="u-text" text="ITEM_COOLANT" />
+                    <ui:VisualElement style="flex-direction: row;"><ui:Label class="u-num" text="88 " /><ui:Label class="u-num u-down" text="−12/h" /></ui:VisualElement>
+                </ui:VisualElement>
+                <theme:DashedFrame class="u-inflight" style="margin-top: 14px;">
+                    <ui:Label class="u-text" text="Move · Fleet A → Lane 7" />
+                    <ui:Label class="u-num u-inflight__eta" text="in 43t" />
+                </theme:DashedFrame>
+            </ui:VisualElement>
+            <ui:VisualElement class="u-panel u-panel--padded" style="flex-grow: 1; flex-basis: 0;">
+                <ui:Label class="u-caption" text="ALERTS" style="margin-bottom: 14px;" />
+                <ui:VisualElement class="u-alert u-alert--danger">
+                    <ui:Label class="u-alert__title" text="COMMAND PARALYSED" />
+                    <ui:Label class="u-alert__body" text="Capital convoy lost. Orders refused for 15:00." />
+                </ui:VisualElement>
+                <ui:VisualElement class="u-alert u-alert--who" style="margin-top: 14px;">
+                    <ui:Label class="u-alert__title" text="WHO · EXPORT LOCK" />
+                    <ui:Label class="u-alert__body" text="Kepler-5 is out of oxygen. Launches off the planet are blocked." />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:ScrollView>
+</ui:UXML>

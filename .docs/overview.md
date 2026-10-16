@@ -6,15 +6,15 @@ rules: `.claude/rules/architecture.md`; decisions and exceptions: `.docs/plan/ro
 State after Sprint 4: the engine-free simulation core (economy, board, weather, latency, radar, fleets, salvo
 combat, capital relocation, credits, WTO market and escrow contracts, STA tolls, leaderboard audit, THE SYSTEM's
 bulletins and Call-to-Arms, Utility AI) and its tests.
-No views, scenes or networking yet.
+The style-guide UI theme exists (`Unruled.View`); no game screens, scenes or networking yet.
 
 ## Assemblies
 
 | Assembly | Folder | Notes |
 |---|---|---|
 | `Unruled.Core` | `Assets/Scripts/Core/` | `noEngineReferences`, `allowUnsafeCode` (fixed buffers). All rules and state. |
-| `Unruled.View` | `Assets/Scripts/View/` | Empty. References Core only. |
-| `Unruled.Editor` | `Assets/Editor/` | Empty. Editor-only. |
+| `Unruled.View` | `Assets/Scripts/View/` | References Core only. `UI/Theme/`: `Unruled.uss` (palette variables, type and component classes), `UnruledTheme.tss`, `UnruledPanelSettings`, OFL fonts + FontAssets, `DashedFrame`, `ThemePreview.uxml`. |
+| `Unruled.Editor` | `Assets/Editor/` | Editor-only. `ThemeAssetBuilder` (menu Unruled/Build UI Theme Assets) creates missing FontAssets and the PanelSettings. |
 | `Unruled.Tests.Core` | `Assets/Tests/Core/` | EditMode NUnit tests, one folder per Core folder. |
 
 ## Composition

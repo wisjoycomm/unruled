@@ -1,0 +1,335 @@
+/*
+ * Unruled theme: the "mission-control schematic" style guide.
+ * Opaque panels, square corners, no blur. Colours mirror UnruledPalette.cs; change both together.
+ * UI Toolkit has no text-transform: write display text in upper case in the data.
+ */
+
+:root {
+    /* Ground & text */
+    --u-void: #0B1220;
+    --u-board: #0E1626;
+    --u-panel: #111B2E;
+    --u-raised: #172440;
+    --u-rule: #2A3A5C;
+    --u-rule-strong: #4A5D82;
+    --u-ink: #E6EDF7;
+    --u-ink-soft: #C4CEDD;
+    --u-ink-dim: #9AA8C0;
+
+    /* Sides & THE SYSTEM's agencies */
+    --u-you: #4DA3FF;
+    --u-you-hover: #8CC4FF;
+    --u-hostile: #FF8A3D;
+    --u-unclaimed: #8796B0;
+    --u-sta: #F2B634;
+    --u-wto: #2EC4B6;
+    --u-who: #5BD47A;
+    --u-who-ground: #1B2A1F;
+    --u-iaea: #FFE14D;
+    --u-noaa: #F39237;
+    --u-danger: #E5543B;
+
+    /* NOAA storm scale R / S / G 1-5 */
+    --u-noaa-1: #F5E663;
+    --u-noaa-2: #F7C548;
+    --u-noaa-3: #F39237;
+    --u-noaa-4: #E5543B;
+    --u-noaa-5: #9E1F35;
+
+    /* Thermal: 20-75 nominal, 75-90 hot, >90 locked */
+    --u-thermal-nominal: #1E4F7A;
+    --u-thermal-hot: #F39237;
+    --u-thermal-locked: #E5543B;
+
+    -unity-font-definition: url("Fonts/IBMPlexSans-Regular.asset");
+    font-size: 14px;
+    color: var(--u-ink);
+}
+
+/* ---------- Surfaces ---------- */
+
+.u-screen {
+    flex-grow: 1;
+    background-color: var(--u-void);
+}
+
+.u-panel {
+    background-color: var(--u-panel);
+    border-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.u-panel--board {
+    background-color: var(--u-board);
+}
+
+.u-panel--padded {
+    padding: 24px;
+}
+
+.u-rule {
+    height: 1px;
+    background-color: var(--u-rule);
+}
+
+/* ---------- Type ---------- */
+
+.u-display {
+    -unity-font-definition: url("Fonts/ChakraPetch-Bold.asset");
+    font-size: 40px;
+    letter-spacing: 1.6px;
+}
+
+.u-h1 {
+    -unity-font-definition: url("Fonts/ChakraPetch-Bold.asset");
+    font-size: 72px;
+    letter-spacing: 2.9px;
+}
+
+.u-h2 {
+    -unity-font-definition: url("Fonts/ChakraPetch-SemiBold.asset");
+    font-size: 28px;
+    letter-spacing: 1.7px;
+}
+
+.u-title {
+    -unity-font-definition: url("Fonts/ChakraPetch-Bold.asset");
+    font-size: 16px;
+    letter-spacing: 0.6px;
+}
+
+.u-text {
+    -unity-font-definition: url("Fonts/IBMPlexSans-Regular.asset");
+    font-size: 14px;
+    white-space: normal;
+}
+
+.u-text--lead {
+    font-size: 20px;
+}
+
+.u-text--strong {
+    -unity-font-definition: url("Fonts/IBMPlexSans-SemiBold.asset");
+}
+
+.u-text--dim {
+    color: var(--u-ink-dim);
+}
+
+.u-caption {
+    -unity-font-definition: url("Fonts/IBMPlexMono-Regular.asset");
+    font-size: 13px;
+    letter-spacing: 1.3px;
+    color: var(--u-ink-dim);
+}
+
+.u-num {
+    -unity-font-definition: url("Fonts/IBMPlexMono-Regular.asset");
+    font-size: 14px;
+}
+
+.u-num--strong {
+    -unity-font-definition: url("Fonts/IBMPlexMono-SemiBold.asset");
+}
+
+.u-num--large {
+    font-size: 28px;
+}
+
+.u-up {
+    color: var(--u-who);
+}
+
+.u-down {
+    color: var(--u-hostile);
+}
+
+/* ---------- Buttons: square, 44 px. Primary = main action, secondary = outline, danger = costly or risky ---------- */
+
+.unity-button.u-btn {
+    -unity-font-definition: url("Fonts/IBMPlexSans-SemiBold.asset");
+    font-size: 15px;
+    min-height: 44px;
+    padding: 0 20px;
+    margin: 0;
+    border-radius: 0;
+    border-width: 0;
+    background-image: none;
+    background-color: var(--u-you);
+    color: var(--u-void);
+}
+
+.unity-button.u-btn:hover {
+    background-color: var(--u-you-hover);
+}
+
+.unity-button.u-btn:active {
+    background-color: var(--u-raised);
+    color: var(--u-ink);
+}
+
+.unity-button.u-btn--secondary {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 1px;
+    border-color: var(--u-rule-strong);
+    color: var(--u-ink);
+}
+
+.unity-button.u-btn--secondary:hover {
+    background-color: var(--u-raised);
+}
+
+.unity-button.u-btn--danger {
+    background-color: var(--u-danger);
+    color: var(--u-void);
+}
+
+.unity-button.u-btn--danger:hover {
+    background-color: var(--u-noaa-3);
+}
+
+.unity-button.u-btn:disabled {
+    background-color: var(--u-panel);
+    border-width: 1px;
+    border-color: var(--u-rule);
+    color: var(--u-ink-dim);
+}
+
+/* ---------- Data rows and orders in flight ---------- */
+
+.u-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+    border-bottom-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.u-inflight {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    --u-dash-color: var(--u-you);
+}
+
+.u-inflight__eta {
+    color: var(--u-you);
+}
+
+/* ---------- Alerts ---------- */
+
+.u-alert {
+    padding: 12px 14px;
+}
+
+.u-alert__title {
+    -unity-font-definition: url("Fonts/ChakraPetch-Bold.asset");
+    font-size: 16px;
+    letter-spacing: 0.6px;
+}
+
+.u-alert__body {
+    font-size: 14px;
+    white-space: normal;
+    margin-top: 4px;
+}
+
+.u-alert--danger {
+    background-color: var(--u-danger);
+    color: var(--u-void);
+}
+
+.u-alert--who {
+    background-color: var(--u-who-ground);
+    border-width: 1px;
+    border-color: var(--u-who);
+}
+
+.u-alert--who > .u-alert__title {
+    color: var(--u-who);
+}
+
+/* ---------- Agency tags and NOAA chips ---------- */
+
+.u-tag {
+    -unity-font-definition: url("Fonts/IBMPlexMono-Regular.asset");
+    font-size: 12px;
+    padding: 6px 10px;
+    border-width: 1px;
+}
+
+.u-tag--sta { border-color: var(--u-sta); color: var(--u-sta); }
+.u-tag--wto { border-color: var(--u-wto); color: var(--u-wto); }
+.u-tag--who { border-color: var(--u-who); color: var(--u-who); }
+.u-tag--noaa { border-color: var(--u-noaa); color: var(--u-noaa); }
+
+.u-tag--iaea {
+    -unity-font-definition: url("Fonts/IBMPlexMono-SemiBold.asset");
+    border-color: var(--u-iaea);
+    background-color: var(--u-iaea);
+    color: var(--u-void);
+}
+
+.u-noaa {
+    -unity-font-definition: url("Fonts/IBMPlexMono-SemiBold.asset");
+    font-size: 12px;
+    padding: 4px 8px;
+    color: var(--u-void);
+}
+
+.u-noaa--1 { background-color: var(--u-noaa-1); }
+.u-noaa--2 { background-color: var(--u-noaa-2); }
+.u-noaa--3 { background-color: var(--u-noaa-3); }
+.u-noaa--4 { background-color: var(--u-noaa-4); }
+.u-noaa--5 { background-color: var(--u-noaa-5); color: #FFFFFF; }
+
+/* ---------- Thermal bar: segment widths follow 20-75 / 75-90 / >90 ---------- */
+
+.u-thermal {
+    flex-direction: row;
+    height: 12px;
+    border-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.u-thermal__nominal, .u-thermal__hot, .u-thermal__locked {
+    margin: 0;
+    flex-basis: 0;
+}
+
+.u-thermal__nominal { flex-grow: 75; background-color: var(--u-thermal-nominal); }
+.u-thermal__hot { flex-grow: 15; background-color: var(--u-thermal-hot); }
+.u-thermal__locked { flex-grow: 20; background-color: var(--u-thermal-locked); }
+
+.u-thermal__marker {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    background-color: var(--u-ink);
+}
+
+/* ---------- Scrollbars: flat, no arrows ---------- */
+
+.u-screen .unity-scroller {
+    background-color: var(--u-void);
+    border-width: 0;
+}
+
+.u-screen .unity-scroller .unity-repeat-button {
+    display: none;
+}
+
+.u-screen .unity-scroller .unity-base-slider__tracker {
+    background-color: var(--u-panel);
+    border-width: 0;
+    border-radius: 0;
+}
+
+.u-screen .unity-scroller .unity-base-slider__dragger {
+    background-color: var(--u-rule-strong);
+    border-width: 0;
+    border-radius: 0;
+}
