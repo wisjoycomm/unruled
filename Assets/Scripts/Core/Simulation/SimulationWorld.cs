@@ -1,4 +1,5 @@
 using System;
+using Unruled.Core.AI;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
@@ -48,6 +49,7 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<StolenGoods> StolenGoods;
         public readonly ComponentStore<SystemSanction> Sanctions;
         public readonly ComponentStore<SystemBulletin> Bulletins;
+        public readonly ComponentStore<AiController> AiControllers;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly Ledger Ledger;
@@ -60,6 +62,7 @@ namespace Unruled.Core.Simulation
         public readonly LeaderboardAuditSystem Audit;
         public readonly SystemAuthorityManager Authority;
         public readonly NoaaForecast Forecast;
+        public readonly UtilityAiEngine Ai; // not on the clock: the host calls Think (Server 2)
         public readonly NoaaWeatherEngine WeatherEngine;
         public readonly PlanetLifecycleSystem Lifecycle;
         public readonly FleetFactory FleetFactory;
@@ -106,6 +109,7 @@ namespace Unruled.Core.Simulation
             StolenGoods = World.CreateStore<StolenGoods>();
             Sanctions = World.CreateStore<SystemSanction>();
             Bulletins = World.CreateStore<SystemBulletin>();
+            AiControllers = World.CreateStore<AiController>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -126,7 +130,7 @@ namespace Unruled.Core.Simulation
 
             Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, FleetMotions,
                 balance.Latency);
-            Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, FleetMotions, Players, Relocations);
+            Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, FleetMotions, Deposits, Players, Relocations);
             FleetFactory = new FleetFactory(
                 World, Sites, Fleets, FleetMotions, FleetRoutes, FleetSensors, FleetReadiness, FleetCombat, Stockpiles, balance.Combat);
             Routes = new RoutePlanner(Graph, Starlanes, balance.Starlanes, balance.Fleets);
@@ -199,6 +203,10 @@ namespace Unruled.Core.Simulation
             Clock.Register(Audit);
             Commands.Register(CommandType.AuditOptIn, Audit);
             Clock.Register(Authority);
+
+            Ai = new UtilityAiEngine(
+                AiControllers, Players, Fleets, FleetMotions, FleetCombat, Stockpiles, Sites, Weather, Deposits, Starlanes,
+                RadarScans, Issuer, balance.Ai, balance.Combat, balance.Radar);
         }
 
         /// <summary>

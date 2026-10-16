@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using NUnit.Framework;
+using Unruled.Core.AI;
 using Unruled.Core.Board;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
@@ -264,6 +265,30 @@ namespace Unruled.Tests.Core.Economy
                     Assert.AreEqual(0, b.NoaaLeadTicks, $"{b.Name} lead");
                 Assert.AreEqual(lead.StartsWith("+", StringComparison.Ordinal) || lead == "Current Storm Path", b.SeesCurrentStorms,
                     $"{b.Name} sees current storms");
+            }
+        }
+
+        [Test]
+        public void UtilityAiTab_MatchesAiBalance()
+        {
+            var rows = ReadTable("## 06_Utility_AI_Presets");
+            var ai = DefaultGameBalance.CreateAiBalance();
+            Assert.AreEqual(ai.Count, rows.Count, "preset count");
+
+            foreach (var row in rows)
+            {
+                var p = ai.Preset(byte.Parse(row[0], CultureInfo.InvariantCulture));
+                Assert.AreEqual(row[1], p.Code, $"preset {row[0]} code");
+                Assert.AreEqual(ToMilli(row[2]), p.DefenseHoldWeight, $"{p.Code} defense hold");
+                Assert.AreEqual(ToMilli(row[3]), p.EvacuateSafetyWeight, $"{p.Code} evacuate");
+                Assert.AreEqual(ToMilli(row[4]), p.RadarBeltScanWeight, $"{p.Code} radar");
+                Assert.AreEqual(ToMilli(row[5]), p.ResupplyLogisticsWeight, $"{p.Code} resupply");
+                Assert.AreEqual(ToMilli(row[6]), p.StealthRaidWeight, $"{p.Code} stealth raid");
+                Assert.AreEqual(ToMilli(row[7]), p.SiegeConquestWeight, $"{p.Code} siege");
+                Assert.AreEqual(LeadingNumber(row[8]) * 1000, p.CoolantVentTempMilli, $"{p.Code} vent temperature");
+                Assert.AreEqual(ToMilli(row[9]), p.RetreatForceRatioMilli, $"{p.Code} retreat ratio");
+                Assert.AreEqual(LeadingPercent(row[10]), p.MinBatteryForScanPercent, $"{p.Code} min battery");
+                Assert.AreEqual($"G{p.EvacuateStormLevel} / S{p.EvacuateStormLevel}", row[11], $"{p.Code} storm level");
             }
         }
 

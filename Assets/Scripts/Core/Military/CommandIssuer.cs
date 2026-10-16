@@ -1,6 +1,7 @@
 using System;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
+using Unruled.Core.Economy;
 using Unruled.Core.Simulation;
 
 namespace Unruled.Core.Military
@@ -17,7 +18,8 @@ namespace Unruled.Core.Military
 
     /// <summary>
     /// The door for player and AI orders: stamps <see cref="DelayedPlayerCommand.ExecuteAtTick"/> with the signal
-    /// latency to the target's location (a site, a lane, or the site/lane a fleet is on) and queues it on the clock.
+    /// latency to the target's location (a site, a lane, the site/lane a fleet is on, or a deposit's site) and queues
+    /// it on the clock.
     /// Refuses every order while the player's command network is paralysed (capital convoy destroyed).
     /// </summary>
     public sealed class CommandIssuer
@@ -27,12 +29,14 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<SiteInfo> _sites;
         private readonly ComponentStore<StarlaneEdge> _lanes;
         private readonly ComponentStore<FleetMotion> _fleets;
+        private readonly ComponentStore<MineralDeposit> _deposits;
         private readonly ComponentStore<PlayerHq> _players;
         private readonly ComponentStore<CapitalRelocation> _relocations;
 
         public CommandIssuer(
             SimClock clock, SignalLatencySolver solver, ComponentStore<SiteInfo> sites,
-            ComponentStore<StarlaneEdge> lanes, ComponentStore<FleetMotion> fleets, ComponentStore<PlayerHq> players,
+            ComponentStore<StarlaneEdge> lanes, ComponentStore<FleetMotion> fleets, ComponentStore<MineralDeposit> deposits,
+            ComponentStore<PlayerHq> players,
             ComponentStore<CapitalRelocation> relocations)
         {
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -40,6 +44,7 @@ namespace Unruled.Core.Military
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _lanes = lanes ?? throw new ArgumentNullException(nameof(lanes));
             _fleets = fleets ?? throw new ArgumentNullException(nameof(fleets));
+            _deposits = deposits ?? throw new ArgumentNullException(nameof(deposits));
             _players = players ?? throw new ArgumentNullException(nameof(players));
             _relocations = relocations ?? throw new ArgumentNullException(nameof(relocations));
         }
@@ -64,6 +69,10 @@ namespace Unruled.Core.Military
                 ref var fleet = ref _fleets.Get(target);
                 site = fleet.Site;
                 lane = fleet.Lane;
+            }
+            else if (_deposits.Has(target))
+            {
+                site = _deposits.Get(target).Site;
             }
 
             LatencyStatus status;

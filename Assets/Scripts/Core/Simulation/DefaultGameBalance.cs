@@ -1,3 +1,4 @@
+using Unruled.Core.AI;
 using Unruled.Core.Board;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
@@ -19,7 +20,7 @@ namespace Unruled.Core.Simulation
                 CreateCombatBalance(), CreateRelocationBalance(), CreateLedgerBalance(),
                 CreateStaBalance(), CreateLeaderboardBalance(), CreateWtoBalance(),
                 CreateWtoContractBalance(), CreateSystemAuthorityBalance(),
-                CreateSystemFactionBalance());
+                CreateSystemFactionBalance(), CreateAiBalance());
 
         /// <summary>
         /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,
@@ -143,6 +144,20 @@ namespace Unruled.Core.Simulation
         /// PROVISIONAL Call-to-Arms: offences count for a day; the first bars the WTO for an hour, the third brings a
         /// WTO defence fleet of 20 Tier-1 line ships to the offender's core base for an hour. Bulletins last an hour.
         /// </summary>
+        /// <summary>
+        /// Tab 06 presets (weights and ratio in milli, vent temperature in milli-degrees). Think every 10 ticks (GDD §2.5).
+        /// PROVISIONAL: 100% battery = 10 scan startups at the core base; resupply below 5 ammo per line ship.
+        /// </summary>
+        public static AiBalance CreateAiBalance() => new AiBalance(
+            thinkIntervalTicks: 10, fullBatteryScans: 10, resupplyAmmoPerLineShip: 5, presets: new[]
+            {
+                new AiPreset(1, "Sentinel_Defender", 1_800, 1_700, 1_500, 1_400, 0, 0, 75_000, 650, 30, 3),
+                new AiPreset(2, "Industrialist_Trader", 1_200, 1_900, 1_000, 2_000, 0, 200, 70_000, 800, 50, 3),
+                new AiPreset(3, "Raider_Ambush", 600, 1_400, 1_200, 1_000, 1_900, 500, 85_000, 750, 40, 4),
+                new AiPreset(4, "Warlord_Conqueror", 1_000, 700, 1_100, 1_500, 1_100, 1_800, 88_000, 350, 35, 5),
+                new AiPreset(5, "Technocrat_Explorer", 1_200, 1_200, 1_800, 1_300, 800, 1_000, 80_000, 500, 25, 4),
+            });
+
         public static SystemAuthorityBalance CreateSystemAuthorityBalance() => new SystemAuthorityBalance(
             offenceWindowTicks: 86_400, layerOneOffences: 1, wtoBarTicks: 3_600, layerTwoOffences: 3, defenceTier: 1,
             defenceLineShips: 20, defenceAmmo: 500, defenceTicks: 3_600, bulletinTicks: 3_600);
