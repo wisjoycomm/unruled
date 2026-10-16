@@ -6,7 +6,7 @@ paths:
 # Unity C# performance rules (WebGL, Desktop & Mobile, IL2CPP/HybridCLR)
 
 Applies to every C# file in `Assets/`. Hot paths = `Update`, `FixedUpdate`,
-`LateUpdate`, `SimClock` per-tick loops, `MapBoardRenderer` draw updates, and UI Toolkit bindings.
+`LateUpdate`, `SimClock` per-tick loops and ECS system loops, `MapBoardRenderer` draw updates, and UI Toolkit bindings.
 
 ## Memory and GC
 - No boxing: don't pass structs to `object` parameters or non-generic APIs
@@ -17,7 +17,7 @@ Applies to every C# file in `Assets/`. Hot paths = `Update`, `FixedUpdate`,
   `NativeArray<T>` for large temporary buffers.
 - Strings: no `+` concatenation in loops or hot paths; use ZString or a cached
   builder. Compare with `string.Equals(a, b, StringComparison.Ordinal)`.
-- Bulk config & board data (`SiteNode`, `StarlaneEdge`, 20-item inventories): prefer contiguous struct arrays to avoid heap fragmentation.
+- Simulation data is ECS (architecture rule 12): blittable struct components in contiguous arrays, iterated by index. Pass large structs by `in`/`ref`; never copy a whole store.
 
 ## Unity API
 - Cache `Camera.main`, `GetComponent<T>()`, `Transform` and UI Toolkit `VisualElement` queries (`Q<T>()`) in `Awake`/`OnEnable` or `Bind`; never look them up every frame.

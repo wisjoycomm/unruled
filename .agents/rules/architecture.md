@@ -5,7 +5,7 @@ Every code task follows these rules. The locked design and data tables are in
 project works today is in `.docs/overview.md`. Keep this file, the overview and the
 roadmap in agreement.
 
-In one line: **data in config, rules in pure C# (`Unruled.Core`), state in one place,
+In one line: **data in config, rules in a pure C# ECS (`Unruled.Core`), state in one place,
 views (`Unruled.View`) only draw, and every change goes through one door.**
 
 ## Rules
@@ -27,7 +27,8 @@ views (`Unruled.View`) only draw, and every change goes through one door.**
    (`NoaaWeatherEngine`), economy (`WtoMarketEngine`, `ConvoyRouter`), military
    (`FleetUnit`, `SupplyLineSolver`, `LanchesterCombat`), and system factions
    (`SystemAuthorityManager`, `SystemDefenseEvaluator`, `VictoryEvaluator`): each domain
-   has one owning engine/manager. Others read state or subscribe to events.
+   has one owning system, and each component type has exactly one system that writes it.
+   Others read state or subscribe to events.
 5. **No hidden lookups.** No new `static Current`, singletons, `FindAnyObjectByType`
    or `FindObjectsByType` in game code. Core classes take dependencies in their
    constructor; views get them via explicit `Bind(...)`.
@@ -49,6 +50,17 @@ views (`Unruled.View`) only draw, and every change goes through one door.**
 11. **Dependencies point one way:** `Unruled.View → Unruled.Core`. `Unruled.Core` has
     `noEngineReferences: true` and never references `Unruled.View` or `UnityEngine`.
     Editor tooling stays in `Assets/Editor/` (`Unruled.Editor`).
+12. **Simulation is a hand-rolled pure C# ECS.** Built for performance and so it can be
+    ported to Rust later. Entities are `EntityId` (int index + generation). Components
+    are blittable `struct`s (no object references, no managed arrays; variable-size data
+    lives in its own store) kept in dense sparse-set arrays (`ComponentStore<T>`). Systems
+    implement `ISimSystem`, keep no hidden state, run on `SimClock` in a fixed explicit
+    order, and iterate in ascending entity order for determinism. No class-based
+    entities, inheritance trees, LINQ, reflection, virtual calls or allocations inside
+    system loops. Simulation quantities are integers or fixed-point (e.g. ESI as `int`
+    milli-units); `float` only in `Unruled.View`. No Unity DOTS (`Unity.Entities`, Burst)
+    in `Unruled.Core`; DOTS may appear only in `Unruled.View` for rendering, after profiling
+    shows the need and the roadmap records it. No third-party ECS library without approval.
 
 ## Where code goes
 
@@ -57,6 +69,7 @@ Paths are under `Assets/Scripts/` (plus `Assets/Editor/` and `Assets/Tests/Core/
 | Writing | Folder | Assembly |
 |---|---|---|
 | Tick clock, command queue & balance config | `Assets/Scripts/Core/Simulation/` (`SimClock.cs`, `GameBalanceConfig.cs`) | `Unruled.Core` |
+| ECS core: entity ids, component stores, world | `Assets/Scripts/Core/Ecs/` (`EntityId.cs`, `ComponentStore.cs`, `World.cs`) | `Unruled.Core` |
 | Map sites (ESI, 3 mining depths), starlanes & NOAA weather (`R/S/G 1–5`) | `Assets/Scripts/Core/Board/` (`SiteNode.cs`, `StarlaneEdge.cs`, `NoaaWeatherEngine.cs`) | `Unruled.Core` |
 | 20 Items (`10 RAW_*`, `10 ITEM_*`), Leontief recipes, convoys & WTO market | `Assets/Scripts/Core/Economy/` (`ItemId.cs`, `RecipeDatabase.cs`, `ConvoyRouter.cs`, `WtoMarketEngine.cs`) | `Unruled.Core` |
 | 3-part fleets (Line/EW/Supply), supply lines & Lanchester salvo combat | `Assets/Scripts/Core/Military/` (`FleetUnit.cs`, `SupplyLineSolver.cs`, `LanchesterCombat.cs`) | `Unruled.Core` |
@@ -72,6 +85,7 @@ Paths are under `Assets/Scripts/` (plus `Assets/Editor/` and `Assets/Tests/Core/
 - [ ] The diff adds no `.Current`, `Find*Object*`, singleton or upward dependency
       (`grep -nE "\.Current\b|Find(Any)?Object" <changed files>`).
 - [ ] Pure simulation logic is in `Unruled.Core` (zero `UnityEngine` references) and tested; state changes go through `SimClock` / owning engine.
+- [ ] New simulation state is ECS: blittable struct components in a `ComponentStore<T>`, written by one system, integer/fixed-point math, no allocations in system loops.
 - [ ] Asmdef references still point one way (`Unruled.View → Unruled.Core`).
 - [ ] Changed C# meets the checklist in `unity-perf.md`.
 - [ ] Saved/network data changes: keys only appended, `SchemaVersion` bumped, migration test added.
