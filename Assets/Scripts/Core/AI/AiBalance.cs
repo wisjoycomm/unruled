@@ -54,13 +54,19 @@ namespace Unruled.Core.AI
         public readonly int ThinkIntervalTicks;
         public readonly int FullBatteryScans; // core-base batteries for this many scan startups read as 100%
         public readonly int ResupplyAmmoPerLineShip; // below this much ammo per line ship a fleet goes home
+        public readonly int LoadAmmoPerLineShip; // at the core base a fleet loads ammo up to this per line ship
+        public readonly int LoadFuel; // and fuel up to this
         private readonly AiPreset[] _presets;
 
-        public AiBalance(int thinkIntervalTicks, int fullBatteryScans, int resupplyAmmoPerLineShip, AiPreset[] presets)
+        public AiBalance(
+            int thinkIntervalTicks, int fullBatteryScans, int resupplyAmmoPerLineShip, int loadAmmoPerLineShip, int loadFuel,
+            AiPreset[] presets)
         {
             if (thinkIntervalTicks < 1) throw new ArgumentOutOfRangeException(nameof(thinkIntervalTicks));
             if (fullBatteryScans < 1) throw new ArgumentOutOfRangeException(nameof(fullBatteryScans));
             if (resupplyAmmoPerLineShip < 1) throw new ArgumentOutOfRangeException(nameof(resupplyAmmoPerLineShip));
+            if (loadAmmoPerLineShip < resupplyAmmoPerLineShip) throw new ArgumentOutOfRangeException(nameof(loadAmmoPerLineShip));
+            if (loadFuel < 1) throw new ArgumentOutOfRangeException(nameof(loadFuel));
             if (presets == null || presets.Length == 0) throw new ArgumentException("Presets required.", nameof(presets));
             for (int i = 0; i < presets.Length; i++)
             {
@@ -70,6 +76,8 @@ namespace Unruled.Core.AI
             ThinkIntervalTicks = thinkIntervalTicks;
             FullBatteryScans = fullBatteryScans;
             ResupplyAmmoPerLineShip = resupplyAmmoPerLineShip;
+            LoadAmmoPerLineShip = loadAmmoPerLineShip;
+            LoadFuel = loadFuel;
             _presets = (AiPreset[])presets.Clone();
         }
 

@@ -28,7 +28,9 @@ components, then rebuilds the graph. `CreatePlayer(playerId, coreBase)` creates 
 which adds every fleet component and an empty cargo hold. Orders enter through `CommandIssuer.Issue`, which stamps
 the signal latency and queues them; when due, `SimClock` sends them through `CommandRouter` to the owning system.
 `UtilityAiEngine` (`Ai`) is not on the clock: the host calls `Ai.Think(tick)` (every 10 ticks, Server 2), and it
-issues orders only through `CommandIssuer`. `NoaaForecast` (`Forecast`) is a read-only query for the views.
+issues orders only through `CommandIssuer`. Per fleet it vents, retreats, resupplies, loads up at the core base
+(fill-to transfers), then stealth-raids or besieges a site it outguns with round-trip fuel and claims it; per player it
+scans, stress-tests and opens its jump gate. `NoaaForecast` (`Forecast`) is a read-only query for the views.
 `NewGameSetup.Create(sim, playerId)` lays out a new game from `NewGameBalance`: a home system per participant,
 stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a starting fleet and AI rivals.
 

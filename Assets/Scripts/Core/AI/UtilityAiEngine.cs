@@ -3,6 +3,7 @@ using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
+using Unruled.Core.Research;
 using Unruled.Core.Simulation;
 
 namespace Unruled.Core.AI
@@ -19,7 +20,14 @@ namespace Unruled.Core.AI
         Retreat = 2,
         Resupply = 3,
         RetractDrills = 4,
-        RadarScan = 5
+        RadarScan = 5,
+        StressTest = 6,
+        OpenGate = 7,
+        LoadCargo = 8,
+        StealthRaid = 9,
+        Siege = 10,
+        ClaimSite = 11,
+        ReturnHome = 12
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -46,11 +54,22 @@ namespace Unruled.Core.AI
     /// the preset level, or the player's power there falls below the retreat ratio.</item>
     /// <item>The player: one focused scan (Radar_Belt_Scan) of an unscanned bypass lane at one of its sites while the
     /// core base holds more than the preset minimum battery.</item>
+    /// <item>The player: a stress test (Radar_Belt_Scan, the research weight) once telemetry is complete and the core base
+    /// can pay; opening its jump gate (the higher of Stealth_Raid and Siege_Conquest) at the gate tier when the core base
+    /// can pay. A preset with neither weight stays sealed at home.</item>
+    /// <item>A fleet ready at the core base: load ammo and fuel up to the load targets, microchips for storm telemetry
+    /// while the player researches, plus the claim cost when it
+    /// besieges (Resupply_Logistics). Fully loaded, it picks a target it outguns with fuel for the round trip: a stealth raid
+    /// (Stealth_Raid) on rival fleets at a rival site, or a siege (Siege_Conquest) of a neutral or rival site (never a
+    /// core base) while it carries the claim cost. Advantage reads 500 at even power up to 1000 when undefended; the
+    /// best advantage wins, then the fewest lanes.</item>
+    /// <item>A fleet ready at a claimable site carrying the claim cost: claim it (Siege_Conquest). Ready at a site that is
+    /// not its player's, with nothing to fight or claim: go home (Resupply_Logistics at half).</item>
     /// </list>
     /// A triggered consideration reads 500 at its threshold, rising to 1000 at the extreme. Fleet orders also weigh a
     /// can-do consideration (coolant in the hold to vent, fuel to leave) that vetoes the action at 0. Power is line ships x
     /// LineAlpha plus EW ships x EwBeta (PROVISIONAL). Orders already in effect score 0; orders still in flight may
-    /// be issued again, which their handlers ignore. Stealth_Raid and Siege_Conquest have no actions yet.
+    /// be issued again, which their handlers ignore.
     /// </summary>
     public sealed class UtilityAiEngine
     {
@@ -62,16 +81,26 @@ namespace Unruled.Core.AI
         private readonly ComponentStore<FleetUnit> _units;
         private readonly ComponentStore<FleetMotion> _motions;
         private readonly ComponentStore<FleetCombatState> _combat;
+        private readonly ComponentStore<FleetReadiness> _readiness;
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly ComponentStore<SiteInfo> _sites;
         private readonly ComponentStore<SiteWeather> _weather;
         private readonly ComponentStore<MineralDeposit> _deposits;
         private readonly ComponentStore<StarlaneEdge> _lanes;
         private readonly ComponentStore<RadarScan> _scans;
+        private readonly ComponentStore<TechProgress> _progress;
+        private readonly ComponentStore<JumpGate> _gates;
         private readonly CommandIssuer _issuer;
+        private readonly RoutePlanner _routes;
+        private readonly ITechGates _tech;
         private readonly AiBalance _balance;
         private readonly CombatBalance _combatBalance;
         private readonly RadarBalance _radarBalance;
+        private readonly ResearchBalance _researchBalance;
+        private readonly JumpGateBalance _gateBalance;
+        private readonly SiteControlBalance _claimBalance;
+
+        private FleetRoute _route;
 
         private AiOrder[] _orders = new AiOrder[16];
         private int _orderCount;
@@ -79,25 +108,36 @@ namespace Unruled.Core.AI
         public UtilityAiEngine(
             ComponentStore<AiController> controllers, ComponentStore<PlayerHq> players, ComponentStore<FleetUnit> units,
             ComponentStore<FleetMotion> motions, ComponentStore<FleetCombatState> combat,
-            ComponentStore<Stockpile> stockpiles, ComponentStore<SiteInfo> sites, ComponentStore<SiteWeather> weather,
-            ComponentStore<MineralDeposit> deposits, ComponentStore<StarlaneEdge> lanes, ComponentStore<RadarScan> scans,
-            CommandIssuer issuer, AiBalance balance, CombatBalance combatBalance, RadarBalance radarBalance)
+            ComponentStore<FleetReadiness> readiness, ComponentStore<Stockpile> stockpiles, ComponentStore<SiteInfo> sites,
+            ComponentStore<SiteWeather> weather, ComponentStore<MineralDeposit> deposits, ComponentStore<StarlaneEdge> lanes,
+            ComponentStore<RadarScan> scans, ComponentStore<TechProgress> progress, ComponentStore<JumpGate> gates,
+            CommandIssuer issuer, RoutePlanner routes, ITechGates tech, AiBalance balance, CombatBalance combatBalance,
+            RadarBalance radarBalance, ResearchBalance researchBalance, JumpGateBalance gateBalance,
+            SiteControlBalance claimBalance)
         {
             _controllers = controllers ?? throw new ArgumentNullException(nameof(controllers));
             _players = players ?? throw new ArgumentNullException(nameof(players));
             _units = units ?? throw new ArgumentNullException(nameof(units));
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
             _combat = combat ?? throw new ArgumentNullException(nameof(combat));
+            _readiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _weather = weather ?? throw new ArgumentNullException(nameof(weather));
             _deposits = deposits ?? throw new ArgumentNullException(nameof(deposits));
             _lanes = lanes ?? throw new ArgumentNullException(nameof(lanes));
             _scans = scans ?? throw new ArgumentNullException(nameof(scans));
+            _progress = progress ?? throw new ArgumentNullException(nameof(progress));
+            _gates = gates ?? throw new ArgumentNullException(nameof(gates));
             _issuer = issuer ?? throw new ArgumentNullException(nameof(issuer));
+            _routes = routes ?? throw new ArgumentNullException(nameof(routes));
+            _tech = tech ?? throw new ArgumentNullException(nameof(tech));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
             _combatBalance = combatBalance ?? throw new ArgumentNullException(nameof(combatBalance));
             _radarBalance = radarBalance ?? throw new ArgumentNullException(nameof(radarBalance));
+            _researchBalance = researchBalance ?? throw new ArgumentNullException(nameof(researchBalance));
+            _gateBalance = gateBalance ?? throw new ArgumentNullException(nameof(gateBalance));
+            _claimBalance = claimBalance ?? throw new ArgumentNullException(nameof(claimBalance));
         }
 
         /// <summary>The orders tried by the last think that ran, in decision order.</summary>
@@ -140,16 +180,17 @@ namespace Unruled.Core.AI
                 for (int f = 0; f < _units.Count; f++)
                 {
                     if (_units.At(f).OwnerPlayerId == player.PlayerId && _units.At(f).TotalShips > 0)
-                        ThinkFleet(player, preset, _units.EntityAt(f));
+                        ThinkFleet(player, preset, _controllers.EntityAt(c), _units.EntityAt(f), tick);
                 }
                 for (int d = 0; d < _deposits.Count; d++)
                     ThinkDeposit(player.PlayerId, preset, d);
                 ThinkRadar(player, preset);
+                ThinkProgress(player, preset, _controllers.EntityAt(c));
             }
             return _orderCount;
         }
 
-        private void ThinkFleet(in PlayerHq player, AiPreset preset, EntityId fleet)
+        private void ThinkFleet(in PlayerHq player, AiPreset preset, EntityId hq, EntityId fleet, long tick)
         {
             ref var unit = ref _units.Get(fleet);
             ref var motion = ref _motions.Get(fleet);
@@ -186,20 +227,217 @@ namespace Unruled.Core.AI
                 }
             }
 
+            bool ready = motion.Lane.IsNull && !motion.Site.IsNull && state.EngagedUntilTick <= tick &&
+                         (!_readiness.Has(fleet) || _readiness.Get(fleet).CanAct(tick));
+            EntityId raidTarget = default, siegeTarget = default;
+            var loadItem = ItemId.None;
+            int loadQuantity = 0;
+            if (ready && motion.Site == player.CoreBase)
+            {
+                bool telemetry = _progress.Has(hq) && _progress.Get(hq).Stage == ResearchStage.FieldTelemetry;
+                if (TryPickLoad(player.CoreBase, preset, telemetry, in unit, ref hold, out loadItem, out loadQuantity,
+                        out int shortage))
+                {
+                    Consider(AiAction.LoadCargo, Score(preset.ResupplyLogisticsWeight, shortage), ref best, ref bestScore);
+                }
+                else
+                {
+                    int fuel = hold.Get(ItemId.ItemFuel);
+                    if (preset.StealthRaidWeight > 0 &&
+                        FindTarget(player, in unit, fuel, raid: true, out raidTarget, out int raidEdge))
+                        Consider(AiAction.StealthRaid, Score(preset.StealthRaidWeight, raidEdge), ref best, ref bestScore);
+                    if (preset.SiegeConquestWeight > 0 && CarriesClaimCost(ref hold) &&
+                        FindTarget(player, in unit, fuel, raid: false, out siegeTarget, out int siegeEdge))
+                        Consider(AiAction.Siege, Score(preset.SiegeConquestWeight, siegeEdge), ref best, ref bestScore);
+                }
+            }
+            else if (ready && IsAway(motion.Site, player.PlayerId) && Power(motion.Site, player.PlayerId, mine: false) == 0)
+            {
+                if (preset.SiegeConquestWeight > 0 && IsClaimable(motion.Site, player.PlayerId) && CarriesClaimCost(ref hold))
+                    Consider(AiAction.ClaimSite, Score(preset.SiegeConquestWeight, Full), ref best, ref bestScore);
+                else
+                    Consider(AiAction.ReturnHome, Score(preset.ResupplyLogisticsWeight, Threshold), ref best, ref bestScore);
+            }
+
             if (bestScore == 0)
                 return;
             var command = new DelayedPlayerCommand { PlayerId = player.PlayerId, Target = fleet };
-            if (best == AiAction.VentCoolant)
+            switch (best)
             {
-                command.CommandType = CommandType.VentCoolant;
+                case AiAction.VentCoolant:
+                    command.CommandType = CommandType.VentCoolant;
+                    break;
+                case AiAction.LoadCargo:
+                    command.CommandType = CommandType.TransferCargo;
+                    command.ParamA = (int)loadItem;
+                    command.ParamB = loadQuantity;
+                    command.ParamC = 1; // fill up to: an order re-issued while in flight changes nothing
+                    break;
+                case AiAction.StealthRaid:
+                    command.CommandType = CommandType.Move;
+                    command.ParamEntity = raidTarget;
+                    break;
+                case AiAction.Siege:
+                    command.CommandType = CommandType.Move;
+                    command.ParamEntity = siegeTarget;
+                    break;
+                case AiAction.ClaimSite:
+                    command.CommandType = CommandType.ClaimSite;
+                    command.Target = motion.Site;
+                    break;
+                default:
+                    command.CommandType = CommandType.Move;
+                    command.ParamEntity = player.CoreBase;
+                    break;
             }
-            else
-            {
-                command.CommandType = CommandType.Move;
-                command.ParamEntity = player.CoreBase;
-            }
-            Issue(command, best, bestScore);
+            Issue(command, best, bestScore, fleet);
         }
+
+        // The first item the fleet is short of at the core base that the base can give: ammo, fuel, microchips for storm
+        // telemetry while researching, then the claim cost when the preset besieges. Shortage reads 500 for any gap,
+        // 1000 for an empty hold.
+        private bool TryPickLoad(
+            EntityId core, AiPreset preset, bool telemetry, in FleetUnit unit, ref Stockpile hold, out ItemId item,
+            out int quantity, out int shortage)
+        {
+            item = ItemId.None;
+            quantity = 0;
+            shortage = 0;
+            if (!_stockpiles.Has(core))
+                return false;
+            ref var stock = ref _stockpiles.Get(core);
+            if (TryLoad(ref stock, ref hold, ItemId.ItemAmmo, (long)unit.LineShips * _balance.LoadAmmoPerLineShip,
+                    ref item, ref quantity, ref shortage) ||
+                TryLoad(ref stock, ref hold, ItemId.ItemFuel, _balance.LoadFuel, ref item, ref quantity, ref shortage) ||
+                (telemetry && TryLoad(ref stock, ref hold, ItemId.ItemMicrochip, _researchBalance.TelemetryMinMicrochips,
+                    ref item, ref quantity, ref shortage)))
+                return true;
+            if (preset.SiegeConquestWeight == 0)
+                return false;
+            for (int i = 0; i < _claimBalance.ClaimCostCount; i++)
+            {
+                var cost = _claimBalance.ClaimCost(i);
+                if (TryLoad(ref stock, ref hold, cost.Item, cost.Quantity, ref item, ref quantity, ref shortage))
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool TryLoad(
+            ref Stockpile stock, ref Stockpile hold, ItemId id, long target, ref ItemId item, ref int quantity,
+            ref int shortage)
+        {
+            long gap = target - hold.Get(id);
+            if (gap <= 0 || stock.Get(id) <= 0)
+                return false;
+            item = id;
+            quantity = (int)Math.Min(target, int.MaxValue);
+            shortage = Severity(gap, target);
+            return true;
+        }
+
+        // Best site this fleet outguns and has the fuel to reach and come back from: a raid hunts rival fleets at a rival
+        // site; a siege takes a neutral or rival site. Never a core base or THE SYSTEM's site.
+        private bool FindTarget(in PlayerHq player, in FleetUnit unit, int fuel, bool raid, out EntityId target, out int edge)
+        {
+            long power = FleetPower(in unit);
+            target = default;
+            edge = 0;
+            int bestLanes = int.MaxValue;
+            for (int i = 0; i < _sites.Count; i++)
+            {
+                ref var site = ref _sites.At(i);
+                var entity = _sites.EntityAt(i);
+                if (site.OwnerPlayerId < 0 || site.OwnerPlayerId == player.PlayerId || (raid && site.OwnerPlayerId == 0) ||
+                    IsCoreBase(entity))
+                    continue;
+                long hostile = Power(entity, player.PlayerId, mine: false);
+                if (hostile >= power || (raid && hostile == 0))
+                    continue;
+                int advantage = Severity(power - hostile, power);
+                if (advantage < edge || !_routes.TryPlan(player.CoreBase, entity, unit.TechTier, ref _route) ||
+                    2L * RouteFuel(in unit) > fuel)
+                    continue;
+                if (advantage == edge && _route.Count >= bestLanes)
+                    continue;
+                target = entity;
+                edge = advantage;
+                bestLanes = _route.Count;
+            }
+            return !target.IsNull;
+        }
+
+        private long RouteFuel(in FleetUnit unit)
+        {
+            long fuel = 0;
+            for (int i = 0; i < _route.Count; i++)
+                fuel += _routes.FuelFor(unit, _lanes.Get(_route.LaneAt(i)));
+            return fuel;
+        }
+
+        private void ThinkProgress(in PlayerHq player, AiPreset preset, EntityId hq)
+        {
+            if (!_stockpiles.Has(player.CoreBase))
+                return;
+            ref var stock = ref _stockpiles.Get(player.CoreBase);
+            if (_progress.Has(hq) && _progress.Get(hq).Stage == ResearchStage.StressTest && preset.RadarBeltScanWeight > 0)
+            {
+                var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
+                bool affordable = true;
+                for (int i = 0; i < cost.Length; i++)
+                    affordable &= stock.Has(cost[i].Item, cost[i].Quantity);
+                if (affordable)
+                    Issue(new DelayedPlayerCommand
+                    {
+                        PlayerId = player.PlayerId, CommandType = CommandType.StressTest, Target = player.CoreBase
+                    }, AiAction.StressTest, Score(preset.RadarBeltScanWeight, Full));
+            }
+
+            int expand = Math.Max(preset.StealthRaidWeight, preset.SiegeConquestWeight);
+            if (expand == 0 || !_tech.Unlocks(player.PlayerId, TechGate.JumpGate))
+                return;
+            for (int g = 0; g < _gates.Count; g++)
+            {
+                ref var gate = ref _gates.At(g);
+                if (gate.OwnerPlayerId != player.PlayerId || gate.IsOpen)
+                    continue;
+                for (int i = 0; i < _gateBalance.OpenCostCount; i++)
+                    if (!stock.Has(_gateBalance.OpenCost(i).Item, _gateBalance.OpenCost(i).Quantity))
+                        return;
+                Issue(new DelayedPlayerCommand
+                {
+                    PlayerId = player.PlayerId, CommandType = CommandType.OpenJumpGate, Target = gate.HomeSite
+                }, AiAction.OpenGate, Score(expand, Full));
+                return;
+            }
+        }
+
+        private bool CarriesClaimCost(ref Stockpile hold)
+        {
+            for (int i = 0; i < _claimBalance.ClaimCostCount; i++)
+                if (!hold.Has(_claimBalance.ClaimCost(i).Item, _claimBalance.ClaimCost(i).Quantity))
+                    return false;
+            return true;
+        }
+
+        private bool IsAway(EntityId site, int playerId) => _sites.Has(site) && _sites.Get(site).OwnerPlayerId != playerId;
+
+        private bool IsClaimable(EntityId site, int playerId)
+        {
+            int owner = _sites.Get(site).OwnerPlayerId;
+            return owner >= 0 && owner != playerId && !IsCoreBase(site);
+        }
+
+        private bool IsCoreBase(EntityId site)
+        {
+            for (int i = 0; i < _players.Count; i++)
+                if (_players.At(i).CoreBase == site)
+                    return true;
+            return false;
+        }
+
+        private long FleetPower(in FleetUnit unit) =>
+            (long)unit.LineShips * _combatBalance.LineAlpha + (long)unit.EwShips * _combatBalance.EwBeta;
 
         private void ThinkDeposit(int playerId, AiPreset preset, int denseIndex)
         {
@@ -319,7 +557,7 @@ namespace Unruled.Core.AI
                 ref var unit = ref _units.At(i);
                 if ((unit.OwnerPlayerId == playerId) != mine || _motions.Get(_units.EntityAt(i)).Site != site)
                     continue;
-                power += (long)unit.LineShips * _combatBalance.LineAlpha + (long)unit.EwShips * _combatBalance.EwBeta;
+                power += FleetPower(in unit);
             }
             return power;
         }
@@ -337,14 +575,16 @@ namespace Unruled.Core.AI
             return false;
         }
 
-        private void Issue(DelayedPlayerCommand command, AiAction action, int score)
+        private void Issue(DelayedPlayerCommand command, AiAction action, int score) => Issue(command, action, score, command.Target);
+
+        private void Issue(DelayedPlayerCommand command, AiAction action, int score, EntityId subject)
         {
             var result = _issuer.Issue(command, out _);
             if (_orderCount == _orders.Length)
                 Array.Resize(ref _orders, _orderCount * 2);
             _orders[_orderCount++] = new AiOrder
             {
-                PlayerId = command.PlayerId, Action = action, Subject = command.Target, ScoreMilli = score, Result = result
+                PlayerId = command.PlayerId, Action = action, Subject = subject, ScoreMilli = score, Result = result
             };
         }
     }

@@ -33,11 +33,12 @@ namespace Unruled.Tests.Core.Military
         private ref Stockpile Site => ref _sim.Stockpiles.Get(_core);
         private ref Stockpile Hold => ref _sim.Stockpiles.Get(_fleet);
 
-        private void Transfer(EntityId fleet, ItemId item, int quantity)
+        private void Transfer(EntityId fleet, ItemId item, int quantity, int fill = 0)
         {
             var command = new DelayedPlayerCommand
             {
-                PlayerId = Player, CommandType = CommandType.TransferCargo, Target = fleet, ParamA = (int)item, ParamB = quantity
+                PlayerId = Player, CommandType = CommandType.TransferCargo, Target = fleet, ParamA = (int)item, ParamB = quantity,
+                ParamC = fill
             };
             Assert.AreEqual(IssueResult.Issued, _sim.Issuer.Issue(command, out long at));
             for (long t = _sim.Clock.CurrentTick; t < at; t++)
@@ -54,6 +55,22 @@ namespace Unruled.Tests.Core.Military
             Transfer(_fleet, ItemId.ItemAmmo, -10);
             Assert.AreEqual(30, Site.Get(ItemId.ItemAmmo));
             Assert.AreEqual(20, Hold.Get(ItemId.ItemAmmo));
+        }
+
+        [Test]
+        public void FillTo_TopsUpTheHold_FromWhatTheSiteHas_AndRepeatsChangeNothing()
+        {
+            Hold.Add(ItemId.ItemAmmo, 10);
+            Transfer(_fleet, ItemId.ItemAmmo, 30, fill: 1);
+            Assert.AreEqual(30, Hold.Get(ItemId.ItemAmmo));
+            Assert.AreEqual(30, Site.Get(ItemId.ItemAmmo));
+
+            Transfer(_fleet, ItemId.ItemAmmo, 30, fill: 1);
+            Assert.AreEqual(30, Hold.Get(ItemId.ItemAmmo), "already full");
+
+            Transfer(_fleet, ItemId.ItemAmmo, 100, fill: 1);
+            Assert.AreEqual(60, Hold.Get(ItemId.ItemAmmo), "takes what the site has");
+            Assert.AreEqual(0, Site.Get(ItemId.ItemAmmo));
         }
 
         [Test]

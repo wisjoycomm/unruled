@@ -236,8 +236,9 @@ namespace Unruled.Core.Simulation
             Clock.Register(Authority);
 
             Ai = new UtilityAiEngine(
-                AiControllers, Players, Fleets, FleetMotions, FleetCombat, Stockpiles, Sites, Weather, Deposits, Starlanes,
-                RadarScans, Issuer, balance.Ai, balance.Combat, balance.Radar);
+                AiControllers, Players, Fleets, FleetMotions, FleetCombat, FleetReadiness, Stockpiles, Sites, Weather, Deposits,
+                Starlanes, RadarScans, TechProgress, JumpGates, Issuer, Routes, TechGates, balance.Ai, balance.Combat,
+                balance.Radar, balance.Research, balance.JumpGates, balance.SiteControl);
         }
 
         /// <summary>

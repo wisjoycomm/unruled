@@ -104,14 +104,15 @@ namespace Unruled.Core.Simulation
             startingRefineries: new[] { ItemId.ItemOxygen, ItemId.ItemCoolant, ItemId.ItemFuel, ItemId.ItemSteel, ItemId.ItemBattery },
             coreBaseStock: new[]
             {
-                new ItemStack(ItemId.ItemFuel, 400), new ItemStack(ItemId.ItemCoolant, 400),
+                new ItemStack(ItemId.ItemFuel, 2_000), new ItemStack(ItemId.ItemCoolant, 400),
                 new ItemStack(ItemId.ItemOxygen, 200), new ItemStack(ItemId.ItemRations, 200),
                 new ItemStack(ItemId.ItemSteel, 150), new ItemStack(ItemId.ItemBattery, 40),
-                new ItemStack(ItemId.ItemAmmo, 300), new ItemStack(ItemId.RawMethane, 100)
+                new ItemStack(ItemId.ItemAmmo, 300), new ItemStack(ItemId.RawMethane, 100),
+                new ItemStack(ItemId.ItemMicrochip, 20)
             },
             fleetStock: new[]
             {
-                new ItemStack(ItemId.ItemAmmo, 120), new ItemStack(ItemId.ItemFuel, 80), new ItemStack(ItemId.ItemCoolant, 60),
+                new ItemStack(ItemId.ItemAmmo, 120), new ItemStack(ItemId.ItemFuel, 600), new ItemStack(ItemId.ItemCoolant, 60),
                 new ItemStack(ItemId.ItemRations, 40)
             });
 
@@ -242,10 +243,12 @@ namespace Unruled.Core.Simulation
         /// </summary>
         /// <summary>
         /// Tab 06 presets (weights and ratio in milli, vent temperature in milli-degrees). Think every 10 ticks (GDD §2.5).
-        /// PROVISIONAL: 100% battery = 10 scan startups at the core base; resupply below 5 ammo per line ship.
+        /// PROVISIONAL: 100% battery = 10 scan startups at the core base; resupply below 5 ammo per line ship; at the
+        /// core base a fleet loads up to 20 ammo per line ship and 1,500 fuel.
         /// </summary>
         public static AiBalance CreateAiBalance() => new AiBalance(
-            thinkIntervalTicks: 10, fullBatteryScans: 10, resupplyAmmoPerLineShip: 5, presets: new[]
+            thinkIntervalTicks: 10, fullBatteryScans: 10, resupplyAmmoPerLineShip: 5, loadAmmoPerLineShip: 20, loadFuel: 1_500,
+            presets: new[]
             {
                 new AiPreset(1, "Sentinel_Defender", 1_800, 1_700, 1_500, 1_400, 0, 0, 75_000, 650, 30, 3),
                 new AiPreset(2, "Industrialist_Trader", 1_200, 1_900, 1_000, 2_000, 0, 200, 70_000, 800, 50, 3),

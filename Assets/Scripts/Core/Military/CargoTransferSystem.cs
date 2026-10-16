@@ -8,8 +8,9 @@ namespace Unruled.Core.Military
 {
     /// <summary>
     /// <see cref="CommandType.TransferCargo"/> (target: a fleet; ParamA = item; ParamB = quantity, positive loads from the
-    /// site into the hold, negative unloads into the site). The fleet must be the player's, docked at a site the player
-    /// owns, out of combat and not a WTO contract convoy. All or nothing. Stolen units move first, so their
+    /// site into the hold, negative unloads into the site; ParamC = 1 fills the hold up to ParamB from what the site has,
+    /// so a repeated fill changes nothing). The fleet must be the player's, docked at a site the player owns, out of combat
+    /// and not a WTO contract convoy. A plain transfer is all or nothing. Stolen units move first, so their
     /// <see cref="StolenGoods"/> tags follow them.
     /// </summary>
     public sealed class CargoTransferSystem : ICommandHandler
@@ -57,6 +58,14 @@ namespace Unruled.Core.Military
             var to = load ? fleet : site;
             int quantity = Math.Abs(command.ParamB);
             ref var source = ref _stockpiles.Get(from);
+            if (command.ParamC == 1)
+            {
+                if (!load)
+                    return;
+                quantity = Math.Min(command.ParamB - _stockpiles.Get(fleet).Get(item), source.Get(item));
+                if (quantity <= 0)
+                    return;
+            }
             if (!source.Has(item, quantity))
                 return;
 
