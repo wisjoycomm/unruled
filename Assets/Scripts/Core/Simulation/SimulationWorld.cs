@@ -36,11 +36,14 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<FleetSensors> FleetSensors;
         public readonly ComponentStore<FleetReadiness> FleetReadiness;
         public readonly ComponentStore<FleetCombatState> FleetCombat;
+        public readonly ComponentStore<CapitalRelocation> Relocations;
         public readonly ComponentStore<RadarScan> RadarScans;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly PlanetLifecycleSystem Lifecycle;
+        public readonly FleetFactory FleetFactory;
         public readonly FleetMovementSystem Movement;
+        public readonly CapitalRelocationSystem Relocation;
         public readonly SignalLatencySolver Latency;
         public readonly CommandIssuer Issuer;
 
@@ -68,11 +71,14 @@ namespace Unruled.Core.Simulation
             FleetSensors = World.CreateStore<FleetSensors>();
             FleetReadiness = World.CreateStore<FleetReadiness>();
             FleetCombat = World.CreateStore<FleetCombatState>();
+            Relocations = World.CreateStore<CapitalRelocation>();
             RadarScans = World.CreateStore<RadarScan>();
 
             Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, FleetMotions,
                 balance.Latency);
-            Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, FleetMotions);
+            Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, FleetMotions, Players, Relocations);
+            FleetFactory = new FleetFactory(
+                World, Sites, Fleets, FleetMotions, FleetSensors, FleetReadiness, FleetCombat, Stockpiles, balance.Combat);
 
             // Fixed tick order: weather first, then producers before consumers, watchers last.
             Clock.Register(new NoaaWeatherEngine(
@@ -100,12 +106,18 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Reverse, Movement);
 
             var combat = new SalvoCombatEngine(
-                World, Fleets, FleetMotions, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, balance.Combat,
-                balance.Fleets);
+                World, Fleets, FleetMotions, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, Players, Relocations,
+                balance.Combat, balance.Fleets, balance.Relocation);
             Clock.Register(combat);
             Commands.Register(CommandType.SetRof, combat);
             Commands.Register(CommandType.SetFocus, combat);
             Commands.Register(CommandType.VentCoolant, combat);
+
+            Relocation = new CapitalRelocationSystem(
+                World, Players, Relocations, Fleets, FleetMotions, Sites, Starlanes, Stockpiles, FleetFactory,
+                balance.Relocation, worldSeed);
+            Clock.Register(Relocation);
+            Commands.Register(CommandType.RelocateBase, Relocation);
 
             var radar = new FocusedRadarSystem(
                 World, RadarScans, Fleets, FleetMotions, FleetSensors, Starlanes, Players, Stockpiles, balance.Radar,
@@ -117,25 +129,7 @@ namespace Unruled.Core.Simulation
         }
 
         /// <summary>World setup: creates a fleet at a site with every fleet component and an empty cargo hold.</summary>
-        public EntityId CreateFleet(in FleetUnit unit, EntityId site)
-        {
-            if (unit.TechTier < 1 || unit.TechTier > FleetBalance.TierCount)
-                throw new ArgumentOutOfRangeException(nameof(unit), $"Tech tier {unit.TechTier} is not 1..{FleetBalance.TierCount}.");
-            if (!Sites.Has(site))
-                throw new ArgumentException($"{site} is not a site.", nameof(site));
-
-            var fleet = World.Create();
-            Fleets.Add(fleet, unit);
-            FleetMotions.Add(fleet, new FleetMotion { Site = site });
-            FleetSensors.Add(fleet, default);
-            FleetReadiness.Add(fleet, default);
-            FleetCombat.Add(fleet, new FleetCombatState
-            {
-                Rof = RofStance.Standard100, TemperatureMilli = Balance.Combat.AmbientMilli
-            });
-            Stockpiles.Add(fleet, default);
-            return fleet;
-        }
+        public EntityId CreateFleet(in FleetUnit unit, EntityId site) => FleetFactory.Create(unit, site);
 
         /// <summary>
         /// World setup: generates one star system's sites and lanes from its seed, gives them weather components,

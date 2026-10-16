@@ -20,12 +20,14 @@ namespace Unruled.Core.Simulation
         public readonly RadarBalance Radar;
         public readonly FleetBalance Fleets;
         public readonly CombatBalance Combat;
+        public readonly RelocationBalance Relocation;
         public readonly SystemFactionBalance SystemFactions;
 
         public GameBalanceConfig(
             RecipeDatabase recipes, UniverseGenBalance universe, StarlaneBalance starlanes, NoaaBalance weather,
             RefineryBalance refinery, MiningBalance mining,
             LifecycleBalance lifecycle, LatencyBalance latency, RadarBalance radar, FleetBalance fleets, CombatBalance combat,
+            RelocationBalance relocation,
             SystemFactionBalance systemFactions)
         {
             Recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
@@ -39,6 +41,7 @@ namespace Unruled.Core.Simulation
             Radar = radar ?? throw new ArgumentNullException(nameof(radar));
             Fleets = fleets ?? throw new ArgumentNullException(nameof(fleets));
             Combat = combat ?? throw new ArgumentNullException(nameof(combat));
+            Relocation = relocation ?? throw new ArgumentNullException(nameof(relocation));
             SystemFactions = systemFactions ?? throw new ArgumentNullException(nameof(systemFactions));
         }
     }

@@ -13,6 +13,7 @@ namespace Unruled.Core.Military
     /// <item>Supply tenders first top up friendly holds; a fleet at its owner's site also draws from the site vault.</item>
     /// <item>Psi = sum of line ships x Alpha x ROF (fleets that can act, are not overheated and have ammo).</item>
     /// <item>Omega = (sum of EW ships x Beta) x (1 + fortification at own site) x F_flank (fleets with batteries).
+    /// A core base in relocation teardown keeps only part of its fortification.
     /// F_flank counts hostile arrival lanes at a site whose directions are at least 90° apart.</item>
     /// <item>Each player fires at the hostile player with the lowest id: damage max(0, Psi - Omega) lands on the focus
     /// class of its lowest fleet, then spills to the other classes. Damage is resolved simultaneously.</item>
@@ -31,7 +32,10 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<SiteInfo> _sites;
         private readonly ComponentStore<StarlaneEdge> _lanes;
         private readonly ComponentStore<Stockpile> _stockpiles;
+        private readonly ComponentStore<PlayerHq> _players;
+        private readonly ComponentStore<CapitalRelocation> _relocations;
         private readonly CombatBalance _balance;
+        private readonly RelocationBalance _relocationBalance;
         private readonly FleetBalance _fleetBalance;
 
         private long[] _keys = new long[64];
@@ -53,7 +57,8 @@ namespace Unruled.Core.Military
             World world, ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions,
             ComponentStore<FleetReadiness> readiness, ComponentStore<FleetCombatState> combat,
             ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes, ComponentStore<Stockpile> stockpiles,
-            CombatBalance balance, FleetBalance fleetBalance)
+            ComponentStore<PlayerHq> players, ComponentStore<CapitalRelocation> relocations, CombatBalance balance,
+            FleetBalance fleetBalance, RelocationBalance relocationBalance)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _units = units ?? throw new ArgumentNullException(nameof(units));
@@ -63,8 +68,11 @@ namespace Unruled.Core.Military
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _lanes = lanes ?? throw new ArgumentNullException(nameof(lanes));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
+            _players = players ?? throw new ArgumentNullException(nameof(players));
+            _relocations = relocations ?? throw new ArgumentNullException(nameof(relocations));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
             _fleetBalance = fleetBalance ?? throw new ArgumentNullException(nameof(fleetBalance));
+            _relocationBalance = relocationBalance ?? throw new ArgumentNullException(nameof(relocationBalance));
         }
 
         public void OnTick(long tick)
@@ -197,7 +205,7 @@ namespace Unruled.Core.Military
                 int t = _target[p];
                 long omega = _omegaBase[t];
                 if (!site.IsNull && _sites.Get(site).OwnerPlayerId == _playerIds[t])
-                    omega = omega * (100 + _balance.FortificationPdPercent) / 100;
+                    omega = omega * (100 + FortificationPercent(_playerIds[t], site)) / 100;
                 if (!site.IsNull)
                     omega = omega * _balance.FlankPercent(ExtraLanes(start, end, site, _playerIds[t])) / 100;
                 _damage[p] = Math.Max(0, _psi[p] - omega);
@@ -210,6 +218,20 @@ namespace Unruled.Core.Military
                 var focus = _combat.Get(_units.EntityAt(_lead[p])).Focus;
                 ApplyDamage(start, end, _playerIds[_target[p]], _damage[p], focus);
             }
+        }
+
+        private int FortificationPercent(int playerId, EntityId site)
+        {
+            for (int i = 0; i < _players.Count; i++)
+            {
+                ref var hq = ref _players.At(i);
+                if (hq.PlayerId != playerId || hq.CoreBase != site)
+                    continue;
+                var hqEntity = _players.EntityAt(i);
+                if (_relocations.Has(hqEntity) && _relocations.Get(hqEntity).Phase == RelocationPhase.Teardown)
+                    return _balance.FortificationPdPercent * _relocationBalance.TeardownDefencePercent / 100;
+            }
+            return _balance.FortificationPdPercent;
         }
 
         private int SlotOf(int playerId, int denseIndex)

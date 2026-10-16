@@ -16,7 +16,7 @@ namespace Unruled.Core.Simulation
                 CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateStarlaneBalance(), CreateNoaaBalance(),
                 CreateRefineryBalance(), CreateMiningBalance(),
                 CreateLifecycleBalance(), CreateLatencyBalance(), CreateRadarBalance(), CreateFleetBalance(),
-                CreateCombatBalance(),
+                CreateCombatBalance(), CreateRelocationBalance(),
                 CreateSystemFactionBalance());
 
         /// <summary>
@@ -116,6 +116,24 @@ namespace Unruled.Core.Simulation
             overheatMilli: 90_000,
             overheatReleaseMilli: 75_000,
             cookOffHullPercent: 5);
+
+        /// <summary>
+        /// GDD §2.4 A, §4.2 and data sheet tab 04: teardown 900–1800 ticks with the old base at 50% defence bonus,
+        /// convoy 1800–3600 ticks (latency x2, paralysis 15 min if destroyed), bootstrap 1800 ticks, cooldown 48 h.
+        /// PROVISIONAL: costs 20 alloy + 50 fuel + 20 battery (teardown) and 20 coolant + 20 battery (bootstrap), all
+        /// paid from the old core base when ordered; durations rolled uniformly inside each range.
+        /// </summary>
+        public static RelocationBalance CreateRelocationBalance() => new RelocationBalance(
+            teardownMinTicks: 900,
+            teardownMaxTicks: 1_800,
+            convoyMinTicks: 1_800,
+            convoyMaxTicks: 3_600,
+            bootstrapTicks: 1_800,
+            cooldownTicks: 172_800,
+            paralysisTicks: 900,
+            teardownDefencePercent: 50,
+            teardownCost: new[] { Milli(ItemId.ItemAlloy, 20_000), Milli(ItemId.ItemFuel, 50_000), Milli(ItemId.ItemBattery, 20_000) },
+            bootstrapCost: new[] { Milli(ItemId.ItemCoolant, 20_000), Milli(ItemId.ItemBattery, 20_000) });
 
         private static ItemAmount Milli(ItemId item, int milli) => new ItemAmount(item, milli);
 

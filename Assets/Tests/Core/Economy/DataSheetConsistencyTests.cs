@@ -150,6 +150,41 @@ namespace Unruled.Tests.Core.Economy
         }
 
         [Test]
+        public void RoutesTab_MatchesRelocationBalance()
+        {
+            var rows = ReadTable("## 04_Routes_Radar_Latency");
+            var relocation = DefaultGameBalance.CreateRelocationBalance();
+
+            var teardown = FindRow(rows, "Phase_1_Teardown_Old_Base");
+            Assert.AreEqual(
+                $"{relocation.TeardownMinTicks} - {relocation.TeardownMaxTicks} Ticks " +
+                $"({relocation.TeardownMinTicks / 60} - {relocation.TeardownMaxTicks / 60} Mins)", teardown[2]);
+            Assert.AreEqual(ItemNames(relocation.TeardownCost), teardown[3]);
+            StringAssert.Contains($"giảm {100 - relocation.TeardownDefencePercent}% SiteDefenseBonus", teardown[4]);
+
+            var convoy = FindRow(rows, "Phase_2_Capital_Convoy");
+            Assert.AreEqual(
+                $"{relocation.ConvoyMinTicks} - {relocation.ConvoyMaxTicks} Ticks " +
+                $"({relocation.ConvoyMinTicks / 60} - {relocation.ConvoyMaxTicks / 60} Mins)", convoy[2]);
+            StringAssert.Contains($"Tê liệt lệnh {relocation.ParalysisTicks / 60} phút", convoy[4]);
+
+            var bootstrap = FindRow(rows, "Phase_3_Bootstrap_New_Base");
+            Assert.AreEqual(
+                $"{relocation.BootstrapTicks} Ticks ({relocation.BootstrapTicks / 60} Mins) | Cooldown {relocation.CooldownTicks / 3600}h",
+                bootstrap[2]);
+            Assert.AreEqual(ItemNames(relocation.BootstrapCost), bootstrap[3]);
+        }
+
+        // (ItemAlloy, ...), (ItemFuel, ...) -> "ALLOY + FUEL"
+        private static string ItemNames(ItemAmount[] amounts)
+        {
+            var names = new string[amounts.Length];
+            for (int i = 0; i < amounts.Length; i++)
+                names[i] = amounts[i].Item.ToString().Substring("Item".Length).ToUpperInvariant();
+            return string.Join(" + ", names);
+        }
+
+        [Test]
         public void ShipsTab_MatchesFleetBalance()
         {
             var rows = ReadTable("## 03_Ships_And_Upkeep");
