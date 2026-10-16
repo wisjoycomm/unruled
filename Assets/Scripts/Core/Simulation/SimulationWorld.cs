@@ -55,6 +55,7 @@ namespace Unruled.Core.Simulation
         public readonly BracketRates Rates;
         public readonly WtoMarketEngine Market;
         public readonly WtoContractSystem ContractSystem;
+        public readonly LeaderboardAuditSystem Audit;
         public readonly PlanetLifecycleSystem Lifecycle;
         public readonly FleetFactory FleetFactory;
         public readonly RoutePlanner Routes;
@@ -182,6 +183,10 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.CancelScan, radar);
             Commands.Register(CommandType.EcmJam, radar);
             Clock.Register(ContractSystem);
+            Audit = new LeaderboardAuditSystem(
+                Standings, Wallets, Sites, Fleets, Stockpiles, Ledger, WtoFeePool, StaTollPool, Market, balance.Leaderboard);
+            Clock.Register(Audit);
+            Commands.Register(CommandType.AuditOptIn, Audit);
         }
 
         /// <summary>

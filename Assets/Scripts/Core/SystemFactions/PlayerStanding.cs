@@ -8,5 +8,7 @@ namespace Unruled.Core.SystemFactions
     {
         public byte Bracket;
         public int Rank; // 0 = unrated
+        public bool IsAudited; // opted in to the audit
+        public bool IsEvading; // left the audit while in a bracket: pays the evading escrow rate until they rejoin
     }
 }

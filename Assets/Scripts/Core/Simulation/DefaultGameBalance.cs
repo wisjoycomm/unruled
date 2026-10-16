@@ -142,6 +142,7 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// Data sheet tab 05, one row per bracket. "Current Storm Path" = no lead but sees storms now; the unrated
         /// bracket sees no forecast. 40% escrow applies to unrated players evading the audit.
+        /// PROVISIONAL: the audit runs once a game day (86,400 ticks).
         /// </summary>
         public static LeaderboardBalance CreateLeaderboardBalance() => new LeaderboardBalance(new[]
         {
@@ -156,7 +157,7 @@ namespace Unruled.Core.Simulation
                 new[] { ItemId.ItemFuel, ItemId.ItemCoolant, ItemId.ItemSteel }, 20 * 60, true),
             new BracketRules(6, "Apex_Tier0", 1, 10, 15, 15, 200, 15, 10, 15,
                 new[] { ItemId.ItemFuel, ItemId.ItemCoolant, ItemId.ItemAlloy }, 30 * 60, true)
-        });
+        }, auditIntervalTicks: 86_400);
 
         public static RelocationBalance CreateRelocationBalance() => new RelocationBalance(
             teardownMinTicks: 900,

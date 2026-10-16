@@ -6,7 +6,7 @@ namespace Unruled.Core.SystemFactions
 {
     /// <summary>
     /// A player's bracket rules (tab 05), read from the <see cref="PlayerStanding"/> on their HQ (the wallet entity).
-    /// A player without a standing is unrated.
+    /// A player without a standing is unrated; a player evading the audit pays the unrated evading escrow rate.
     /// </summary>
     public sealed class BracketRates : IMarketRates
     {
@@ -31,6 +31,11 @@ namespace Unruled.Core.SystemFactions
 
         public int FeeBasisPoints(int playerId) => For(playerId).MarketFeeBasisPoints;
 
-        public int EscrowRatePercent(int playerId) => For(playerId).EscrowRatePercent;
+        public int EscrowRatePercent(int playerId)
+        {
+            if (_ledger.TryFindPlayerWallet(playerId, out var hq) && _standings.Has(hq) && _standings.Get(hq).IsEvading)
+                return _brackets.Bracket(LeaderboardBalance.Unrated).EvadingEscrowRatePercent;
+            return For(playerId).EscrowRatePercent;
+        }
     }
 }

@@ -52,15 +52,17 @@ namespace Unruled.Core.SystemFactions
         }
     }
 
-    /// <summary>Data sheet tab 05: the seven brackets, indexed by id (0 = unrated).</summary>
+    /// <summary>Data sheet tab 05: the seven brackets, indexed by id (0 = unrated), and how often the audit runs.</summary>
     public sealed class LeaderboardBalance
     {
         public const byte Unrated = 0;
 
+        public readonly int AuditIntervalTicks;
         private readonly BracketRules[] _brackets;
 
-        public LeaderboardBalance(BracketRules[] brackets)
+        public LeaderboardBalance(BracketRules[] brackets, int auditIntervalTicks)
         {
+            if (auditIntervalTicks <= 0) throw new ArgumentOutOfRangeException(nameof(auditIntervalTicks));
             if (brackets == null || brackets.Length == 0) throw new ArgumentException("Brackets required.", nameof(brackets));
             for (int i = 0; i < brackets.Length; i++)
                 if (brackets[i] == null || brackets[i].Id != i)
@@ -75,6 +77,16 @@ namespace Unruled.Core.SystemFactions
             if (dividends > 100 || grants > 100)
                 throw new ArgumentException("Bracket shares add up to more than the pool.", nameof(brackets));
             _brackets = brackets;
+            AuditIntervalTicks = auditIntervalTicks;
+        }
+
+        /// <summary>The bracket a rank (1 = richest) falls in; ranks no bracket covers are unrated.</summary>
+        public byte BracketForRank(int rank)
+        {
+            for (int i = 1; i < _brackets.Length; i++)
+                if (rank >= _brackets[i].RankMin && rank <= _brackets[i].RankMax)
+                    return (byte)i;
+            return Unrated;
         }
 
         public int Count => _brackets.Length;
