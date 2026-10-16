@@ -56,3 +56,4 @@
 - 2026-10-16 - Claude - Shipyard: BuildShips (core base, tier ≤ research tier, tab-03 items, build queue delivering into a docked fleet or a new one) and Retrofit (docked fleet to the research tier for 50% cost); FleetUnit.Gain; tests.
 - 2026-10-16 - Claude - Site development: ClaimSite (docked fleet unloads the claim cost; neutral or undefended rival sites, never a core base), BuildRig on owned deposits, BuildRefinery on owned sites, with costs and caps in balance; tests.
 - 2026-10-16 - Claude - Jump gates: contested cluster generated after the homes (tungsten/uranium only there), a dormant JumpGate per participant, OpenJumpGate at Tier 2 for an energy charge adds the gate lane; tests.
+- 2026-10-16 - Claude - Galaxy tab: board shows every system (contested in the middle, gate links open/dormant, own fleet counts), click opens a system; gate rings on the system board. Compile-checked against Unity DLLs; Play Mode not yet checked (editor closed).

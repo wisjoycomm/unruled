@@ -11,6 +11,8 @@ namespace Unruled.View.UI
     /// </summary>
     public sealed class MainScreenView : MonoBehaviour
     {
+        private const string ActiveTabClass = "board__tab--active";
+
         [SerializeField] private UIDocument _document;
 
         private TopTelemetryHud _top;
@@ -26,6 +28,10 @@ namespace Unruled.View.UI
 
         public FleetCard Fleet => _fleet;
 
+        public Button SystemTab { get; private set; }
+
+        public Button GalaxyTab { get; private set; }
+
         public void Bind(SimulationWorld sim, int playerId)
         {
             if (_document == null)
@@ -37,9 +43,8 @@ namespace Unruled.View.UI
             _fleet = new FleetCard(root);
             _inFlight = new InFlightStrip(root);
             BoardView = TopTelemetryHud.Require<VisualElement>(root, "board-view");
-            var systemTab = TopTelemetryHud.Require<Button>(root, "tab-system");
-            if (HudQueries.TryFindHq(sim, playerId, out var hq) && sim.Sites.Has(sim.Players.Get(hq).CoreBase))
-                systemTab.text = "SYSTEM " + UiFormat.StarName(sim.Sites.Get(sim.Players.Get(hq).CoreBase).ClusterId);
+            SystemTab = TopTelemetryHud.Require<Button>(root, "tab-system");
+            GalaxyTab = TopTelemetryHud.Require<Button>(root, "tab-galaxy");
 
             _sim = sim;
             _top.Bind(sim, playerId);
@@ -50,6 +55,14 @@ namespace Unruled.View.UI
             _top.SetSelection(_fleet.Fleet);
             _shownTick = -1;
             RefreshAll();
+        }
+
+        /// <summary>Marks the board tab that is showing; the system tab names the last system shown.</summary>
+        public void ShowBoardTab(bool galaxy, int clusterId)
+        {
+            SystemTab.text = "SYSTEM " + UiFormat.StarName(clusterId);
+            SystemTab.EnableInClassList(ActiveTabClass, !galaxy);
+            GalaxyTab.EnableInClassList(ActiveTabClass, galaxy);
         }
 
         /// <summary>Selects a fleet for the card; the latency readout follows it.</summary>
