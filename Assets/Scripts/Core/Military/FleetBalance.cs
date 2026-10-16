@@ -52,25 +52,28 @@ namespace Unruled.Core.Military
         }
     }
 
-    /// <summary>Fleet rules: tab 03 per tech tier plus movement (speed in milli map units per tick).</summary>
+    /// <summary>Fleet rules: tab 03 per tech tier, the upkeep interval, and movement (speed in milli map units per tick).</summary>
     public sealed class FleetBalance
     {
         public const int TierCount = 5;
 
         private readonly ShipTierRules[] _tiers;
+        public readonly int UpkeepIntervalTicks;
         public readonly int BaseSpeedMilliPerTick;
         public readonly int FuelPerShipPer100UnitsMilli;
 
-        public FleetBalance(ShipTierRules[] tiers, int baseSpeedMilliPerTick, int fuelPerShipPer100UnitsMilli)
+        public FleetBalance(ShipTierRules[] tiers, int upkeepIntervalTicks, int baseSpeedMilliPerTick, int fuelPerShipPer100UnitsMilli)
         {
             if (tiers == null) throw new ArgumentNullException(nameof(tiers));
             if (tiers.Length != TierCount) throw new ArgumentException($"Expected {TierCount} tiers.", nameof(tiers));
             for (int i = 0; i < tiers.Length; i++)
                 if (tiers[i] == null) throw new ArgumentNullException(nameof(tiers), $"Tier {i + 1} is missing.");
+            if (upkeepIntervalTicks < 1) throw new ArgumentOutOfRangeException(nameof(upkeepIntervalTicks));
             if (baseSpeedMilliPerTick < 1) throw new ArgumentOutOfRangeException(nameof(baseSpeedMilliPerTick));
             if (fuelPerShipPer100UnitsMilli < 0) throw new ArgumentOutOfRangeException(nameof(fuelPerShipPer100UnitsMilli));
 
             _tiers = tiers;
+            UpkeepIntervalTicks = upkeepIntervalTicks;
             BaseSpeedMilliPerTick = baseSpeedMilliPerTick;
             FuelPerShipPer100UnitsMilli = fuelPerShipPer100UnitsMilli;
         }

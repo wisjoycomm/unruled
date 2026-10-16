@@ -61,6 +61,17 @@ namespace Unruled.Core.Military
         public bool IsReversing;
     }
 
+    /// <summary>ECS component: mothball and upkeep state of a fleet (tab 03).</summary>
+    public struct FleetReadiness
+    {
+        public bool IsMothballed;
+        public long WarmupUntilTick; // reactors restarting after a mothball
+        public bool IsUnsupplied; // the last upkeep was not paid
+
+        /// <summary>Whether the fleet may move or fire on this tick.</summary>
+        public bool CanAct(long tick) => !IsMothballed && !IsUnsupplied && tick >= WarmupUntilTick;
+    }
+
     /// <summary>ECS component: what enemy sensors know about a fleet.</summary>
     public struct FleetSensors
     {

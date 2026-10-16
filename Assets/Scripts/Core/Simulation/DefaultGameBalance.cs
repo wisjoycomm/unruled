@@ -47,7 +47,7 @@ namespace Unruled.Core.Simulation
             revealTicks: 60);
 
         /// <summary>
-        /// Data sheet tab 03: hourly upkeep per ship, combat burn multipliers, 80% mothball discount, warm-up 60–180
+        /// Data sheet tab 03: upkeep per ship each hour, combat burn multipliers, 80% mothball discount, warm-up 60–180
         /// ticks, IAEA reveal for Tier 5. PROVISIONAL: base speed 5 map units per tick and 1 fuel per ship per 100 units
         /// (scaled by the lane tier's speed and fuel multiplier).
         /// </summary>
@@ -75,6 +75,7 @@ namespace Unruled.Core.Simulation
                     new[] { Milli(ItemId.ItemAmmo, 3500), Milli(ItemId.ItemCoolant, 4000) },
                     mothballUpkeepDiscountPercent: 80, mothballWarmupTicks: 180, iaeaGlobalReveal: true)
             },
+            upkeepIntervalTicks: 3_600,
             baseSpeedMilliPerTick: 5000,
             fuelPerShipPer100UnitsMilli: 1000);
 

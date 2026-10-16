@@ -12,6 +12,7 @@ namespace Unruled.Core.Military
     /// fuel from the fleet's hold at departure: ships x fuel per 100 units x length x tier fuel multiplier, rounded up.
     /// Lanes above the fleet's tech tier (storm shortcuts) are refused. Each tick a moving fleet advances base speed x
     /// tier speed %, and arrives at the far end when it has covered the lane.
+    /// Fleets that cannot act (<see cref="FleetReadiness.CanAct"/>) neither depart nor advance.
     /// Hold (ParamA 1 = hold, 0 = resume) stops a fleet mid-lane. Reverse turns it back towards the site it left (and ends a hold).
     /// Invalid orders change nothing.
     /// </summary>
@@ -19,17 +20,20 @@ namespace Unruled.Core.Military
     {
         private readonly ComponentStore<FleetUnit> _units;
         private readonly ComponentStore<FleetMotion> _motions;
+        private readonly ComponentStore<FleetReadiness> _readiness;
         private readonly ComponentStore<StarlaneEdge> _lanes;
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly StarlaneBalance _laneBalance;
         private readonly FleetBalance _balance;
 
         public FleetMovementSystem(
-            ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions, ComponentStore<StarlaneEdge> lanes,
+            ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions, ComponentStore<FleetReadiness> readiness,
+            ComponentStore<StarlaneEdge> lanes,
             ComponentStore<Stockpile> stockpiles, StarlaneBalance laneBalance, FleetBalance balance)
         {
             _units = units ?? throw new ArgumentNullException(nameof(units));
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
+            _readiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
             _lanes = lanes ?? throw new ArgumentNullException(nameof(lanes));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _laneBalance = laneBalance ?? throw new ArgumentNullException(nameof(laneBalance));
@@ -41,7 +45,7 @@ namespace Unruled.Core.Military
             for (int i = 0; i < _motions.Count; i++)
             {
                 ref var motion = ref _motions.At(i);
-                if (motion.Lane.IsNull || motion.IsHolding)
+                if (motion.Lane.IsNull || motion.IsHolding || !_readiness.Get(_motions.EntityAt(i)).CanAct(tick))
                     continue;
 
                 ref var edge = ref _lanes.Get(motion.Lane);
@@ -63,7 +67,7 @@ namespace Unruled.Core.Military
             switch (command.CommandType)
             {
                 case CommandType.Move:
-                    Move(command.PlayerId, command.Target, command.ParamEntity);
+                    Move(command.PlayerId, command.Target, command.ParamEntity, tick);
                     break;
                 case CommandType.Hold:
                     Hold(command.PlayerId, command.Target, command.ParamA != 0);
@@ -87,9 +91,9 @@ namespace Unruled.Core.Military
         private long SpeedMilli(StarlaneTier tier) =>
             (long)_balance.BaseSpeedMilliPerTick * _laneBalance.Get(tier).SpeedPercent / 100;
 
-        private void Move(int playerId, EntityId fleet, EntityId lane)
+        private void Move(int playerId, EntityId fleet, EntityId lane, long tick)
         {
-            if (!IsOwnFleet(playerId, fleet) || !_lanes.Has(lane))
+            if (!IsOwnFleet(playerId, fleet) || !_lanes.Has(lane) || !_readiness.Get(fleet).CanAct(tick))
                 return;
             ref var motion = ref _motions.Get(fleet);
             ref var edge = ref _lanes.Get(lane);

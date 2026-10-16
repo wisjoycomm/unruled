@@ -34,6 +34,7 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<FleetUnit> Fleets;
         public readonly ComponentStore<FleetMotion> FleetMotions;
         public readonly ComponentStore<FleetSensors> FleetSensors;
+        public readonly ComponentStore<FleetReadiness> FleetReadiness;
         public readonly ComponentStore<RadarScan> RadarScans;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
@@ -64,6 +65,7 @@ namespace Unruled.Core.Simulation
             Fleets = World.CreateStore<FleetUnit>();
             FleetMotions = World.CreateStore<FleetMotion>();
             FleetSensors = World.CreateStore<FleetSensors>();
+            FleetReadiness = World.CreateStore<FleetReadiness>();
             RadarScans = World.CreateStore<RadarScan>();
 
             Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, FleetMotions,
@@ -81,7 +83,13 @@ namespace Unruled.Core.Simulation
             Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, balance.Recipes, balance.Refinery));
             Clock.Register(new WhoQuarantineSystem(Quarantines, Stockpiles, balance.SystemFactions));
 
-            Movement = new FleetMovementSystem(Fleets, FleetMotions, Starlanes, Stockpiles, balance.Starlanes, balance.Fleets);
+            var upkeep = new FleetUpkeepSystem(Fleets, FleetReadiness, FleetMotions, Stockpiles, balance.Fleets);
+            Clock.Register(upkeep);
+            Commands.Register(CommandType.Mothball, upkeep);
+            Commands.Register(CommandType.Activate, upkeep);
+
+            Movement = new FleetMovementSystem(
+                Fleets, FleetMotions, FleetReadiness, Starlanes, Stockpiles, balance.Starlanes, balance.Fleets);
             Clock.Register(Movement);
             Commands.Register(CommandType.Move, Movement);
             Commands.Register(CommandType.Hold, Movement);
@@ -108,6 +116,7 @@ namespace Unruled.Core.Simulation
             Fleets.Add(fleet, unit);
             FleetMotions.Add(fleet, new FleetMotion { Site = site });
             FleetSensors.Add(fleet, default);
+            FleetReadiness.Add(fleet, default);
             Stockpiles.Add(fleet, default);
             return fleet;
         }

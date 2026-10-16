@@ -30,3 +30,4 @@
 - 2026-10-16 - Claude - Update overview for Sprint 2; Sprint 2 plan finished and archived to .docs/plan/sprint-2.md.
 - 2026-10-16 - Claude - Sprint 3 step 1: split fleet components (FleetUnit/FleetMotion/FleetSensors + cargo hold), FleetBalance from tab 03, IAEA Tier-5 reveal; FleetPresence removed.
 - 2026-10-16 - Claude - Sprint 3 step 2: FleetMovementSystem (Move one lane per order with fuel and tech-tier gate, Hold/resume, Reverse); DelayedPlayerCommand.ParamEntity.
+- 2026-10-16 - Claude - Sprint 3 step 3: FleetUpkeepSystem + FleetReadiness (hourly tab-03 upkeep per ship, 80% mothball discount, warm-up by tier, unpaid = grounded); Mothball/Activate commands.
