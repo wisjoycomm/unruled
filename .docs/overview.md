@@ -3,7 +3,8 @@
 Unity 6000.5.7f1. Design: `.docs/unruled_master_gdd.md`; numbers: `.docs/unruled_master_data_sheets.md`;
 rules: `.claude/rules/architecture.md`; decisions and exceptions: `.docs/plan/roadmap.md`.
 
-State after Sprint 1: the engine-free simulation core and its tests. No views, scenes or networking yet.
+State after Sprint 2: the engine-free simulation core (economy, board, weather, latency, radar) and its tests.
+No views, scenes or networking yet.
 
 ## Assemblies
 
@@ -14,41 +15,56 @@ State after Sprint 1: the engine-free simulation core and its tests. No views, s
 | `Unruled.Editor` | `Assets/Editor/` | Empty. Editor-only. |
 | `Unruled.Tests.Core` | `Assets/Tests/Core/` | EditMode NUnit tests, one folder per Core folder. |
 
-## Core folders
+## Composition
 
-- **Simulation/** — `SimTick` (1 tick = 1 s), `SimClock` (advances ticks; runs queued `DelayedPlayerCommand`s by
-  `ExecuteAtTick` then enqueue order, then every `ISimSystem` in registration order), `ICommandHandler`.
-  `SplitMix64` (the only RNG) and `FixedMath` (Q16 integer sin/cos, 65536 binary angle units).
-  `GameBalanceConfig` holds every balance object; `DefaultGameBalance` is the one place sheet values are written.
-- **Ecs/** — hand-rolled ECS: `EntityId` (index + generation, `default` = null), `World` (create/destroy with a free
-  list, owns the stores), `ComponentStore<T>` (sorted sparse set of blittable structs, iterated by index in
-  ascending entity order for determinism).
-- **Board/** — `SiteInfo` component (position, ESI in milli-units, `PlanetLifecycleState`), `SiteWeather`
-  (NOAA R/S/G levels), `SystemSeedGenerator` (seed → deterministic polar layout of site entities, min spacing
-  and habitable-zone ESI), `UniverseGenBalance`.
-- **Economy/** — `ItemId` (10 `RAW_*`, 10 `ITEM_*`), `Stockpile` (fixed int[20] per site; throws on negative or
-  overflow), `RecipeDatabase` (items, prices, ESI bands, 10 recipes). `MiningSystem` + `MineralDeposit`
-  (surface → deep crust → core fracture, fuel/coolant cost, lifecycle ESI drops). `RefinerySystem` + `Refinery`
-  (10-tick cycle: NotStarted / IdleStarved / ActiveProduction / GridBrownout, upkeep accrued on the component).
-- **SystemFactions/** — `WhoQuarantineSystem` + `SiteQuarantine` (site stockpile out of `RAW_WATER` or
-  `ITEM_OXYGEN` for more than 30 ticks → export lock for 300 ticks).
+`SimulationWorld(GameBalanceConfig, worldSeed)` is the composition root. It creates the `World`, every component
+store, the `StarlaneGraph`, every system and the `CommandRouter`, and registers the systems on `SimClock` in the
+fixed order below. `GenerateSystem(systemSeed, clusterId)` creates a star system's sites, lanes and weather
+components, then rebuilds the graph. Orders enter through `CommandIssuer.Issue`, which stamps the signal latency
+and queues them; when due, `SimClock` sends them through `CommandRouter` to the owning system.
 
 ## Tick order
 
-Intended `SimClock.Register` order (systems are only wired one at a time in tests so far; there is no
-composition root yet):
+1. `NoaaWeatherEngine`: expires and rolls storm fronts, writes `SiteWeather` and `LaneWeather`.
+2. `MiningSystem`: ore into site `Stockpile`s.
+3. `PlanetLifecycleSystem`: depletion states and ESI; also nuclear strikes and the `Terraform` command.
+4. `RefinerySystem`: recipes and brownouts (reads `SiteWeather`).
+5. `WhoQuarantineSystem`: export lock when water or oxygen runs out.
+6. `FocusedRadarSystem`: scan timelines; handles `ScanBelt`, `CancelScan`, `EcmJam` and `Reverse`.
 
-1. `MiningSystem` — raw ore into the site `Stockpile`.
-2. `RefinerySystem` — recipes consume raw items, produce `ITEM_*`.
-3. `WhoQuarantineSystem` — reads the stockpile after production, sets `SiteQuarantine`.
+In each tick, due commands run before the systems. Shared components (`Stockpile`) change only through their own
+methods, in this order (rule 4).
 
-Shared components (`Stockpile`) are changed only through their own methods, in this order (rule 4).
+## Core folders
+
+- **Simulation/**: `SimTick`, `SimClock`, `DelayedPlayerCommand` (target = entity index + generation),
+  `CommandRouter`, `SimulationWorld`. `SplitMix64` is the only RNG; `FixedMath` provides Q16 sin/cos and an exact
+  integer sqrt. `GameBalanceConfig` holds every balance object, and `DefaultGameBalance` is the one place sheet
+  values are written.
+- **Ecs/**: `EntityId`, `World` (create/destroy, owns the stores) and `ComponentStore<T>` (sorted sparse set,
+  iterated in ascending entity order).
+- **Board/**:
+  - `SiteInfo` (position, ESI in milli-units, lifecycle, `IrradiatedUntilTick`).
+  - `SystemSeedGenerator` (site layout) and `PlanetLifecycleSystem` + `LifecycleBalance`.
+  - `StarlaneEdge` (3 tiers), `StarlaneBalance` (tab 04 rules), `StarlaneGenerator` (orbit-chain highways plus
+    seeded bypasses and shortcuts) and `StarlaneGraph` (CSR adjacency).
+  - `StormFront`, `SiteWeather`, `LaneWeather`, `NoaaWeatherEngine` + `NoaaBalance`.
+- **Economy/**: `ItemId`, `Stockpile`, `RecipeDatabase`, `MiningSystem` + `MineralDeposit`, `RefinerySystem` +
+  `Refinery`.
+- **Military/**:
+  - `PlayerHq` (core base, capital convoy flag), `RelayStation`, and `FleetPresence` (a placeholder until Sprint 3).
+  - `SignalLatencySolver`: Dijkstra over lanes, (15 + hops × 35, or × 8 when relayed) × 2 during relocation; an
+    R3+ storm blocks the order.
+  - `CommandIssuer`.
+  - `FocusedRadarSystem` + `RadarScan` + `RadarBalance`.
+- **SystemFactions/**: `WhoQuarantineSystem` + `SiteQuarantine`.
 
 ## Tests
 
-`Assets/Tests/Core/` covers SimClock ordering, ECS lifecycle, deterministic maths, the generator, stockpile,
-recipes, mining, refinery and quarantine. `DataSheetConsistencyTests` parses the markdown data sheet and fails
-if `DefaultGameBalance` drifts from it. Run EditMode tests for `Unruled.Tests.Core`.
+`Assets/Tests/Core/` covers the clock, ECS, maths, generators, graph, weather, lifecycle, mining, refinery,
+quarantine, latency, radar and an end-to-end `SimulationWorld` run (same seeds → same state).
+`DataSheetConsistencyTests` parses the markdown data sheet (tabs 01, 02, 04) and fails if `DefaultGameBalance`
+drifts from it. Run EditMode tests for `Unruled.Tests.Core`.
 
 ## Tooling
 
