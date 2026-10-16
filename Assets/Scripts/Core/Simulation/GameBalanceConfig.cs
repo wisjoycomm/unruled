@@ -10,17 +10,19 @@ namespace Unruled.Core.Simulation
     {
         public readonly RecipeDatabase Recipes;
         public readonly UniverseGenBalance Universe;
+        public readonly StarlaneBalance Starlanes;
         public readonly RefineryBalance Refinery;
         public readonly MiningBalance Mining;
         public readonly LifecycleBalance Lifecycle;
         public readonly SystemFactionBalance SystemFactions;
 
         public GameBalanceConfig(
-            RecipeDatabase recipes, UniverseGenBalance universe, RefineryBalance refinery, MiningBalance mining,
+            RecipeDatabase recipes, UniverseGenBalance universe, StarlaneBalance starlanes, RefineryBalance refinery, MiningBalance mining,
             LifecycleBalance lifecycle, SystemFactionBalance systemFactions)
         {
             Recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
             Universe = universe ?? throw new ArgumentNullException(nameof(universe));
+            Starlanes = starlanes ?? throw new ArgumentNullException(nameof(starlanes));
             Refinery = refinery ?? throw new ArgumentNullException(nameof(refinery));
             Mining = mining ?? throw new ArgumentNullException(nameof(mining));
             Lifecycle = lifecycle ?? throw new ArgumentNullException(nameof(lifecycle));

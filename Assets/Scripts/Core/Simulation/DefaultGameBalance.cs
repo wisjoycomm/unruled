@@ -12,7 +12,7 @@ namespace Unruled.Core.Simulation
     {
         public static GameBalanceConfig Create() =>
             new GameBalanceConfig(
-                CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateRefineryBalance(), CreateMiningBalance(),
+                CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateStarlaneBalance(), CreateRefineryBalance(), CreateMiningBalance(),
                 CreateLifecycleBalance(), CreateSystemFactionBalance());
 
         /// <summary>
@@ -30,6 +30,19 @@ namespace Unruled.Core.Simulation
             coreFracture: new MiningDepth(speedPercent: 100, fuelCoolantMultiplier: 4),
             deepCoreEsiDropMilli: 50,
             barrenHuskEsiDropMilli: 200);
+
+        /// <summary>
+        /// Data sheet tab 04: highway 100% speed / 1.0x fuel / sheltered / STA toll; bypass 60% / 4.5x / storms up to
+        /// G2 / 90% hidden from auto radar; shortcut 90% / 1.5x / storms up to level 4 / tech tier 4+.
+        /// PROVISIONAL: topology chances (bypass 50%, shortcut 25% between orbits 3 apart).
+        /// </summary>
+        public static StarlaneBalance CreateStarlaneBalance() => new StarlaneBalance(
+            highway: new StarlaneTierRules(100, 1000, maxStormLevel: 0, minTechTier: 0, autoRadarHiddenPercent: 0, chargesStaToll: true),
+            bypass: new StarlaneTierRules(60, 4500, maxStormLevel: 2, minTechTier: 0, autoRadarHiddenPercent: 90, chargesStaToll: false),
+            shortcut: new StarlaneTierRules(90, 1500, maxStormLevel: 4, minTechTier: 4, autoRadarHiddenPercent: 0, chargesStaToll: false),
+            bypassChancePercent: 50,
+            shortcutChancePercent: 25,
+            shortcutSpan: 3);
 
         /// <summary>
         /// Data sheet tab 02: irradiated world = S4 radiation for 24–72h and ESI 0.00; terraforming lifts ESI to 0.60.

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using NUnit.Framework;
+using Unruled.Core.Board;
 using Unruled.Core.Economy;
 using Unruled.Core.Simulation;
 using UnityEngine;
@@ -90,6 +91,36 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(lifecycle.TerraformedEsiMilli, ToMilli(esiCell[esiCell.Length - 1]), "terraformed ESI");
         }
 
+        [Test]
+        public void RoutesTab_MatchesStarlaneBalance()
+        {
+            var rows = ReadTable("## 04_Routes_Radar_Latency");
+            var lanes = DefaultGameBalance.CreateStarlaneBalance();
+
+            AssertTier(FindRow(rows, "STA_Toll_Highway"), lanes.Highway, "highway");
+            AssertTier(FindRow(rows, "Outer_Rim_Asteroid_Bypass"), lanes.Bypass, "bypass");
+            AssertTier(FindRow(rows, "Hazard_Storm_Shortcut"), lanes.Shortcut, "shortcut");
+
+            Assert.IsTrue(lanes.Highway.ChargesStaToll && FindRow(rows, "STA_Toll_Highway")[3].Contains("Toll"));
+            StringAssert.Contains($"Ẩn {lanes.Bypass.AutoRadarHiddenPercent}%", FindRow(rows, "Outer_Rim_Asteroid_Bypass")[4]);
+            StringAssert.Contains($"Tech Tier {lanes.Shortcut.MinTechTier}", FindRow(rows, "Hazard_Storm_Shortcut")[3]);
+        }
+
+        // "Speed 60% | Fuel 4.5x | Storm G1-G2" -> 60, 4500, highest storm level 2
+        private static void AssertTier(string[] row, StarlaneTierRules rules, string name)
+        {
+            var parts = row[2].Split('|');
+            Assert.AreEqual(3, parts.Length, $"{name} formula '{row[2]}'");
+            Assert.AreEqual(rules.SpeedPercent, LeadingNumber(parts[0].Trim().Substring("Speed ".Length)), $"{name} speed");
+            Assert.AreEqual(rules.FuelMultiplierMilli, ToMilli(parts[1].Trim().Substring("Fuel ".Length).TrimEnd('x')), $"{name} fuel");
+
+            int maxLevel = 0;
+            foreach (char ch in parts[2])
+                if (char.IsDigit(ch))
+                    maxLevel = Math.Max(maxLevel, ch - '0');
+            Assert.AreEqual(rules.MaxStormLevel, maxLevel, $"{name} storm exposure");
+        }
+
         private static string[] FindRow(List<string[]> rows, string stateCode)
         {
             foreach (var row in rows)
@@ -110,6 +141,10 @@ namespace Unruled.Tests.Core.Economy
             return (int)value;
         }
 
+        private const string EscapedPipe = @"\|";
+        private const string PipePlaceholder = "\u0001";
+
+        // Splits rows on '|' but keeps escaped "\|" inside a cell (tab 04 formulas).
         private static List<string[]> ReadTable(string heading)
         {
             Assert.IsTrue(File.Exists(SheetPath), $"Data sheet not found at {SheetPath}");
@@ -130,9 +165,9 @@ namespace Unruled.Tests.Core.Economy
                     continue;
                 }
 
-                var cells = line.Trim('|').Split('|');
+                var cells = line.Trim('|').Replace(EscapedPipe, PipePlaceholder).Split('|');
                 for (int c = 0; c < cells.Length; c++)
-                    cells[c] = cells[c].Trim();
+                    cells[c] = cells[c].Replace(PipePlaceholder, "|").Trim();
                 rows.Add(cells);
             }
             return rows;

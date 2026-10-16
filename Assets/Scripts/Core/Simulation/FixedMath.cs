@@ -29,6 +29,30 @@ namespace Unruled.Core.Simulation
 
         public static int Cos(int angle) => Sin(angle + AngleQuarter);
 
+        /// <summary>floor(sqrt(value)) for value >= 0, exact in integers.</summary>
+        public static long Sqrt(long value)
+        {
+            if (value < 0) throw new System.ArgumentOutOfRangeException(nameof(value));
+            long result = 0;
+            long bit = 1L << 62;
+            while (bit > value)
+                bit >>= 2;
+            while (bit != 0)
+            {
+                if (value >= result + bit)
+                {
+                    value -= result + bit;
+                    result = (result >> 1) + bit;
+                }
+                else
+                {
+                    result >>= 1;
+                }
+                bit >>= 2;
+            }
+            return result;
+        }
+
         /// <summary>sin for x in [0, AngleQuarter], as Q16.</summary>
         private static int SinQuarter(int x)
         {
