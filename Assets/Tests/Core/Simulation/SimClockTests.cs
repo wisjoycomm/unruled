@@ -97,6 +97,22 @@ namespace Unruled.Tests.Core.Simulation
         }
 
         [Test]
+        public void PendingAt_ListsQueuedCommandsInExecutionOrder()
+        {
+            var clock = new SimClock(new RecordingHandler());
+            clock.Enqueue(Cmd(1, issued: 0, execute: 30));
+            clock.Enqueue(Cmd(2, issued: 0, execute: 10));
+            clock.Enqueue(Cmd(3, issued: 0, execute: 20));
+            Assert.AreEqual(3, clock.PendingCommandCount);
+            Assert.AreEqual(2, clock.PendingAt(0).TargetEntityId);
+            Assert.AreEqual(3, clock.PendingAt(1).TargetEntityId);
+            Assert.AreEqual(1, clock.PendingAt(2).TargetEntityId);
+            clock.Advance(15);
+            Assert.AreEqual(2, clock.PendingCommandCount);
+            Assert.AreEqual(3, clock.PendingAt(0).TargetEntityId);
+        }
+
+        [Test]
         public void SameInputs_ProduceSameSequence()
         {
             List<string> Run()

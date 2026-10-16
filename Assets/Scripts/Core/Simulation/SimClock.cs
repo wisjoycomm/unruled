@@ -16,6 +16,9 @@ namespace Unruled.Core.Simulation
         public long CurrentTick { get; private set; }
         public int PendingCommandCount => _queue.Count;
 
+        /// <summary>Read access to the queue, in execution order (orders still in signal latency).</summary>
+        public DelayedPlayerCommand PendingAt(int index) => _queue[index];
+
         public SimClock(ICommandHandler handler, long startTick = 0)
         {
             _handler = handler ?? throw new ArgumentNullException(nameof(handler));
