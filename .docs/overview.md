@@ -136,6 +136,8 @@ methods, in this order (rule 4).
   keys read as defaults and unknown ones are skipped. `MsgPackWriter` / `MsgPackReader` are a small in-house codec.
   Balance is not saved (it comes from config); the starlane graph is rebuilt on load. A new store or component
   field must be appended to `ComponentFormatters` / `SaveGame`, with `SchemaVersion` bumped.
+  `GameSession` continues `persistentDataPath/unruled.save` at start-up and autosaves every sim hour and on
+  pause/quit.
 
 ## Tests
 
