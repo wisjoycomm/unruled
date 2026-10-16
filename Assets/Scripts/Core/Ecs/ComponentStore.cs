@@ -5,6 +5,7 @@ namespace Unruled.Core.Ecs
     internal interface IComponentStore
     {
         void RemoveIfPresent(int entityIndex);
+        void Clear();
     }
 
     /// <summary>
@@ -92,6 +93,14 @@ namespace Unruled.Core.Ecs
         {
             if (entityIndex < _sparse.Length && _sparse[entityIndex] != 0)
                 RemoveAtSlot(_sparse[entityIndex] - 1);
+        }
+
+        void IComponentStore.Clear()
+        {
+            Array.Clear(_sparse, 0, _sparse.Length);
+            Array.Clear(_entities, 0, Count);
+            Array.Clear(_data, 0, Count);
+            Count = 0;
         }
 
         private void RemoveAtSlot(int slot)

@@ -130,13 +130,20 @@ methods, in this order (rule 4).
     `DirectorateSeat`. The HUD's citadel tag shows the shield and defence tier, then The Directorate.
 - **Research/**: `TechProgress` (on the HQ: tech tier 1..5, stage, telemetry, failed tests, retool end), `ResearchSystem` (telemetry in storms, `StressTest` command with calibration pity, retooling) + `ResearchBalance`; blasts go to `IResearchIncidentLog` (THE SYSTEM's bulletins). `TechGates` (`ITechGates`, `sim.TechGates`) answers a player's tier and gates: laser comms (orders through R3+ blackouts) and core-fracture mining at Tier 4, terraforming at Tier 5.
 - **AI/**: `UtilityAiEngine` + `AiController` (on an AI-run HQ) + `AiBalance` / `AiPreset` (tab 06).
+- **Persistence/**: `SaveGame.Write(sim)` / `SaveGame.Load(balance, bytes)` save the whole world as MessagePack
+  (`SchemaVersion`, seed, tick, entity allocator, queued commands, then every store in a fixed, append-only order).
+  `ComponentFormatters` holds one explicit formatter per component: an array indexed by key, so missing trailing
+  keys read as defaults and unknown ones are skipped. `MsgPackWriter` / `MsgPackReader` are a small in-house codec.
+  Balance is not saved (it comes from config); the starlane graph is rebuilt on load. A new store or component
+  field must be appended to `ComponentFormatters` / `SaveGame`, with `SchemaVersion` bumped.
 
 ## Tests
 
 `Assets/Tests/Core/` covers the clock, ECS, maths, generators, graph, weather, lifecycle, mining, refinery,
 quarantine, latency, radar, fleet movement/upkeep/routes, salvo combat, drill retract, relocation, ledger, WTO
 market and contracts, STA tolls, leaderboard audit, Call-to-Arms, NOAA forecast, Utility AI and an end-to-end
-`SimulationWorld` run (same seeds → same state).
+`SimulationWorld` run (same seeds → same state) and save/load (a loaded game re-saves to the same bytes and plays on
+in lockstep with the original).
 `DataSheetConsistencyTests` parses the markdown data sheet (tabs 01–06) and fails if `DefaultGameBalance`
 drifts from it. Run EditMode tests for `Unruled.Tests.Core`.
 

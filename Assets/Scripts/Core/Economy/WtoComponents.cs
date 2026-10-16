@@ -115,6 +115,23 @@ namespace Unruled.Core.Economy
             LastVwapCents = ReferencePriceCents(tick, windowTicks);
         }
 
+        // Ring slots for save games.
+        internal void SlotAt(int i, out long tick, out long valueCents, out long volume)
+        {
+            if ((uint)i >= MaxWindowTicks) throw new ArgumentOutOfRangeException(nameof(i));
+            tick = _slotTick[i];
+            valueCents = _slotValue[i];
+            volume = _slotVolume[i];
+        }
+
+        internal void RestoreSlot(int i, long tick, long valueCents, long volume)
+        {
+            if ((uint)i >= MaxWindowTicks) throw new ArgumentOutOfRangeException(nameof(i));
+            _slotTick[i] = tick;
+            _slotValue[i] = valueCents;
+            _slotVolume[i] = volume;
+        }
+
         /// <summary>VWAP over the ticks (tick - window, tick], or <see cref="LastVwapCents"/> if nothing traded then.</summary>
         public long ReferencePriceCents(long tick, int windowTicks)
         {

@@ -57,6 +57,33 @@ namespace Unruled.Core.Ecs
             !entity.IsNull && entity.Index >= 0 && entity.Index < _nextIndex &&
             _generations[entity.Index] == entity.Generation;
 
+        // Allocator state for save games: indices issued so far, the signed generation at each, and the free list.
+        internal int IssuedCount => _nextIndex;
+        internal int FreeCount => _freeCount;
+        internal int GenerationAt(int index) => _generations[index];
+        internal int FreeIndexAt(int i) => _freeIndices[i];
+
+        /// <summary>Empties every store and replaces the allocator state with a saved one (see <c>SaveGame</c>).</summary>
+        internal void Restore(int[] generations, int[] freeIndices)
+        {
+            if (freeIndices.Length > generations.Length)
+                throw new ArgumentException("More free indices than issued ones.", nameof(freeIndices));
+            for (int i = 0; i < _stores.Count; i++)
+                _stores[i].Clear();
+
+            int capacity = Math.Max(generations.Length, 1);
+            _generations = new int[capacity];
+            _freeIndices = new int[capacity];
+            Array.Copy(generations, _generations, generations.Length);
+            Array.Copy(freeIndices, _freeIndices, freeIndices.Length);
+            _nextIndex = generations.Length;
+            _freeCount = freeIndices.Length;
+            int alive = 0;
+            for (int i = 0; i < generations.Length; i++)
+                if (generations[i] > 0) alive++;
+            AliveCount = alive;
+        }
+
         public void Destroy(EntityId entity)
         {
             if (!IsAlive(entity))
