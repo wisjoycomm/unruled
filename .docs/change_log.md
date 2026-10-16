@@ -17,3 +17,4 @@
 - 2026-10-16 - Claude - Add ItemId (20 items) and fixed-buffer Stockpile ECS component; enable unsafe code in Unruled.Core.
 - 2026-10-16 - Claude - Add GameBalanceConfig, DefaultGameBalance and RecipeDatabase (20 items, 10 recipes, base prices) with a data-sheet consistency test.
 - 2026-10-16 - Claude - Add SplitMix64, FixedMath integer trig, SiteInfo component and deterministic SystemSeedGenerator with provisional layout defaults.
+- 2026-10-16 - Claude - Add RefinerySystem (idle/active/brownout), SiteWeather, WhoQuarantineSystem; amend rule 4 for shared components.

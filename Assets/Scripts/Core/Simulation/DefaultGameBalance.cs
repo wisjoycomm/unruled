@@ -1,5 +1,6 @@
 using Unruled.Core.Board;
 using Unruled.Core.Economy;
+using Unruled.Core.SystemFactions;
 
 namespace Unruled.Core.Simulation
 {
@@ -10,7 +11,25 @@ namespace Unruled.Core.Simulation
     public static class DefaultGameBalance
     {
         public static GameBalanceConfig Create() =>
-            new GameBalanceConfig(CreateRecipeDatabase(), CreateUniverseGenBalance());
+            new GameBalanceConfig(
+                CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateRefineryBalance(),
+                CreateSystemFactionBalance());
+
+        /// <summary>
+        /// GDD §2.2 A: 10-tick cycle, idle at 20% upkeep, brownout from G2.
+        /// PROVISIONAL: base upkeep 10 per cycle and 1 battery per storm cycle are not in the GDD or data sheet.
+        /// </summary>
+        public static RefineryBalance CreateRefineryBalance() => new RefineryBalance(
+            cycleTicks: 10,
+            baseUpkeepPerCycle: 10,
+            idleUpkeepPercent: 20,
+            brownoutMinGeoLevel: 2,
+            batteryPerBrownoutCycle: 1);
+
+        /// <summary>GDD §2.2 A.4 and data sheet tab 01: WHO quarantine after more than 30 starved ticks, for 300 ticks.</summary>
+        public static SystemFactionBalance CreateSystemFactionBalance() => new SystemFactionBalance(
+            whoStarvationTicks: 30,
+            whoQuarantineTicks: 300);
 
         /// <summary>
         /// PROVISIONAL: only MinSiteSpacing (120) comes from the GDD; the rest are proposed defaults until the

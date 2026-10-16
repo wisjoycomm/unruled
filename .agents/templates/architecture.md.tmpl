@@ -27,8 +27,10 @@ views (`${VIEW_ASM}`) only draw, and every change goes through one door.**
    (`NoaaWeatherEngine`), economy (`WtoMarketEngine`, `ConvoyRouter`), military
    (`FleetUnit`, `SupplyLineSolver`, `LanchesterCombat`), and system factions
    (`SystemAuthorityManager`, `SystemDefenseEvaluator`, `VictoryEvaluator`): each domain
-   has one owning system, and each component type has exactly one system that writes it.
-   Others read state or subscribe to events.
+   has one owning system, and each component type has one owning system that defines its
+   invariants. Shared resource components (e.g. `Stockpile`) change only through their own
+   methods, inside systems running in the fixed `SimClock` order. Others read state or
+   subscribe to events.
 5. **No hidden lookups.** No new `static Current`, singletons, `FindAnyObjectByType`
    or `FindObjectsByType` in game code. Core classes take dependencies in their
    constructor; views get them via explicit `Bind(...)`.
@@ -85,7 +87,7 @@ Paths are under `${SCRIPTS_ROOT}/` (plus `${EDITOR_DIR}/` and `${TESTS_DIR}/`).
 - [ ] The diff adds no `.Current`, `Find*Object*`, singleton or upward dependency
       (`grep -nE "\.Current\b|Find(Any)?Object" <changed files>`).
 - [ ] Pure simulation logic is in `${CORE_ASM}` (zero `UnityEngine` references) and tested; state changes go through `SimClock` / owning engine.
-- [ ] New simulation state is ECS: blittable struct components in a `ComponentStore<T>`, written by one system, integer/fixed-point math, no allocations in system loops.
+- [ ] New simulation state is ECS: blittable struct components in a `ComponentStore<T>`, one owning system, integer/fixed-point math, no allocations in system loops.
 - [ ] Asmdef references still point one way (`${VIEW_ASM} → ${CORE_ASM}`).
 - [ ] Changed C# meets the checklist in `unity-perf.md`.
 - [ ] Saved/network data changes: keys only appended, `SchemaVersion` bumped, migration test added.

@@ -1,6 +1,7 @@
 using System;
 using Unruled.Core.Board;
 using Unruled.Core.Economy;
+using Unruled.Core.SystemFactions;
 
 namespace Unruled.Core.Simulation
 {
@@ -9,11 +10,17 @@ namespace Unruled.Core.Simulation
     {
         public readonly RecipeDatabase Recipes;
         public readonly UniverseGenBalance Universe;
+        public readonly RefineryBalance Refinery;
+        public readonly SystemFactionBalance SystemFactions;
 
-        public GameBalanceConfig(RecipeDatabase recipes, UniverseGenBalance universe)
+        public GameBalanceConfig(
+            RecipeDatabase recipes, UniverseGenBalance universe, RefineryBalance refinery,
+            SystemFactionBalance systemFactions)
         {
             Recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
             Universe = universe ?? throw new ArgumentNullException(nameof(universe));
+            Refinery = refinery ?? throw new ArgumentNullException(nameof(refinery));
+            SystemFactions = systemFactions ?? throw new ArgumentNullException(nameof(systemFactions));
         }
     }
 }
