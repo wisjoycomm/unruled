@@ -34,3 +34,4 @@
 - 2026-10-16 - Claude - Sprint 3 step 4: SalvoCombatEngine (5-tick Hughes salvo, fortification +35% PD with vault access, 90° multi-lane flank, tender hot resupply, thermal lock/cook-off/vent, lane pinning); SetRof/SetFocus/VentCoolant.
 - 2026-10-16 - Claude - Sprint 3 step 5: RetractDrills command; MiningSystem stops a deposit at once and frees its rigs after 180 ticks.
 - 2026-10-16 - Claude - Sprint 3 step 6: CapitalRelocationSystem (RelocateBase: teardown/convoy/bootstrap, hostile lock, escort, upfront costs, convoy loss = 15 min paralysis, 48 h cooldown); FleetFactory; teardown halves base fortification.
+- 2026-10-16 - Claude - Sprint 3 step 7: overview and roadmap updated for fleets, combat and relocation; plan archived as .docs/plan/sprint-3.md.
