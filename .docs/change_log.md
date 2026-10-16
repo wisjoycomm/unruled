@@ -13,3 +13,4 @@
 - 2026-10-16 - Claude - Create Unity 6000.5.7f1 project, four asmdefs (Core/View/Editor/Tests.Core), embed KitWright MCP with a Unity 6000.5 compile fix.
 - 2026-10-16 - Claude - Add SimTick, SimClock deterministic tick loop and delayed command queue with EditMode tests.
 - 2026-10-16 - Claude - Add architecture rule 12 (pure C# ECS, fixed-point, no DOTS in Core) and start the roadmap.
+- 2026-10-16 - Claude - Add hand-rolled ECS core (EntityId, World, sorted sparse-set ComponentStore) with EditMode tests.
