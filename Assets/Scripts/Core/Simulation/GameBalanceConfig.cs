@@ -22,13 +22,15 @@ namespace Unruled.Core.Simulation
         public readonly CombatBalance Combat;
         public readonly RelocationBalance Relocation;
         public readonly LedgerBalance Ledger;
+        public readonly StaBalance Sta;
+        public readonly LeaderboardBalance Leaderboard;
         public readonly SystemFactionBalance SystemFactions;
 
         public GameBalanceConfig(
             RecipeDatabase recipes, UniverseGenBalance universe, StarlaneBalance starlanes, NoaaBalance weather,
             RefineryBalance refinery, MiningBalance mining,
             LifecycleBalance lifecycle, LatencyBalance latency, RadarBalance radar, FleetBalance fleets, CombatBalance combat,
-            RelocationBalance relocation, LedgerBalance ledger,
+            RelocationBalance relocation, LedgerBalance ledger, StaBalance sta, LeaderboardBalance leaderboard,
             SystemFactionBalance systemFactions)
         {
             Recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
@@ -44,6 +46,8 @@ namespace Unruled.Core.Simulation
             Combat = combat ?? throw new ArgumentNullException(nameof(combat));
             Relocation = relocation ?? throw new ArgumentNullException(nameof(relocation));
             Ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
+            Sta = sta ?? throw new ArgumentNullException(nameof(sta));
+            Leaderboard = leaderboard ?? throw new ArgumentNullException(nameof(leaderboard));
             SystemFactions = systemFactions ?? throw new ArgumentNullException(nameof(systemFactions));
         }
     }

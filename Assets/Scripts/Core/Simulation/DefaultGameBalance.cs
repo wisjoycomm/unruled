@@ -17,6 +17,7 @@ namespace Unruled.Core.Simulation
                 CreateRefineryBalance(), CreateMiningBalance(),
                 CreateLifecycleBalance(), CreateLatencyBalance(), CreateRadarBalance(), CreateFleetBalance(),
                 CreateCombatBalance(), CreateRelocationBalance(), CreateLedgerBalance(),
+                CreateStaBalance(), CreateLeaderboardBalance(),
                 CreateSystemFactionBalance());
 
         /// <summary>
@@ -126,6 +127,28 @@ namespace Unruled.Core.Simulation
         /// </summary>
         /// <summary>PROVISIONAL: every player starts with 10,000 credits (the GDD gives no starting money).</summary>
         public static LedgerBalance CreateLedgerBalance() => new LedgerBalance(startingCents: 10_000 * Wallet.CentsPerCredit);
+
+        /// <summary>PROVISIONAL: the STA toll is 2 credits per ship per 100 units of highway (tab 04 names no amount).</summary>
+        public static StaBalance CreateStaBalance() => new StaBalance(tollCentsPerShipPer100Units: 200);
+
+        /// <summary>
+        /// Data sheet tab 05, one row per bracket. "Current Storm Path" = no lead but sees storms now; the unrated
+        /// bracket sees no forecast. 40% escrow applies to unrated players evading the audit.
+        /// </summary>
+        public static LeaderboardBalance CreateLeaderboardBalance() => new LeaderboardBalance(new[]
+        {
+            new BracketRules(0, "Unrated_Ghost", 0, 0, 30, 40, 500, 0, 0, 0, new ItemId[0], 0, false),
+            new BracketRules(1, "Registered_BB_D", 5_001, 10_000, 28, 28, 450, 5, 1, 5,
+                new[] { ItemId.ItemFuel, ItemId.ItemOxygen }, 0, true),
+            new BracketRules(2, "Standard_BBB_C", 2_001, 5_000, 26, 26, 420, 10, 2, 10, new[] { ItemId.ItemFuel }, 0, true),
+            new BracketRules(3, "MidGrade_A_B", 501, 2_000, 24, 24, 380, 20, 4, 20, new[] { ItemId.ItemFuel }, 5 * 60, true),
+            new BracketRules(4, "HighGrade_AA_A", 101, 500, 21, 21, 300, 25, 6, 25,
+                new[] { ItemId.ItemFuel, ItemId.ItemSteel }, 12 * 60, true),
+            new BracketRules(5, "Superpower_AAA_S", 11, 100, 18, 18, 250, 25, 8, 25,
+                new[] { ItemId.ItemFuel, ItemId.ItemCoolant, ItemId.ItemSteel }, 20 * 60, true),
+            new BracketRules(6, "Apex_Tier0", 1, 10, 15, 15, 200, 15, 10, 15,
+                new[] { ItemId.ItemFuel, ItemId.ItemCoolant, ItemId.ItemAlloy }, 30 * 60, true)
+        });
 
         public static RelocationBalance CreateRelocationBalance() => new RelocationBalance(
             teardownMinTicks: 900,

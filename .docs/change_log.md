@@ -37,3 +37,4 @@
 - 2026-10-16 - Claude - Sprint 3 step 7: overview and roadmap updated for fleets, combat and relocation; plan archived as .docs/plan/sprint-3.md.
 - 2026-10-16 - Claude - Sprint 4 step 1: credits ledger (Wallet in cents, Ledger transfer/burn/grant, WTO and STA tax pools, CreatePlayer with starting credits); refinery upkeep paid from the site owner's wallet, unpaid upkeep carried as debt.
 - 2026-10-16 - Claude - Sprint 4 step 2: multi-lane routes (Move to a destination site, RoutePlanner Dijkstra by travel time and tech tier, FleetRoute fixed buffer, fuel per lane at each departure); combat burns fuel per acting ship x tab-03 fuel burn.
+- 2026-10-16 - Claude - Sprint 4 step 3: STA toll highways (StaTollGate via ITollGate charged at each highway departure into the STA pool, bracket discount from tab 05 LeaderboardBalance, PlayerStanding on the HQ, PROVISIONAL 2 credits per ship per 100 units).

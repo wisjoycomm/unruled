@@ -7,6 +7,7 @@ using Unruled.Core.Board;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
 using Unruled.Core.Simulation;
+using Unruled.Core.SystemFactions;
 using UnityEngine;
 
 namespace Unruled.Tests.Core.Economy
@@ -232,6 +233,42 @@ namespace Unruled.Tests.Core.Economy
                     maxLevel = Math.Max(maxLevel, ch - '0');
             Assert.AreEqual(rules.MaxStormLevel, maxLevel, $"{name} storm exposure");
         }
+
+        [Test]
+        public void LeaderboardTab_MatchesLeaderboardBalance()
+        {
+            var rows = ReadTable("## 05_Leaderboard_Top10K");
+            var brackets = DefaultGameBalance.CreateLeaderboardBalance();
+            Assert.AreEqual(brackets.Count, rows.Count, "bracket count");
+
+            foreach (var row in rows)
+            {
+                var b = brackets.Bracket(byte.Parse(row[0], CultureInfo.InvariantCulture));
+                Assert.AreEqual(row[1], b.Name, $"bracket {row[0]} name");
+                if (b.Id == LeaderboardBalance.Unrated)
+                    StringAssert.Contains($"({b.EvadingEscrowRatePercent}% if evading)", row[4]);
+                else
+                    StringAssert.StartsWith($"Rank {b.RankMin} - {b.RankMax}", row[2], $"{b.Name} ranks");
+                Assert.AreEqual(b.EscrowRatePercent, LeadingPercent(row[4]), $"{b.Name} escrow");
+                Assert.AreEqual(b.MarketFeeBasisPoints, ToMilli(row[5].Split('%')[0]) / 10, $"{b.Name} fee");
+                Assert.AreEqual(b.DividendSharePercent, LeadingPercent(row[6]), $"{b.Name} dividend");
+                Assert.AreEqual(b.TollDiscountPercent, LeadingPercent(row[7]), $"{b.Name} toll discount");
+                Assert.AreEqual(b.GrantSharePercent, LeadingPercent(row[8]), $"{b.Name} grant");
+                foreach (var item in b.GrantItems)
+                    StringAssert.Contains(item.ToString().Substring("Item".Length).ToUpperInvariant(), row[8], $"{b.Name} grant item");
+
+                var lead = row[9];
+                if (lead.StartsWith("+", StringComparison.Ordinal))
+                    Assert.AreEqual(b.NoaaLeadTicks, int.Parse(lead.Substring(1).Split(' ')[0], CultureInfo.InvariantCulture) * 60, $"{b.Name} lead");
+                else
+                    Assert.AreEqual(0, b.NoaaLeadTicks, $"{b.Name} lead");
+                Assert.AreEqual(lead.StartsWith("+", StringComparison.Ordinal) || lead == "Current Storm Path", b.SeesCurrentStorms,
+                    $"{b.Name} sees current storms");
+            }
+        }
+
+        private static int LeadingPercent(string cell) =>
+            int.Parse(cell.Substring(0, cell.IndexOf('%')), CultureInfo.InvariantCulture);
 
         private static string[] FindRow(List<string[]> rows, string stateCode)
         {

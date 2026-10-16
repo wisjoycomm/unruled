@@ -11,8 +11,9 @@ namespace Unruled.Core.Military
     /// Move (target: own fleet at a site; <see cref="DelayedPlayerCommand.ParamEntity"/>: a lane from that site, or a
     /// destination site) departs at once. A destination is routed by <see cref="RoutePlanner"/> once, at the order;
     /// on each arrival the fleet departs on the next lane of its route the same tick.
-    /// Every departure pays fuel from the fleet's hold: ships x fuel per 100 units x length x tier fuel multiplier,
-    /// rounded up; without it the fleet stays at the site and the rest of its route is dropped. Lanes above the
+    /// Every departure pays fuel from the fleet's hold (ships x fuel per 100 units x length x tier fuel multiplier,
+    /// rounded up) and whatever the <see cref="ITollGate"/> charges for the lane; if either can't be paid the fleet
+    /// stays at the site, nothing is paid, and the rest of its route is dropped. Lanes above the
     /// fleet's tech tier (storm shortcuts) are refused. Each tick a moving fleet advances base speed x tier speed %.
     /// Fleets that cannot act (<see cref="FleetReadiness.CanAct"/>) neither depart nor advance; a fleet engaged in
     /// combat on its lane is pinned there unless it is reversing.
@@ -30,6 +31,7 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<StarlaneEdge> _lanes;
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly RoutePlanner _planner;
+        private readonly ITollGate _tolls;
         private readonly StarlaneBalance _laneBalance;
         private readonly FleetBalance _balance;
 
@@ -37,7 +39,7 @@ namespace Unruled.Core.Military
             ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions, ComponentStore<FleetRoute> routes,
             ComponentStore<FleetReadiness> readiness, ComponentStore<FleetCombatState> combat,
             ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes, ComponentStore<Stockpile> stockpiles,
-            RoutePlanner planner, StarlaneBalance laneBalance, FleetBalance balance)
+            RoutePlanner planner, ITollGate tolls, StarlaneBalance laneBalance, FleetBalance balance)
         {
             _units = units ?? throw new ArgumentNullException(nameof(units));
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
@@ -48,6 +50,7 @@ namespace Unruled.Core.Military
             _lanes = lanes ?? throw new ArgumentNullException(nameof(lanes));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _planner = planner ?? throw new ArgumentNullException(nameof(planner));
+            _tolls = tolls ?? throw new ArgumentNullException(nameof(tolls));
             _laneBalance = laneBalance ?? throw new ArgumentNullException(nameof(laneBalance));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
         }
@@ -144,7 +147,7 @@ namespace Unruled.Core.Military
 
             ref var hold = ref _stockpiles.Get(fleet);
             int fuel = FuelFor(unit, edge);
-            if (!hold.Has(ItemId.ItemFuel, fuel))
+            if (!hold.Has(ItemId.ItemFuel, fuel) || !_tolls.TryCharge(unit, edge))
                 return false;
             hold.Add(ItemId.ItemFuel, -fuel);
 

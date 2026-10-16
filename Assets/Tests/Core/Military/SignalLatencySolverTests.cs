@@ -41,8 +41,7 @@ namespace Unruled.Tests.Core.Military
             Lane(5, 2, StarlaneTier.OuterRimBypass);
             _sim.Graph.Rebuild(_sim.Starlanes);
 
-            _hq = _sim.World.Create();
-            _sim.Players.Add(_hq, new PlayerHq { PlayerId = Me, CoreBase = _s[0] });
+            _hq = _sim.CreatePlayer(Me, _s[0]);
         }
 
         private EntityId Lane(int a, int b, StarlaneTier tier)

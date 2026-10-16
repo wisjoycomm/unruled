@@ -27,6 +27,7 @@ namespace Unruled.Tests.Core.Military
             _highway = Lane(_s0, _s1, StarlaneTier.StaHighway);
             _bypass = Lane(_s0, _s1, StarlaneTier.OuterRimBypass);
             _shortcut = Lane(_s1, _s2, StarlaneTier.HazardStormShortcut);
+            _sim.CreatePlayer(Me, _s0);
         }
 
         private EntityId Site(int x)

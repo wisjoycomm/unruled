@@ -36,6 +36,7 @@ namespace Unruled.Tests.Core.Military
             _dc = Lane(_d, _c, StarlaneTier.OuterRimBypass, 150);
             _ac = Lane(_a, _c, StarlaneTier.HazardStormShortcut, 300);
             _sim.Graph.Rebuild(_sim.Starlanes);
+            _sim.CreatePlayer(Me, _a);
         }
 
         private EntityId Site()

@@ -40,6 +40,7 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<CapitalRelocation> Relocations;
         public readonly ComponentStore<RadarScan> RadarScans;
         public readonly ComponentStore<Wallet> Wallets;
+        public readonly ComponentStore<PlayerStanding> Standings;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly Ledger Ledger;
@@ -48,6 +49,7 @@ namespace Unruled.Core.Simulation
         public readonly PlanetLifecycleSystem Lifecycle;
         public readonly FleetFactory FleetFactory;
         public readonly RoutePlanner Routes;
+        public readonly StaTollGate Tolls;
         public readonly FleetMovementSystem Movement;
         public readonly CapitalRelocationSystem Relocation;
         public readonly SignalLatencySolver Latency;
@@ -81,6 +83,7 @@ namespace Unruled.Core.Simulation
             Relocations = World.CreateStore<CapitalRelocation>();
             RadarScans = World.CreateStore<RadarScan>();
             Wallets = World.CreateStore<Wallet>();
+            Standings = World.CreateStore<PlayerStanding>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -113,9 +116,10 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Activate, upkeep);
 
             Routes = new RoutePlanner(Graph, Starlanes, balance.Starlanes, balance.Fleets);
+            Tolls = new StaTollGate(Ledger, Standings, StaTollPool, balance.Starlanes, balance.Leaderboard, balance.Sta);
             Movement = new FleetMovementSystem(
                 Fleets, FleetMotions, FleetRoutes, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, Routes,
-                balance.Starlanes, balance.Fleets);
+                Tolls, balance.Starlanes, balance.Fleets);
             Clock.Register(Movement);
             Commands.Register(CommandType.Move, Movement);
             Commands.Register(CommandType.Hold, Movement);
@@ -144,7 +148,10 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.EcmJam, radar);
         }
 
-        /// <summary>World setup: creates a player's HQ with its core base and a wallet holding the starting credits.</summary>
+        /// <summary>
+        /// World setup: creates a player's HQ with its core base, an unrated standing and a wallet holding the starting
+        /// credits.
+        /// </summary>
         public EntityId CreatePlayer(int playerId, EntityId coreBase)
         {
             if (playerId <= 0) throw new ArgumentOutOfRangeException(nameof(playerId));
@@ -153,6 +160,7 @@ namespace Unruled.Core.Simulation
             var hq = World.Create();
             Players.Add(hq, new PlayerHq { PlayerId = playerId, CoreBase = coreBase });
             Wallets.Add(hq, new Wallet { OwnerPlayerId = playerId });
+            Standings.Add(hq, new PlayerStanding { Bracket = LeaderboardBalance.Unrated });
             Ledger.Grant(hq, Balance.Ledger.StartingCents);
             return hq;
         }

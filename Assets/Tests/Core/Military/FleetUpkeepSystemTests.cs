@@ -28,6 +28,7 @@ namespace Unruled.Tests.Core.Military
             _sim.Sites.Add(s1, new SiteInfo { PosX = 200 });
             _lane = _sim.World.Create();
             _sim.Starlanes.Add(_lane, new StarlaneEdge { SiteA = _s0, SiteB = s1, Tier = StarlaneTier.StaHighway, Length = 200 });
+            _sim.CreatePlayer(Me, _s0);
         }
 
         private EntityId Fleet(byte tier, int ships)

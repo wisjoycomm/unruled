@@ -14,7 +14,7 @@ namespace Unruled.Tests.Core.Board
         private static GameBalanceConfig WithWeather(NoaaBalance weather)
         {
             var d = DefaultGameBalance.Create();
-            return new GameBalanceConfig(d.Recipes, d.Universe, d.Starlanes, weather, d.Refinery, d.Mining, d.Lifecycle, d.Latency, d.Radar, d.Fleets, d.Combat, d.Relocation, d.Ledger,
+            return new GameBalanceConfig(d.Recipes, d.Universe, d.Starlanes, weather, d.Refinery, d.Mining, d.Lifecycle, d.Latency, d.Radar, d.Fleets, d.Combat, d.Relocation, d.Ledger, d.Sta, d.Leaderboard,
                 d.SystemFactions);
         }
 
