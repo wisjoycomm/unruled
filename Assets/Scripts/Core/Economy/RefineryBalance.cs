@@ -3,10 +3,14 @@ using Unruled.Core.Simulation;
 
 namespace Unruled.Core.Economy
 {
-    /// <summary>Refinery numbers (GDD §2.2 A) and the cost of building one, up to a cap per site.</summary>
+    /// <summary>
+    /// Refinery numbers (GDD §2.2 A) and the cost of building one, up to a cap per site. Each cycle a refinery runs as
+    /// many recipe batches as its inputs allow, up to <see cref="MaxBatchesPerCycle"/>.
+    /// </summary>
     public sealed class RefineryBalance
     {
         public readonly int CycleTicks;
+        public readonly int MaxBatchesPerCycle;
         public readonly int BaseUpkeepPerCycle;
         public readonly int IdleUpkeepPercent;
         public readonly int BrownoutMinGeoLevel;
@@ -15,10 +19,11 @@ namespace Unruled.Core.Economy
         private readonly ItemStack[] _buildCost;
 
         public RefineryBalance(
-            int cycleTicks, int baseUpkeepPerCycle, int idleUpkeepPercent, int brownoutMinGeoLevel,
+            int cycleTicks, int maxBatchesPerCycle, int baseUpkeepPerCycle, int idleUpkeepPercent, int brownoutMinGeoLevel,
             int batteryPerBrownoutCycle, int maxRefineriesPerSite, ItemStack[] buildCost)
         {
             if (cycleTicks < 1) throw new ArgumentOutOfRangeException(nameof(cycleTicks));
+            if (maxBatchesPerCycle < 1) throw new ArgumentOutOfRangeException(nameof(maxBatchesPerCycle));
             if (baseUpkeepPerCycle < 0) throw new ArgumentOutOfRangeException(nameof(baseUpkeepPerCycle));
             if (idleUpkeepPercent < 0 || idleUpkeepPercent > 100) throw new ArgumentOutOfRangeException(nameof(idleUpkeepPercent));
             if (brownoutMinGeoLevel < 1 || brownoutMinGeoLevel > 5) throw new ArgumentOutOfRangeException(nameof(brownoutMinGeoLevel));
@@ -27,6 +32,7 @@ namespace Unruled.Core.Economy
             if (buildCost == null || buildCost.Length == 0) throw new ArgumentException("Build cost required.", nameof(buildCost));
 
             CycleTicks = cycleTicks;
+            MaxBatchesPerCycle = maxBatchesPerCycle;
             BaseUpkeepPerCycle = baseUpkeepPerCycle;
             IdleUpkeepPercent = idleUpkeepPercent;
             BrownoutMinGeoLevel = brownoutMinGeoLevel;

@@ -129,11 +129,28 @@ namespace Unruled.Core.Simulation
 
             sim.Sites.Get(coreBase).OwnerPlayerId = playerId;
             var hq = sim.CreatePlayer(playerId, coreBase);
-            for (int i = 0; i < sim.Deposits.Count; i++)
+            for (int d = 0; d < rules.CoreBaseDepositCount; d++)
             {
-                ref var deposit = ref sim.Deposits.At(i);
-                if (deposit.Site == coreBase)
-                    deposit.RigCount = rules.StartingRigsPerDeposit;
+                var spec = rules.CoreBaseDeposit(d);
+                bool found = false;
+                for (int i = 0; i < sim.Deposits.Count && !found; i++)
+                {
+                    ref var deposit = ref sim.Deposits.At(i);
+                    if (deposit.Site != coreBase || deposit.RawItem != spec.Item)
+                        continue;
+                    deposit.RigCount = spec.Quantity;
+                    found = true;
+                }
+                if (!found)
+                    sim.Deposits.Add(sim.World.Create(), new MineralDeposit
+                    {
+                        Site = coreBase,
+                        RawItem = spec.Item,
+                        SurfaceReserve = rules.SurfaceReserve,
+                        DeepCrustReserve = rules.DeepCrustReserve,
+                        CoreFractureReserve = rules.CoreFractureReserve,
+                        RigCount = spec.Quantity
+                    });
             }
             for (int i = 0; i < rules.StartingRefineryCount; i++)
                 sim.Refineries.Add(sim.World.Create(), new Refinery { Site = coreBase, Output = rules.StartingRefinery(i) });

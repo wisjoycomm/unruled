@@ -85,16 +85,21 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §1 and §2.1 A: own home system with no tungsten or uranium, deposits by preferred ESI window.
-        /// PROVISIONAL: 4 AI rivals (archetypes 1..4), 2 deposits per site of 2,000 / 4,000 / 1,000 ore, 2 rigs per
-        /// core-base deposit, the core-base refineries and stock below, and a Tier-1 fleet of 10 line, 2 EW, 2 supply.
+        /// PROVISIONAL: 4 AI rivals (archetypes 1..4), 2 deposits per site of 20,000 / 40,000 / 10,000 ore, a core base
+        /// that mines its own life support (water 4 rigs, nitrogen 3, methane 2: enough for the oxygen, coolant and fuel
+        /// refineries to outrun the drills' burn until the surface veins run out, about 8 hours), the core-base refineries and stock below, and a Tier-1 fleet of
+        /// 10 line, 2 EW, 2 supply.
         /// </summary>
         public static NewGameBalance CreateNewGameBalance() => new NewGameBalance(
             rivalCount: 4,
             depositsPerSite: 2,
-            surfaceReserve: 2_000,
-            deepCrustReserve: 4_000,
-            coreFractureReserve: 1_000,
-            startingRigsPerDeposit: 2,
+            surfaceReserve: 20_000,
+            deepCrustReserve: 40_000,
+            coreFractureReserve: 10_000,
+            coreBaseDeposits: new[]
+            {
+                new ItemStack(ItemId.RawWater, 4), new ItemStack(ItemId.RawNitrogen, 3), new ItemStack(ItemId.RawMethane, 2)
+            },
             fleetTechTier: 1,
             fleetLineShips: 10,
             fleetEwShips: 2,
@@ -123,7 +128,7 @@ namespace Unruled.Core.Simulation
         /// at most 10 rigs per deposit.
         /// </summary>
         public static MiningBalance CreateMiningBalance() => new MiningBalance(
-            cycleTicks: 10,
+            cycleTicks: 60,
             yieldPerRigPerCycle: 10,
             fuelPerRigPerCycle: 1,
             coolantPerRigPerCycle: 1,
@@ -356,6 +361,7 @@ namespace Unruled.Core.Simulation
         /// </summary>
         public static RefineryBalance CreateRefineryBalance() => new RefineryBalance(
             cycleTicks: 10,
+            maxBatchesPerCycle: 2,
             baseUpkeepPerCycle: 10,
             idleUpkeepPercent: 20,
             brownoutMinGeoLevel: 2,

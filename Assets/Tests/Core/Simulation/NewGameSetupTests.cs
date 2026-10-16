@@ -59,21 +59,38 @@ namespace Unruled.Tests.Core.Simulation
         }
 
         [Test]
-        public void Create_HighEsiSiteGetsLifeItems()
+        public void Create_CoreBaseMinesItsLifeSupport_OtherDepositsFollowEsi()
         {
             var sim = NewWorld();
+            var rules = sim.Balance.NewGame;
             var game = NewGameSetup.Create(sim, 1);
             int coreEsi = sim.Sites.Get(game.CoreBase).BaseEsiMilli;
+            for (int d = 0; d < rules.CoreBaseDepositCount; d++)
+            {
+                int rigs = -1;
+                for (int i = 0; i < sim.Deposits.Count; i++)
+                    if (sim.Deposits.At(i).Site == game.CoreBase && sim.Deposits.At(i).RawItem == rules.CoreBaseDeposit(d).Item)
+                        rigs = sim.Deposits.At(i).RigCount;
+                Assert.AreEqual(rules.CoreBaseDeposit(d).Quantity, rigs, rules.CoreBaseDeposit(d).Item.ToString());
+            }
             for (int i = 0; i < sim.Deposits.Count; i++)
             {
                 ref var deposit = ref sim.Deposits.At(i);
-                if (deposit.Site != game.CoreBase)
+                if (deposit.Site != game.CoreBase || IsCoreBaseDeposit(rules, deposit.RawItem))
                     continue;
                 ref readonly var item = ref sim.Balance.Recipes.GetItem(deposit.RawItem);
                 Assert.IsTrue(item.PreferredEsiMinMilli <= coreEsi && coreEsi <= item.PreferredEsiMaxMilli,
                     $"{deposit.RawItem} window {item.PreferredEsiMinMilli}..{item.PreferredEsiMaxMilli} vs ESI {coreEsi}");
-                Assert.AreEqual(sim.Balance.NewGame.StartingRigsPerDeposit, deposit.RigCount);
+                Assert.AreEqual(0, deposit.RigCount);
             }
+        }
+
+        private static bool IsCoreBaseDeposit(NewGameBalance rules, ItemId raw)
+        {
+            for (int d = 0; d < rules.CoreBaseDepositCount; d++)
+                if (rules.CoreBaseDeposit(d).Item == raw)
+                    return true;
+            return false;
         }
 
         [Test]
@@ -137,7 +154,7 @@ namespace Unruled.Tests.Core.Simulation
             for (int i = 0; i < sim.Deposits.Count; i++)
             {
                 ref var deposit = ref sim.Deposits.At(i);
-                if (deposit.Site != game.CoreBase)
+                if (deposit.Site != game.CoreBase || deposit.RigCount == 0)
                     continue;
                 rigged++;
                 Assert.Less(deposit.SurfaceReserve, sim.Balance.NewGame.SurfaceReserve, $"{deposit.RawItem} was mined");

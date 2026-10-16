@@ -50,7 +50,9 @@ namespace Unruled.Core.Economy
                 ref var stock = ref _stockpiles.Get(refinery.Site);
                 ref readonly var recipe = ref _recipes.GetRecipe(refinery.Output);
 
-                if (!stock.Has(recipe.Input1, recipe.Qty1) || !stock.Has(recipe.Input2, recipe.Qty2))
+                int batches = Math.Min(_balance.MaxBatchesPerCycle,
+                    Math.Min(stock.Get(recipe.Input1) / recipe.Qty1, stock.Get(recipe.Input2) / recipe.Qty2));
+                if (batches <= 0)
                 {
                     refinery.State = RefineryState.IdleStarved;
                     refinery.AccruedUpkeep += _balance.IdleUpkeepPerCycle;
@@ -72,9 +74,9 @@ namespace Unruled.Core.Economy
                     stock.Add(ItemId.ItemBattery, -_balance.BatteryPerBrownoutCycle);
                 }
 
-                stock.Add(recipe.Input1, -recipe.Qty1);
-                stock.Add(recipe.Input2, -recipe.Qty2);
-                stock.Add(recipe.Output, recipe.OutputQty);
+                stock.Add(recipe.Input1, -recipe.Qty1 * batches);
+                stock.Add(recipe.Input2, -recipe.Qty2 * batches);
+                stock.Add(recipe.Output, recipe.OutputQty * batches);
                 refinery.State = RefineryState.ActiveProduction;
                 refinery.AccruedUpkeep += _balance.BaseUpkeepPerCycle;
                 PayUpkeep(ref refinery);

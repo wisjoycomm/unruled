@@ -63,17 +63,18 @@ namespace Unruled.Tests.Core.Economy
         }
 
         [Test]
-        public void ActiveProduction_ConsumesLeontiefInputs_AddsOutput_FullUpkeep()
+        public void ActiveProduction_RunsUpToMaxBatches_ConsumesLeontiefInputs_FullUpkeep()
         {
-            Stock.Add(ItemId.RawWater, 5);
-            Stock.Add(ItemId.RawNitrogen, 5);
+            int max = _balance.MaxBatchesPerCycle;
+            Stock.Add(ItemId.RawWater, 2 * max + 1);
+            Stock.Add(ItemId.RawNitrogen, 2 * max + 5);
 
             RunCycles(3);
 
-            Assert.AreEqual(RefineryState.ActiveProduction, Plant.State);
-            Assert.AreEqual(3, Stock.Get(ItemId.ItemOxygen));
-            Assert.AreEqual(2, Stock.Get(ItemId.RawWater));
-            Assert.AreEqual(2, Stock.Get(ItemId.RawNitrogen));
+            Assert.AreEqual(RefineryState.ActiveProduction, Plant.State, "a partial batch count still runs");
+            Assert.AreEqual(2 * max + 1, Stock.Get(ItemId.ItemOxygen));
+            Assert.AreEqual(0, Stock.Get(ItemId.RawWater));
+            Assert.AreEqual(4, Stock.Get(ItemId.RawNitrogen));
             Assert.AreEqual(3L * _balance.BaseUpkeepPerCycle, Plant.AccruedUpkeep);
         }
 
@@ -122,15 +123,16 @@ namespace Unruled.Tests.Core.Economy
         [Test]
         public void GeoStorm_WithBattery_BurnsBatteryAndKeepsProducing()
         {
-            Stock.Add(ItemId.RawWater, 5);
-            Stock.Add(ItemId.RawNitrogen, 5);
+            int max = _balance.MaxBatchesPerCycle;
+            Stock.Add(ItemId.RawWater, 2 * max);
+            Stock.Add(ItemId.RawNitrogen, 2 * max);
             Stock.Add(ItemId.ItemBattery, 1);
             _weather.Add(_site, new SiteWeather { GeomagneticStormLevel = 5 });
 
             RunCycles(2);
 
             Assert.AreEqual(RefineryState.GridBrownout, Plant.State, "second cycle has no battery left");
-            Assert.AreEqual(1, Stock.Get(ItemId.ItemOxygen));
+            Assert.AreEqual(max, Stock.Get(ItemId.ItemOxygen));
             Assert.AreEqual(0, Stock.Get(ItemId.ItemBattery));
         }
 
@@ -155,8 +157,9 @@ namespace Unruled.Tests.Core.Economy
             _wallets.Add(wallet, new Wallet { OwnerPlayerId = owner });
             long cycleCents = _balance.BaseUpkeepPerCycle * Wallet.CentsPerCredit;
             _ledger.Grant(wallet, cycleCents * 2 - 1);
-            Stock.Add(ItemId.RawWater, 5);
-            Stock.Add(ItemId.RawNitrogen, 5);
+            int max = _balance.MaxBatchesPerCycle;
+            Stock.Add(ItemId.RawWater, 3 * max);
+            Stock.Add(ItemId.RawNitrogen, 3 * max);
 
             RunCycles(1);
             Assert.AreEqual(0, Plant.AccruedUpkeep);
@@ -165,7 +168,7 @@ namespace Unruled.Tests.Core.Economy
             _system.OnTick(2L * _balance.CycleTicks);
             Assert.AreEqual(_balance.BaseUpkeepPerCycle, Plant.AccruedUpkeep, "short by one cent: the cycle is owed");
             Assert.AreEqual(cycleCents - 1, _ledger.Balance(wallet), "nothing is paid partly");
-            Assert.AreEqual(2, Stock.Get(ItemId.ItemOxygen), "debt does not stop production");
+            Assert.AreEqual(2 * max, Stock.Get(ItemId.ItemOxygen), "debt does not stop production");
 
             _ledger.Grant(wallet, cycleCents + 1);
             _system.OnTick(3L * _balance.CycleTicks);

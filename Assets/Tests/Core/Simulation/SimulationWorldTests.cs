@@ -48,12 +48,13 @@ namespace Unruled.Tests.Core.Simulation
             var sim = BuildWorld(Seed);
             var site = sim.Sites.EntityAt(0);
             int cycle = sim.Balance.Mining.CycleTicks;
-            Assert.AreEqual(cycle, sim.Balance.Refinery.CycleTicks, "test assumes aligned cycles");
+            Assert.AreEqual(0, cycle % sim.Balance.Refinery.CycleTicks, "test assumes a mining tick is a refinery tick");
 
             sim.Clock.Advance(cycle);
 
             ref var stock = ref sim.Stockpiles.Get(site);
-            Assert.AreEqual(51, stock.Get(ItemId.ItemOxygen), "nitrogen mined this tick was refined this tick");
+            Assert.AreEqual(50 + sim.Balance.Refinery.MaxBatchesPerCycle, stock.Get(ItemId.ItemOxygen),
+                "nitrogen mined this tick was refined this tick");
             Assert.AreEqual(RefineryState.ActiveProduction, sim.Refineries.At(0).State);
             Assert.IsFalse(sim.Quarantines.Get(site).IsExportLocked(sim.Clock.CurrentTick));
         }
@@ -64,7 +65,7 @@ namespace Unruled.Tests.Core.Simulation
             var sim = BuildWorld(Seed);
             var site = sim.Sites.EntityAt(0);
 
-            sim.Clock.Advance(4000); // 300 nitrogen at 1 per refinery cycle runs out at cycle 300 (tick 3000)
+            sim.Clock.Advance(4000); // 300 nitrogen: 10 surface cycles at 10, then 40 deep-crust cycles at 5 (tick 3000)
 
             Assert.AreEqual(PlanetLifecycleState.DepletedBarrenHusk, sim.Sites.Get(site).LifecycleState);
             Assert.AreEqual(RefineryState.IdleStarved, sim.Refineries.At(0).State);
