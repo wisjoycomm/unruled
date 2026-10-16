@@ -207,7 +207,7 @@ namespace Unruled.Tests.Core.Economy
         }
 
         [Test]
-        public void RetractDrills_StopsMiningAtOnce_AndFreesTheRigsAfterTheRetractTime()
+        public void RetractDrills_StopsMiningAtOnce_AndRecoversTheRigsAfterTheRetractTime()
         {
             Site.OwnerPlayerId = 1;
             var deposit = AddDeposit(surface: 0, deep: 1000, rigs: 2);
@@ -228,10 +228,34 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(mined, Stock.Get(ItemId.RawIron), "retracting drills mine nothing");
             Assert.AreEqual(2, _deposits.Get(deposit).RigCount, "rigs are still in the ground");
 
+            var before = new int[_balance.RigCostCount];
+            for (int i = 0; i < before.Length; i++)
+                before[i] = Stock.Get(_balance.RigCost(i).Item);
             RunCycles(1);
             Assert.AreEqual(done, _tick);
             Assert.AreEqual(0, _deposits.Get(deposit).RigCount);
             Assert.AreEqual(0, _deposits.Get(deposit).RetractUntilTick);
+            for (int i = 0; i < _balance.RigCostCount; i++)
+                Assert.AreEqual(before[i] + _balance.RigCost(i).Quantity * 2, Stock.Get(_balance.RigCost(i).Item), "the rigs' cost is back");
+        }
+
+        [Test]
+        public void PauseDrills_StopsMiningAndBurn_UntilResumed()
+        {
+            Site.OwnerPlayerId = 1;
+            var deposit = AddDeposit(surface: 1000, deep: 0, rigs: 2);
+            int fuel = Stock.Get(ItemId.ItemFuel);
+            var order = new DelayedPlayerCommand { PlayerId = 1, CommandType = CommandType.PauseDrills, Target = deposit, ParamA = 1 };
+            _system.Handle(order, _tick);
+            RunCycles(2);
+            Assert.AreEqual(0, Stock.Get(ItemId.RawIron), "paused drills mine nothing");
+            Assert.AreEqual(fuel, Stock.Get(ItemId.ItemFuel), "and burn nothing");
+            Assert.AreEqual(2, _deposits.Get(deposit).RigCount);
+
+            order.ParamA = 0;
+            _system.Handle(order, _tick);
+            RunCycles(1);
+            Assert.Greater(Stock.Get(ItemId.RawIron), 0);
         }
 
         [Test]

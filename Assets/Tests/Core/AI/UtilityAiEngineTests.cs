@@ -33,6 +33,7 @@ namespace Unruled.Tests.Core.AI
             sim.Starlanes.Add(lane, new StarlaneEdge { SiteA = home, SiteB = field, Tier = StarlaneTier.OuterRimBypass, Length = 200 });
             sim.Graph.Rebuild(sim.Starlanes);
             hq = sim.CreatePlayer(Me, home);
+            sim.Standings.Get(hq).IsAudited = true; // so the audit opt-in doesn't add an order to every think
             return sim;
         }
 
@@ -150,7 +151,7 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
-        public void RetractsDrills_AtThePresetStormLevel()
+        public void PausesDrills_AtThePresetStormLevel_AndResumesAfter()
         {
             var deposit = _sim.World.Create();
             _sim.Deposits.Add(deposit, new MineralDeposit { Site = _field, RawItem = ItemId.RawWater, SurfaceReserve = 1_000, RigCount = 1 });
@@ -158,8 +159,27 @@ namespace Unruled.Tests.Core.AI
             Assert.AreEqual(0, Think(Warlord), "G3 is below the Warlord's G5");
 
             var order = OnlyOrder(Sentinel);
-            Assert.AreEqual(AiAction.RetractDrills, order.Action);
+            Assert.AreEqual(AiAction.PauseDrills, order.Action);
             Assert.AreEqual(deposit, order.Subject);
+            RunPendingOrders();
+            Assert.IsTrue(_sim.Deposits.Get(deposit).IsPaused, "the crews are out, the rigs stay");
+            Assert.AreEqual(1, _sim.Deposits.Get(deposit).RigCount);
+
+            _sim.Weather.Get(_field).GeomagneticStormLevel = 0;
+            Assert.AreEqual(AiAction.PauseDrills, OnlyOrder(Sentinel).Action);
+            RunPendingOrders();
+            Assert.IsFalse(_sim.Deposits.Get(deposit).IsPaused);
+        }
+
+        [Test]
+        public void RetractsDrills_WhenOutgunnedAtTheSite()
+        {
+            var deposit = _sim.World.Create();
+            _sim.Deposits.Add(deposit, new MineralDeposit { Site = _field, RawItem = ItemId.RawWater, SurfaceReserve = 1_000, RigCount = 1 });
+            Fleet(Rival, _field, lineShips: 5);
+
+            var order = OnlyOrder(Sentinel);
+            Assert.AreEqual(AiAction.RetractDrills, order.Action);
             RunPendingOrders();
             Assert.Greater(_sim.Deposits.Get(deposit).RetractUntilTick, 0, "the drills are coming out");
         }
@@ -169,6 +189,10 @@ namespace Unruled.Tests.Core.AI
         {
             int startup = _sim.Balance.Radar.StartupBatteries;
             ref var core = ref _sim.Stockpiles.Get(_home);
+            var testCost = _sim.Balance.Research.Tier(2).StressTestCost;
+            for (int i = 0; i < testCost.Length; i++)
+                if (testCost[i].Item == ItemId.ItemBattery)
+                    core.Add(ItemId.ItemBattery, testCost[i].Quantity); // kept back for the next stress test
             core.Add(ItemId.ItemBattery, 2 * startup); // 20%
             Assert.AreEqual(0, Think(Sentinel), "20% is below the Sentinel's 30%");
 

@@ -72,8 +72,8 @@ namespace Unruled.Tests.Core.Economy
             var refinery = _sim.Balance.Refinery;
             _sim.Clock.Advance(5L * refinery.CycleTicks);
 
-            Assert.AreEqual(start - 5L * refinery.BaseUpkeepPerCycle * Wallet.CentsPerCredit, TotalCents());
-            Assert.AreEqual(0, _sim.Refineries.Get(plant).AccruedUpkeep);
+            Assert.AreEqual(start - 5L * refinery.BaseUpkeepCentsPerCycle, TotalCents());
+            Assert.AreEqual(0, _sim.Refineries.Get(plant).AccruedUpkeepCents);
         }
     }
 }

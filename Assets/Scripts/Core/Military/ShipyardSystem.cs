@@ -23,8 +23,9 @@ namespace Unruled.Core.Military
     /// <list type="bullet">
     /// <item><see cref="CommandType.BuildShips"/> (target: the player's core base; ParamA = ship class, ParamB =
     /// count, ParamC = tech tier up to the player's research tier): pays the tier's build items per ship from the
-    /// core base at once; the ships come out after count × the tier's build time. They join a docked fleet of the
-    /// same owner and tier at the site, or form a new one.</item>
+    /// core base at once; the ships come out after count × the tier's build time. Cargo convoys always form a new
+    /// convoy fleet (one per route); other ships join a docked fleet of the same owner and tier at the site that is not
+    /// convoy-only, or form a new one.</item>
     /// <item><see cref="CommandType.Retrofit"/> (target: a fleet docked at its owner's core base): raises the fleet
     /// to the player's research tier for a share of the new tier's build cost per ship (GDD §2.3 TRL 7–9).</item>
     /// </list>
@@ -139,11 +140,11 @@ namespace Unruled.Core.Military
         {
             if (!_sites.Has(order.Site))
                 return;
-            for (int i = 0; i < _units.Count; i++)
+            for (int i = 0; i < _units.Count && order.ShipClass != TargetFocusClass.CargoConvoys; i++)
             {
                 var fleet = _units.EntityAt(i);
                 ref var unit = ref _units.At(i);
-                if (unit.OwnerPlayerId != order.OwnerPlayerId || unit.TechTier != order.TechTier ||
+                if (unit.OwnerPlayerId != order.OwnerPlayerId || unit.TechTier != order.TechTier || unit.IsConvoyOnly ||
                     !IsDocked(fleet, tick) || _motions.Get(fleet).Site != order.Site)
                     continue;
                 unit.Gain(order.ShipClass, order.Count);

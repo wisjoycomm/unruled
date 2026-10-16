@@ -79,6 +79,33 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
+        public void Route_CarriesLifeSupport_AndKeepsItsOwnUpkeep_EvenWhenGrounded()
+        {
+            Hub.Add(ItemId.ItemOxygen, 1_000);
+            Hub.Add(ItemId.ItemRations, 1_000);
+            int hubReserve = _sim.Balance.Convoys.HubSupplyReserve;
+            Outpost.Add(ItemId.RawIron, Batch);
+            _sim.FleetReadiness.Get(_fleet).IsUnsupplied = true;
+            SetRoute(_fleet, _outpost, Batch);
+            Run(_sim.Balance.Convoys.CheckIntervalTicks);
+
+            int reserve = 2 * _sim.Balance.Convoys.UpkeepReserveIntervals; // 2 ships x 1 oxygen and 1 rations an interval
+            ref var hold = ref _sim.Stockpiles.Get(_fleet);
+            Assert.AreEqual(Batch + reserve, hold.Get(ItemId.ItemOxygen), "loads while grounded");
+            Assert.AreEqual(Batch + reserve, hold.Get(ItemId.ItemRations));
+            Assert.AreEqual(_hub, _sim.FleetMotions.Get(_fleet).Site, "a grounded fleet does not leave");
+
+            _sim.FleetReadiness.Get(_fleet).IsUnsupplied = false;
+            Run(3_000);
+
+            Assert.AreEqual(Batch, Outpost.Get(ItemId.ItemOxygen));
+            Assert.AreEqual(Batch, Outpost.Get(ItemId.ItemRations));
+            Assert.AreEqual(Batch, Hub.Get(ItemId.RawIron));
+            Assert.GreaterOrEqual(_sim.Stockpiles.Get(_fleet).Get(ItemId.ItemOxygen), reserve, "its own upkeep stays aboard");
+            Assert.GreaterOrEqual(Hub.Get(ItemId.ItemOxygen), hubReserve, "the hub keeps its reserve");
+        }
+
+        [Test]
         public void Refused_WithoutCargoConvoys_OverCapacity_OrToASiteNotOwned()
         {
             var warships = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 1, LineShips = 4 }, _hub);

@@ -21,7 +21,7 @@ namespace Unruled.View.UI
             "Mothball", "Activate", "Set focus", "Vent coolant", "Retract drills", "Buy order", "Sell order",
             "Cancel order", "Audit opt-in", "Stress test",
             "Build ships", "Retrofit", "Claim site", "Build rig", "Build refinery", "Open jump gate", "Transfer cargo",
-            "Convoy route"
+            "Convoy route", "Refinery cap", "Pause drills"
         };
 
         private readonly DashedFrame[] _rows = new DashedFrame[Slots];

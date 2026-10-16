@@ -25,8 +25,12 @@ namespace Unruled.Core.Simulation
                 CreateResearchBalance(), CreateShipyardBalance(), CreateSiteControlBalance(),
                 CreateJumpGateBalance(), CreateConvoyBalance());
 
-        /// <summary>GDD §1: CargoConvoys feed remote mines. PROVISIONAL: 250 of each item per convoy ship, checked every 10 ticks.</summary>
-        public static ConvoyBalance CreateConvoyBalance() => new ConvoyBalance(capacityPerConvoy: 250, checkIntervalTicks: 10);
+        /// <summary>
+        /// GDD §1: CargoConvoys feed remote mines. PROVISIONAL: 250 of each item per convoy ship, checked every 10 ticks;
+        /// a route fleet keeps 3 upkeep intervals of its own oxygen and rations, and leaves 500 of each supply at its hub.
+        /// </summary>
+        public static ConvoyBalance CreateConvoyBalance() =>
+            new ConvoyBalance(capacityPerConvoy: 250, checkIntervalTicks: 10, upkeepReserveIntervals: 3, hubSupplyReserve: 500);
 
         /// <summary>
         /// GDD §1.2: Tier 2 plus an energy charge opens the home gate. PROVISIONAL: 50 batteries + 50 fuel from the core
@@ -88,20 +92,21 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §1 and §2.1 A: own home system with no tungsten or uranium, deposits by preferred ESI window.
-        /// PROVISIONAL: 4 AI rivals (archetypes 1..4), 2 deposits per site of 20,000 / 40,000 / 10,000 ore, a core base
-        /// that mines its own life support (water 4 rigs, nitrogen 3, methane 2: enough for the oxygen, coolant and fuel
-        /// refineries to outrun the drills' burn until the surface veins run out, about 8 hours), the core-base refineries and stock below, and a Tier-1 fleet of
-        /// 10 line, 2 EW, 2 supply.
+        /// PROVISIONAL: 4 AI rivals (archetypes 1..4), 2 deposits per site of 60,000 / 120,000 / 30,000 ore, a core base
+        /// that mines its own life support (water 4 rigs, nitrogen 3, methane 2, biomass 2: the coolant and fuel
+        /// refineries, which run first, outrun the drills' burn at both depths, and rations cover fleet upkeep), the
+        /// core-base refineries and stock below, and a Tier-1 fleet of 10 line, 2 EW, 2 supply.
         /// </summary>
         public static NewGameBalance CreateNewGameBalance() => new NewGameBalance(
             rivalCount: 4,
             depositsPerSite: 2,
-            surfaceReserve: 20_000,
-            deepCrustReserve: 40_000,
-            coreFractureReserve: 10_000,
+            surfaceReserve: 60_000,
+            deepCrustReserve: 120_000,
+            coreFractureReserve: 30_000,
             coreBaseDeposits: new[]
             {
-                new ItemStack(ItemId.RawWater, 4), new ItemStack(ItemId.RawNitrogen, 3), new ItemStack(ItemId.RawMethane, 2)
+                new ItemStack(ItemId.RawWater, 4), new ItemStack(ItemId.RawNitrogen, 3), new ItemStack(ItemId.RawMethane, 2),
+                new ItemStack(ItemId.RawBiomass, 2)
             },
             fleetTechTier: 1,
             fleetLineShips: 10,
@@ -109,7 +114,10 @@ namespace Unruled.Core.Simulation
             fleetSupplyTenders: 2,
             fleetCargoConvoys: 0,
             homeExcludedRaws: new[] { ItemId.RawTungsten, ItemId.RawUranium },
-            startingRefineries: new[] { ItemId.ItemOxygen, ItemId.ItemCoolant, ItemId.ItemFuel, ItemId.ItemSteel, ItemId.ItemBattery },
+            startingRefineries: new[]
+            {
+                ItemId.ItemCoolant, ItemId.ItemFuel, ItemId.ItemOxygen, ItemId.ItemRations, ItemId.ItemSteel, ItemId.ItemBattery
+            },
             coreBaseStock: new[]
             {
                 new ItemStack(ItemId.ItemFuel, 2_000), new ItemStack(ItemId.ItemCoolant, 400),
@@ -132,7 +140,7 @@ namespace Unruled.Core.Simulation
         /// </summary>
         public static MiningBalance CreateMiningBalance() => new MiningBalance(
             cycleTicks: 60,
-            yieldPerRigPerCycle: 10,
+            yieldPerRigPerCycle: 30,
             fuelPerRigPerCycle: 1,
             coolantPerRigPerCycle: 1,
             surface: new MiningDepth(speedPercent: 100, fuelCoolantMultiplier: 1),
@@ -235,8 +243,8 @@ namespace Unruled.Core.Simulation
         /// <summary>PROVISIONAL: every player starts with 10,000 credits (the GDD gives no starting money).</summary>
         public static LedgerBalance CreateLedgerBalance() => new LedgerBalance(startingCents: 10_000 * Wallet.CentsPerCredit);
 
-        /// <summary>PROVISIONAL: the STA toll is 2 credits per ship per 100 units of highway (tab 04 names no amount).</summary>
-        public static StaBalance CreateStaBalance() => new StaBalance(tollCentsPerShipPer100Units: 200);
+        /// <summary>PROVISIONAL: the STA toll is 0.2 credits per ship per 100 units of highway (tab 04 names no amount).</summary>
+        public static StaBalance CreateStaBalance() => new StaBalance(tollCentsPerShipPer100Units: 20);
 
         /// <summary>GDD §2.2 B: VWAP over the last 100 ticks, price band 0.8x-1.2x.</summary>
         public static WtoBalance CreateWtoBalance() => new WtoBalance(vwapWindowTicks: 100, priceBandPercent: 20);
@@ -252,10 +260,14 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// Tab 06 presets (weights and ratio in milli, vent temperature in milli-degrees). Think every 10 ticks (GDD §2.5).
         /// PROVISIONAL: 100% battery = 10 scan startups at the core base; resupply below 5 ammo per line ship; at the
-        /// core base a fleet loads up to 20 ammo per line ship and 1,500 fuel.
+        /// core base a fleet loads 6 upkeep intervals of oxygen and rations, up to 20 ammo per line ship and 1,500 fuel; 2 rigs per bare deposit of a claimed site;
+        /// 2 cargo convoys running batches of 100 per outpost; a new refinery once 100 of both its inputs sit at the core base;
+        /// fleets leave 500 fuel and 500 coolant at the core base for its drills; drills pause at 5,000 ore in stock.
         /// </summary>
         public static AiBalance CreateAiBalance() => new AiBalance(
             thinkIntervalTicks: 10, fullBatteryScans: 10, resupplyAmmoPerLineShip: 5, loadAmmoPerLineShip: 20, loadFuel: 1_500,
+            outpostRigs: 2, convoyShips: 2, convoyBatch: 100, refineryInputStock: 100,
+            coreSupplyReserve: 500, rawStockCap: 5_000, loadUpkeepIntervals: 6,
             presets: new[]
             {
                 new AiPreset(1, "Sentinel_Defender", 1_800, 1_700, 1_500, 1_400, 0, 0, 75_000, 650, 30, 3),
@@ -359,17 +371,19 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §2.2 A: 10-tick cycle, idle at 20% upkeep, brownout from G2.
-        /// PROVISIONAL: base upkeep 10 per cycle and 1 battery per storm cycle are not in the GDD or data sheet; a refinery
-        /// costs 20 steel + 5 batteries, at most 4 per site.
+        /// PROVISIONAL: base upkeep 5 cents per cycle (18 credits an hour) and 1 battery per storm cycle are not in the GDD
+        /// or data sheet; a refinery
+        /// costs 20 steel + 5 batteries, at most 8 per site; it idles while its site holds 5,000 of its output.
         /// </summary>
         public static RefineryBalance CreateRefineryBalance() => new RefineryBalance(
             cycleTicks: 10,
-            maxBatchesPerCycle: 2,
-            baseUpkeepPerCycle: 10,
+            maxBatchesPerCycle: 4,
+            baseUpkeepCentsPerCycle: 5,
             idleUpkeepPercent: 20,
             brownoutMinGeoLevel: 2,
             batteryPerBrownoutCycle: 1,
-            maxRefineriesPerSite: 4,
+            maxRefineriesPerSite: 8,
+            defaultStockCap: 5_000,
             buildCost: new[] { new ItemStack(ItemId.ItemSteel, 20), new ItemStack(ItemId.ItemBattery, 5) });
 
         /// <summary>GDD §2.2 A.4 and data sheet tab 01: WHO quarantine after more than 30 starved ticks, for 300 ticks.</summary>

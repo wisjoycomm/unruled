@@ -30,9 +30,9 @@ namespace Unruled.Tests.Core.Economy
 
         private ref Stockpile Core => ref _sim.Stockpiles.Get(_core);
 
-        private void Order(CommandType type, EntityId target, int a)
+        private void Order(CommandType type, EntityId target, int a, int b = 0)
         {
-            var command = new DelayedPlayerCommand { PlayerId = Player, CommandType = type, Target = target, ParamA = a };
+            var command = new DelayedPlayerCommand { PlayerId = Player, CommandType = type, Target = target, ParamA = a, ParamB = b };
             Assert.AreEqual(IssueResult.Issued, _sim.Issuer.Issue(command, out long at));
             for (long t = _sim.Clock.CurrentTick; t < at; t++)
                 _sim.Clock.Advance(1);
@@ -87,6 +87,7 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(before + 1, RefineriesAtCore());
             Assert.AreEqual(180, Core.Get(ItemId.ItemSteel));
             Assert.AreEqual(ItemId.ItemOxygen, _sim.Refineries.At(_sim.Refineries.Count - 1).Output);
+            Assert.AreEqual(_sim.Balance.Refinery.DefaultStockCap, _sim.Refineries.At(_sim.Refineries.Count - 1).StockCap);
 
             for (int i = before + 1; i < cap + 1; i++)
                 Order(CommandType.BuildRefinery, _core, (int)ItemId.ItemSteel);
@@ -101,6 +102,28 @@ namespace Unruled.Tests.Core.Economy
             Order(CommandType.BuildRefinery, _core, (int)ItemId.ItemOxygen);
             Assert.AreEqual(0, RefineriesAtCore());
             Assert.AreEqual(200, Core.Get(ItemId.ItemSteel));
+        }
+
+        [Test]
+        public void SetRefineryCap_ChangesTheCapOfThatItemsRefineries_AtAnOwnSite()
+        {
+            Core.Add(ItemId.ItemSteel, 200);
+            Core.Add(ItemId.ItemBattery, 100);
+            Order(CommandType.BuildRefinery, _core, (int)ItemId.ItemOxygen);
+            Order(CommandType.BuildRefinery, _core, (int)ItemId.ItemFuel);
+            var oxygen = _sim.Refineries.EntityAt(_sim.Refineries.Count - 2);
+            var fuel = _sim.Refineries.EntityAt(_sim.Refineries.Count - 1);
+
+            Order(CommandType.SetRefineryCap, _core, (int)ItemId.ItemOxygen, 0);
+            Assert.AreEqual(0, _sim.Refineries.Get(oxygen).StockCap, "no cap");
+            Assert.AreEqual(_sim.Balance.Refinery.DefaultStockCap, _sim.Refineries.Get(fuel).StockCap);
+
+            Order(CommandType.SetRefineryCap, _core, (int)ItemId.ItemOxygen, -1);
+            Assert.AreEqual(0, _sim.Refineries.Get(oxygen).StockCap, "a negative cap is refused");
+
+            _sim.Sites.Get(_core).OwnerPlayerId = 2;
+            Order(CommandType.SetRefineryCap, _core, (int)ItemId.ItemFuel, 7);
+            Assert.AreEqual(_sim.Balance.Refinery.DefaultStockCap, _sim.Refineries.Get(fuel).StockCap, "not the owner");
         }
     }
 }

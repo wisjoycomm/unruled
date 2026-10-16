@@ -105,6 +105,18 @@ namespace Unruled.Core.Military
             return IssueResult.Issued;
         }
 
+        /// <summary>True while an order of this type from the player for this target waits out its latency.</summary>
+        public bool IsInFlight(int playerId, CommandType type, EntityId target)
+        {
+            for (int i = 0; i < _clock.PendingCommandCount; i++)
+            {
+                var pending = _clock.PendingAt(i);
+                if (pending.PlayerId == playerId && pending.CommandType == type && pending.Target == target)
+                    return true;
+            }
+            return false;
+        }
+
         private bool IsParalysed(int playerId)
         {
             for (int i = 0; i < _players.Count; i++)

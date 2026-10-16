@@ -34,6 +34,9 @@ namespace Unruled.Core.Military
 
         public int TotalShips => LineShips + EwShips + SupplyTenders + CargoConvoys;
 
+        /// <summary>A logistics fleet: cargo convoys and no warships or tenders.</summary>
+        public bool IsConvoyOnly => CargoConvoys > 0 && LineShips == 0 && EwShips == 0 && SupplyTenders == 0;
+
         public int Count(TargetFocusClass shipClass)
         {
             switch (shipClass)

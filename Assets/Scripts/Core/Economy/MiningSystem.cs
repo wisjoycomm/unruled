@@ -11,10 +11,12 @@ namespace Unruled.Core.Economy
     /// (only for a site owner with the Tier-4 core-fracture gate).
     /// A deposit whose site lacks the fuel or coolant for this cycle stalls. A depth is never mixed in one cycle.
     /// Depletion lifecycle changes belong to <see cref="Board.PlanetLifecycleSystem"/>, which runs next.
-    /// RetractDrills (target: a deposit on a site the player owns) stops the rigs at once; they are gone from the
-    /// deposit when the retract time is over (GDD §2.1 B). BuildRig (target: a deposit on a site the player owns;
+    /// RetractDrills (target: a deposit on a site the player owns) stops the rigs at once; when the retract time is over
+    /// they are recovered (GDD §2.1 B): gone from the deposit, their build cost back in the site's stock. BuildRig (target: a deposit on a site the player owns;
     /// ParamA = rigs) pays each rig's cost from the site's stock and adds the rigs, up to the cap per deposit.
-    /// Invalid or unaffordable orders change nothing.
+    /// PauseDrills (target: a deposit on a site the player owns; ParamA 1 = pause, 0 = resume) stops or restarts its
+    /// mining, and the fuel and coolant it burns, without touching the rigs. Invalid or unaffordable orders change
+    /// nothing.
     /// </summary>
     public sealed class MiningSystem : ISimSystem, ICommandHandler
     {
@@ -47,19 +49,21 @@ namespace Unruled.Core.Economy
                 {
                     if (tick >= deposit.RetractUntilTick)
                     {
+                        Recover(ref deposit);
                         deposit.RigCount = 0;
                         deposit.RetractUntilTick = 0;
                     }
                     continue;
                 }
-                if (cycle)
+                if (cycle && !deposit.IsPaused)
                     MineDeposit(ref deposit);
             }
         }
 
         public void Handle(in DelayedPlayerCommand command, long tick)
         {
-            if (command.CommandType != CommandType.RetractDrills && command.CommandType != CommandType.BuildRig)
+            if (command.CommandType != CommandType.RetractDrills && command.CommandType != CommandType.BuildRig &&
+                command.CommandType != CommandType.PauseDrills)
                 throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
             if (!_deposits.Has(command.Target))
                 return;
@@ -72,9 +76,23 @@ namespace Unruled.Core.Economy
                 BuildRigs(ref deposit, command.ParamA);
                 return;
             }
+            if (command.CommandType == CommandType.PauseDrills)
+            {
+                deposit.IsPaused = command.ParamA != 0;
+                return;
+            }
             if (deposit.RigCount == 0)
                 return;
             deposit.RetractUntilTick = tick + _balance.DrillRetractTicks;
+        }
+
+        private void Recover(ref MineralDeposit deposit)
+        {
+            if (!_stockpiles.Has(deposit.Site))
+                return;
+            ref var stock = ref _stockpiles.Get(deposit.Site);
+            for (int i = 0; i < _balance.RigCostCount; i++)
+                stock.Add(_balance.RigCost(i).Item, _balance.RigCost(i).Quantity * deposit.RigCount);
         }
 
         private void BuildRigs(ref MineralDeposit deposit, int rigs)

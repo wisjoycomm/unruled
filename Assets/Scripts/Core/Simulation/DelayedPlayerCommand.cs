@@ -30,7 +30,9 @@ namespace Unruled.Core.Simulation
         BuildRefinery = 24,
         OpenJumpGate = 25,
         TransferCargo = 26,
-        SetConvoyRoute = 27
+        SetConvoyRoute = 27,
+        SetRefineryCap = 28,
+        PauseDrills = 29
     }
 
     /// <summary>A player or AI command that takes effect after signal latency. Shared by players and the Server 2 AI.</summary>

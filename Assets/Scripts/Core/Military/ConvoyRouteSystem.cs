@@ -18,13 +18,14 @@ namespace Unruled.Core.Military
     /// Owns <see cref="ConvoyRoute"/> (GDD §1: CargoConvoys feed remote mines). <see cref="CommandType.SetConvoyRoute"/>
     /// (target: own fleet with cargo convoys, docked at an own site, which becomes the hub;
     /// <see cref="DelayedPlayerCommand.ParamEntity"/>: another own site, the outpost; ParamC: the batch, at most cargo
-    /// convoys x capacity; 0 or less ends the route). Every check interval a docked fleet that can act and is out of
-    /// combat works its route without signal latency. At the hub it unloads everything but fuel and coolant, takes on
-    /// coolant up to the batch and fuel up to the batch plus the round trip, and leaves when it can top up an outpost
-    /// below half a batch of fuel or coolant, or the outpost holds a batch of goods. At the outpost it tops the
-    /// outpost's fuel and coolant up to the batch (keeping its fuel home), loads up to a batch of every other item
-    /// there and heads home. Elsewhere, moving or engaged, the route waits; it ends when either site is lost.
-    /// Contract convoys can't run a route. Stolen units keep their tags.
+    /// convoys x capacity; 0 or less ends the route). Every check interval a docked fleet out of combat works its route
+    /// without signal latency. Supplies are fuel, coolant, oxygen and rations (GDD §1); the fleet keeps a reserve of
+    /// its own: the fuel for the trip ahead, and its oxygen and rations upkeep for the reserve intervals. At the hub it
+    /// unloads everything else, takes on each supply up to the batch plus its reserve (even while grounded for unpaid
+    /// upkeep) from what the hub holds above its supply reserve, and leaves, once it can act, when it can top up an outpost below half a batch of a supply, or the
+    /// outpost holds a batch of goods. At the outpost it tops each supply up to the batch from what it carries above
+    /// its reserve, loads up to a batch of every other item there and heads home. Elsewhere, moving or engaged, the
+    /// route waits; it ends when either site is lost. Contract convoys can't run a route. Stolen units keep their tags.
     /// </summary>
     public sealed class ConvoyRouteSystem : ISimSystem, ICommandHandler
     {
@@ -41,6 +42,7 @@ namespace Unruled.Core.Military
         private readonly RoutePlanner _planner;
         private readonly FleetMovementSystem _movement;
         private readonly ConvoyBalance _balance;
+        private readonly FleetBalance _fleetBalance;
         private FleetRoute _scratch;
 
         public ConvoyRouteSystem(
@@ -48,7 +50,7 @@ namespace Unruled.Core.Military
             ComponentStore<FleetReadiness> readiness, ComponentStore<FleetCombatState> combat,
             ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes, ComponentStore<Stockpile> stockpiles,
             ComponentStore<ContractCargo> contracts, ComponentStore<StolenGoods> stolen, RoutePlanner planner,
-            FleetMovementSystem movement, ConvoyBalance balance)
+            FleetMovementSystem movement, ConvoyBalance balance, FleetBalance fleetBalance)
         {
             _routes = routes ?? throw new ArgumentNullException(nameof(routes));
             _units = units ?? throw new ArgumentNullException(nameof(units));
@@ -63,6 +65,7 @@ namespace Unruled.Core.Military
             _planner = planner ?? throw new ArgumentNullException(nameof(planner));
             _movement = movement ?? throw new ArgumentNullException(nameof(movement));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
+            _fleetBalance = fleetBalance ?? throw new ArgumentNullException(nameof(fleetBalance));
         }
 
         public void Handle(in DelayedPlayerCommand command, long tick)
@@ -111,7 +114,7 @@ namespace Unruled.Core.Military
                     continue;
                 }
                 ref var motion = ref _motions.Get(fleet);
-                if (!motion.Lane.IsNull || !_readiness.Get(fleet).CanAct(tick) || tick <= _combat.Get(fleet).EngagedUntilTick)
+                if (!motion.Lane.IsNull || tick <= _combat.Get(fleet).EngagedUntilTick)
                     continue;
                 if (motion.Site == route.Hub)
                     AtHub(fleet, in route, tick);
@@ -132,16 +135,17 @@ namespace Unruled.Core.Military
                 if (!IsSupply(item) && hold.Get(item) > 0)
                     CargoMover.Move(_stockpiles, _stolen, fleet, route.Hub, item, hold.Get(item));
             }
-            Fill(fleet, route.Hub, ItemId.ItemCoolant, route.Batch);
-            Fill(fleet, route.Hub, ItemId.ItemFuel, (int)Math.Min(route.Batch + roundTrip, int.MaxValue));
+            for (int s = 0; s < Supplies.Length; s++)
+                Fill(fleet, route.Hub, Supplies[s], (int)Math.Min(route.Batch + Reserve(fleet, Supplies[s], roundTrip), int.MaxValue),
+                    _balance.HubSupplyReserve);
 
-            if (hold.Get(ItemId.ItemFuel) < roundTrip)
+            if (!_readiness.Get(fleet).CanAct(tick) || hold.Get(ItemId.ItemFuel) < roundTrip)
                 return;
             ref var outpost = ref _stockpiles.Get(route.Outpost);
-            int half = route.Batch / 2;
-            bool coolantRun = outpost.Get(ItemId.ItemCoolant) < half && hold.Get(ItemId.ItemCoolant) > 0;
-            bool fuelRun = outpost.Get(ItemId.ItemFuel) < half && hold.Get(ItemId.ItemFuel) > roundTrip;
-            if (coolantRun || fuelRun || Goods(ref outpost) >= route.Batch)
+            bool run = Goods(ref outpost) >= route.Batch;
+            for (int s = 0; s < Supplies.Length && !run; s++)
+                run = outpost.Get(Supplies[s]) < route.Batch / 2 && hold.Get(Supplies[s]) > Reserve(fleet, Supplies[s], roundTrip);
+            if (run)
                 _movement.TryMoveTo(fleet, route.Outpost, tick);
         }
 
@@ -152,25 +156,26 @@ namespace Unruled.Core.Military
                 return;
             ref var hold = ref _stockpiles.Get(fleet);
             ref var outpost = ref _stockpiles.Get(route.Outpost);
-            int coolant = Math.Min(hold.Get(ItemId.ItemCoolant), route.Batch - outpost.Get(ItemId.ItemCoolant));
-            if (coolant > 0)
-                CargoMover.Move(_stockpiles, _stolen, fleet, route.Outpost, ItemId.ItemCoolant, coolant);
-            long spare = Math.Min(hold.Get(ItemId.ItemFuel) - home, route.Batch - outpost.Get(ItemId.ItemFuel));
-            if (spare > 0)
-                CargoMover.Move(_stockpiles, _stolen, fleet, route.Outpost, ItemId.ItemFuel, (int)spare);
+            for (int s = 0; s < Supplies.Length; s++)
+            {
+                var item = Supplies[s];
+                long spare = Math.Min(hold.Get(item) - Reserve(fleet, item, home), route.Batch - outpost.Get(item));
+                if (spare > 0)
+                    CargoMover.Move(_stockpiles, _stolen, fleet, route.Outpost, item, (int)spare);
+            }
             for (int slot = 0; slot < ItemIds.Count; slot++)
             {
                 var item = ItemIds.FromSlot(slot);
                 if (!IsSupply(item))
-                    Fill(fleet, route.Outpost, item, route.Batch);
+                    Fill(fleet, route.Outpost, item, route.Batch, 0);
             }
             _movement.TryMoveTo(fleet, route.Hub, tick);
         }
 
-        // Tops the hold up to target from the site's stock, as far as the site has it.
-        private void Fill(EntityId fleet, EntityId site, ItemId item, int target)
+        // Tops the hold up to target from what the site holds above its reserve.
+        private void Fill(EntityId fleet, EntityId site, ItemId item, int target, int siteReserve)
         {
-            int quantity = Math.Min(target - _stockpiles.Get(fleet).Get(item), _stockpiles.Get(site).Get(item));
+            int quantity = Math.Min(target - _stockpiles.Get(fleet).Get(item), _stockpiles.Get(site).Get(item) - siteReserve);
             if (quantity > 0)
                 CargoMover.Move(_stockpiles, _stolen, site, fleet, item, quantity);
         }
@@ -198,7 +203,23 @@ namespace Unruled.Core.Military
             return total;
         }
 
-        private static bool IsSupply(ItemId item) => item == ItemId.ItemFuel || item == ItemId.ItemCoolant;
+        private static readonly ItemId[] Supplies = { ItemId.ItemFuel, ItemId.ItemCoolant, ItemId.ItemOxygen, ItemId.ItemRations };
+
+        private static bool IsSupply(ItemId item) =>
+            item == ItemId.ItemFuel || item == ItemId.ItemCoolant || item == ItemId.ItemOxygen || item == ItemId.ItemRations;
+
+        // What the fleet keeps of a supply for itself: the trip's fuel, or its upkeep for the reserve intervals.
+        private long Reserve(EntityId fleet, ItemId item, long tripFuel)
+        {
+            if (item == ItemId.ItemFuel)
+                return tripFuel;
+            ref var unit = ref _units.Get(fleet);
+            var upkeep = _fleetBalance.Tier(unit.TechTier).UpkeepPerShipHour;
+            for (int k = 0; k < upkeep.Length; k++)
+                if (upkeep[k].Item == item)
+                    return (long)FleetUpkeepSystem.Due(unit.TotalShips, upkeep[k].Milli, 0) * _balance.UpkeepReserveIntervals;
+            return 0;
+        }
 
         private bool IsOwnSite(int playerId, EntityId site) =>
             _sites.Has(site) && _sites.Get(site).OwnerPlayerId == playerId && _stockpiles.Has(site);

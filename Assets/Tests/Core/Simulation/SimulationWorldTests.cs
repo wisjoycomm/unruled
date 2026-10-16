@@ -136,7 +136,7 @@ namespace Unruled.Tests.Core.Simulation
             for (int i = 0; i < sim.Refineries.Count; i++)
             {
                 ref var r = ref sim.Refineries.At(i);
-                Mix((long)r.State); Mix(r.AccruedUpkeep);
+                Mix((long)r.State); Mix(r.AccruedUpkeepCents);
             }
             return h;
         }

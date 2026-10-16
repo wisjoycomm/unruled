@@ -153,7 +153,10 @@ namespace Unruled.Core.Simulation
                     });
             }
             for (int i = 0; i < rules.StartingRefineryCount; i++)
-                sim.Refineries.Add(sim.World.Create(), new Refinery { Site = coreBase, Output = rules.StartingRefinery(i) });
+                sim.Refineries.Add(sim.World.Create(), new Refinery
+                {
+                    Site = coreBase, Output = rules.StartingRefinery(i), StockCap = sim.Balance.Refinery.DefaultStockCap
+                });
             ref var stock = ref sim.Stockpiles.Get(coreBase);
             for (int i = 0; i < rules.CoreBaseStockCount; i++)
                 stock.Add(rules.CoreBaseStock(i).Item, rules.CoreBaseStock(i).Quantity);

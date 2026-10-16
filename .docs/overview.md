@@ -29,8 +29,11 @@ which adds every fleet component and an empty cargo hold. Orders enter through `
 the signal latency and queues them; when due, `SimClock` sends them through `CommandRouter` to the owning system.
 `UtilityAiEngine` (`Ai`) is not on the clock: the host calls `Ai.Think(tick)` (every 10 ticks, Server 2), and it
 issues orders only through `CommandIssuer`. Per fleet it vents, retreats, resupplies, loads up at the core base
-(fill-to transfers), then stealth-raids or besieges a site it outguns with round-trip fuel and claims it; per player it
-scans, stress-tests and opens its jump gate. `NoaaForecast` (`Forecast`) is a read-only query for the views.
+(fill-to transfers), then stealth-raids or besieges a site it outguns with round-trip fuel, claims it and rigs its
+deposits; convoy fleets get routes to unserved outposts. Per deposit it pauses drills in storms or at the raw stock
+cap, retracts them when outgunned and rebuilds bare ones; per player it joins the audit, builds convoys and refineries,
+scans, stress-tests and opens its jump gate, keeping back the next stress test's cost. An order still in signal
+latency is not sent again (`CommandIssuer.IsInFlight`). `NoaaForecast` (`Forecast`) is a read-only query for the views.
 `NewGameSetup.Create(sim, playerId)` lays out a new game from `NewGameBalance`: a home system per participant,
 stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a starting fleet and AI rivals.
 
@@ -45,8 +48,8 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
 6. `WhoQuarantineSystem`: export lock when water or oxygen runs out.
 7. `FleetUpkeepSystem`: hourly per-ship upkeep from the cargo hold; `Mothball` / `Activate` and warm-up.
 8. `FleetMovementSystem`: routed travel with fuel and STA tolls paid at each departure; `Move`, `Hold`, `Reverse`.
-9. `ConvoyRouteSystem`: standing supply runs between a hub and an outpost (fuel and coolant out, goods home);
-   `SetConvoyRoute`.
+9. `ConvoyRouteSystem`: standing supply runs between a hub and an outpost (fuel, coolant, oxygen and rations out,
+   goods home; the fleet keeps its own trip fuel and upkeep, the hub keeps a supply reserve); `SetConvoyRoute`.
 10. `SalvoCombatEngine`: a salvo every 5 ticks between hostile fleets at one site or lane; loot and piracy
     reports; `SetRof`, `SetFocus`, `VentCoolant`.
 11. `CapitalRelocationSystem`: teardown → capital convoy → bootstrap; `RelocateBase`.
@@ -57,7 +60,8 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
 16. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
 17. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
 
-`MiningSystem` also handles `RetractDrills` and `BuildRig`, `RefinerySystem` handles `BuildRefinery`, and
+`MiningSystem` also handles `RetractDrills`, `PauseDrills` and `BuildRig`, `RefinerySystem` handles `BuildRefinery`
+and `SetRefineryCap`, and
 `PlanetLifecycleSystem` handles `Terraform`. `SiteControlSystem` (`ClaimSite`), `JumpGateSystem` (`OpenJumpGate`) and
 `CargoTransferSystem` (`TransferCargo`) are not on the clock: they only handle commands.
 
@@ -80,7 +84,8 @@ methods, in this order (rule 4).
   - `StormFront`, `SiteWeather`, `LaneWeather`, `NoaaWeatherEngine` + `NoaaBalance`.
 - **Economy/**:
   - `ItemId`, `Stockpile`, `RecipeDatabase`, `MiningSystem` + `MineralDeposit` (drill retract: rigs freed 180
-    ticks after `RetractDrills`), `RefinerySystem` + `Refinery`.
+    ticks after `RetractDrills` and their build cost returned to the site; paused drills neither mine nor burn),
+    `RefinerySystem` + `Refinery` (idles in `IdleFull` while its site holds its output stock cap).
   - `Wallet` (credits as `long` cents on player HQs and the three pools: WTO fees, STA tolls, WTO escrow) and
     `Ledger` (`Transfer` never overdraws or creates money; `Grant` only for world setup).
   - `WtoMarketEngine` + `WtoOrder` / `ItemMarket` (VWAP ring) + `WtoBalance`; `IMarketRates` (bracket fees and
