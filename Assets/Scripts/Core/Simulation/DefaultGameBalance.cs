@@ -1,0 +1,56 @@
+using Unruled.Core.Economy;
+
+namespace Unruled.Core.Simulation
+{
+    /// <summary>
+    /// Balance values transcribed from .docs/unruled_master_data_sheets.md. This is the only place they are written;
+    /// DataSheetConsistencyTests fails if the sheet and this file drift apart.
+    /// </summary>
+    public static class DefaultGameBalance
+    {
+        public static GameBalanceConfig Create() => new GameBalanceConfig(CreateRecipeDatabase());
+
+        public static RecipeDatabase CreateRecipeDatabase()
+        {
+            var items = new[]
+            {
+                new ItemDefinition(ItemId.RawWater, 10, 400, 900),
+                new ItemDefinition(ItemId.RawNitrogen, 12, 500, 1000),
+                new ItemDefinition(ItemId.RawMethane, 15, 200, 550),
+                new ItemDefinition(ItemId.RawBiomass, 18, 700, 1000),
+                new ItemDefinition(ItemId.RawIron, 14, 300, 850),
+                new ItemDefinition(ItemId.RawCopper, 20, 300, 800),
+                new ItemDefinition(ItemId.RawSilicon, 22, 200, 900),
+                new ItemDefinition(ItemId.RawTitanium, 45, 150, 450),
+                new ItemDefinition(ItemId.RawTungsten, 65, 100, 350),
+                new ItemDefinition(ItemId.RawUranium, 150, 0, 200),
+                new ItemDefinition(ItemId.ItemOxygen, 30),
+                new ItemDefinition(ItemId.ItemRations, 55),
+                new ItemDefinition(ItemId.ItemCoolant, 35),
+                new ItemDefinition(ItemId.ItemFuel, 38),
+                new ItemDefinition(ItemId.ItemSteel, 50),
+                new ItemDefinition(ItemId.ItemAlloy, 125),
+                new ItemDefinition(ItemId.ItemMicrochip, 60),
+                new ItemDefinition(ItemId.ItemBattery, 80),
+                new ItemDefinition(ItemId.ItemAmmo, 95),
+                new ItemDefinition(ItemId.ItemNuclearCore, 420)
+            };
+
+            var recipes = new[]
+            {
+                new Recipe(ItemId.ItemOxygen, ItemId.RawWater, 1, ItemId.RawNitrogen, 1),
+                new Recipe(ItemId.ItemRations, ItemId.RawBiomass, 2, ItemId.RawWater, 1),
+                new Recipe(ItemId.ItemCoolant, ItemId.RawNitrogen, 1, ItemId.RawWater, 1),
+                new Recipe(ItemId.ItemFuel, ItemId.RawMethane, 1, ItemId.RawWater, 1),
+                new Recipe(ItemId.ItemSteel, ItemId.RawIron, 2, ItemId.RawMethane, 1),
+                new Recipe(ItemId.ItemAlloy, ItemId.RawTitanium, 2, ItemId.RawIron, 1),
+                new Recipe(ItemId.ItemMicrochip, ItemId.RawSilicon, 1, ItemId.RawCopper, 1),
+                new Recipe(ItemId.ItemBattery, ItemId.RawCopper, 2, ItemId.RawSilicon, 1),
+                new Recipe(ItemId.ItemAmmo, ItemId.RawTungsten, 1, ItemId.RawNitrogen, 1),
+                new Recipe(ItemId.ItemNuclearCore, ItemId.RawUranium, 2, ItemId.RawTungsten, 1)
+            };
+
+            return new RecipeDatabase(items, recipes);
+        }
+    }
+}
