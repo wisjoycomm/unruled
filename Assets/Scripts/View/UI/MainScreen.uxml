@@ -1,0 +1,310 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:theme="Unruled.View.UI.Theme">
+    <Style src="project://database/Assets/Scripts/View/UI/MainScreen.uss" />
+    <ui:VisualElement name="main" class="main" picking-mode="Ignore">
+        <ui:VisualElement name="top-bar" class="top-bar">
+            <ui:Label class="top-bar__brand" text="UNRULED" />
+            <ui:VisualElement class="top-bar__stat">
+                <ui:Label class="top-bar__label" text="SIM CLOCK" />
+                <ui:Label name="clock" class="top-bar__value" text="DAY 3 · 14:22:07" />
+            </ui:VisualElement>
+            <ui:VisualElement class="top-bar__stat">
+                <ui:Label class="top-bar__label" text="CREDITS" />
+                <ui:Label name="credits" class="top-bar__value" text="48,210" />
+            </ui:VisualElement>
+            <ui:VisualElement class="top-bar__stat">
+                <ui:Label class="top-bar__label" text="LATENCY TO SELECTION" />
+                <ui:Label name="latency" class="top-bar__value top-bar__value--you" text="85t · 2 hops" />
+            </ui:VisualElement>
+            <ui:VisualElement class="top-bar__spacer" />
+            <ui:VisualElement class="top-bar__group">
+                <ui:Label class="top-bar__label" text="NOAA" />
+                <ui:Label name="noaa-r" class="u-noaa u-noaa--1" text="R1" />
+                <ui:Label name="noaa-s" class="u-noaa u-noaa--0" text="S0" />
+                <ui:Label name="noaa-g" class="u-noaa u-noaa--3" text="G3" />
+            </ui:VisualElement>
+            <ui:VisualElement class="top-bar__group">
+                <ui:Label name="who-tag" class="u-tag u-tag--who" text="WHO · 1 LOCK" />
+                <ui:Label name="sta-tag" class="u-tag u-tag--sta" text="STA · TOLL 4%" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement class="main__body" picking-mode="Ignore">
+            <ui:VisualElement name="dock" class="dock">
+                <ui:VisualElement class="dock__head">
+                    <ui:Label class="section-title" text="STOCKPILE" />
+                    <ui:Label name="dock-site" class="section-meta" text="KEPLER-3 · CORE" />
+                </ui:VisualElement>
+                <ui:VisualElement name="stock-list" class="dock__list">
+                    <ui:VisualElement name="stock-1" class="stock-row">
+                        <theme:ItemIcon item="RawWater" />
+                        <ui:Label class="stock-row__code" text="WATER" />
+                        <ui:Label name="qty" class="stock-row__qty" text="820" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+24" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-2" class="stock-row">
+                        <theme:ItemIcon item="RawNitrogen" />
+                        <ui:Label class="stock-row__code" text="NITROGEN" />
+                        <ui:Label name="qty" class="stock-row__qty" text="410" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+10" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-3" class="stock-row">
+                        <theme:ItemIcon item="RawMethane" />
+                        <ui:Label class="stock-row__code" text="METHANE" />
+                        <ui:Label name="qty" class="stock-row__qty" text="655" />
+                        <ui:Label name="trend" class="stock-row__trend u-down" text="−6" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-4" class="stock-row">
+                        <theme:ItemIcon item="RawBiomass" />
+                        <ui:Label class="stock-row__code" text="BIOMASS" />
+                        <ui:Label name="qty" class="stock-row__qty" text="290" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+8" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-5" class="stock-row">
+                        <theme:ItemIcon item="RawIron" />
+                        <ui:Label class="stock-row__code" text="IRON" />
+                        <ui:Label name="qty" class="stock-row__qty" text="1,530" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+40" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-6" class="stock-row">
+                        <theme:ItemIcon item="RawCopper" />
+                        <ui:Label class="stock-row__code" text="COPPER" />
+                        <ui:Label name="qty" class="stock-row__qty" text="740" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+12" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-7" class="stock-row">
+                        <theme:ItemIcon item="RawSilicon" />
+                        <ui:Label class="stock-row__code" text="SILICON" />
+                        <ui:Label name="qty" class="stock-row__qty" text="380" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+6" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-8" class="stock-row">
+                        <theme:ItemIcon item="RawTitanium" />
+                        <ui:Label class="stock-row__code" text="TITANIUM" />
+                        <ui:Label name="qty" class="stock-row__qty" text="212" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+4" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-9" class="stock-row">
+                        <theme:ItemIcon item="RawTungsten" />
+                        <ui:Label class="stock-row__code" text="TUNGSTEN" />
+                        <ui:Label name="qty" class="stock-row__qty" text="96" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+2" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-10" class="stock-row">
+                        <theme:ItemIcon item="RawUranium" />
+                        <ui:Label class="stock-row__code" text="URANIUM" />
+                        <ui:Label name="qty" class="stock-row__qty" text="14" />
+                        <ui:Label name="trend" class="stock-row__trend" text="·" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-11" class="stock-row">
+                        <theme:ItemIcon item="ItemOxygen" />
+                        <ui:Label class="stock-row__code" text="OXYGEN" />
+                        <ui:Label name="qty" class="stock-row__qty" text="960" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+30" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-12" class="stock-row">
+                        <theme:ItemIcon item="ItemRations" />
+                        <ui:Label class="stock-row__code" text="RATIONS" />
+                        <ui:Label name="qty" class="stock-row__qty" text="520" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+14" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-13" class="stock-row">
+                        <theme:ItemIcon item="ItemCoolant" />
+                        <ui:Label class="stock-row__code" text="COOLANT" />
+                        <ui:Label name="qty" class="stock-row__qty" text="88" />
+                        <ui:Label name="trend" class="stock-row__trend u-down" text="−12" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-14" class="stock-row">
+                        <theme:ItemIcon item="ItemFuel" />
+                        <ui:Label class="stock-row__code" text="FUEL" />
+                        <ui:Label name="qty" class="stock-row__qty" text="1,210" />
+                        <ui:Label name="trend" class="stock-row__trend u-down" text="−18" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-15" class="stock-row">
+                        <theme:ItemIcon item="ItemSteel" />
+                        <ui:Label class="stock-row__code" text="STEEL" />
+                        <ui:Label name="qty" class="stock-row__qty" text="640" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+16" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-16" class="stock-row">
+                        <theme:ItemIcon item="ItemAlloy" />
+                        <ui:Label class="stock-row__code" text="ALLOY" />
+                        <ui:Label name="qty" class="stock-row__qty" text="175" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+4" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-17" class="stock-row">
+                        <theme:ItemIcon item="ItemMicrochip" />
+                        <ui:Label class="stock-row__code" text="MICROCHIP" />
+                        <ui:Label name="qty" class="stock-row__qty" text="62" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+2" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-18" class="stock-row">
+                        <theme:ItemIcon item="ItemBattery" />
+                        <ui:Label class="stock-row__code" text="BATTERY" />
+                        <ui:Label name="qty" class="stock-row__qty" text="1,240" />
+                        <ui:Label name="trend" class="stock-row__trend u-up" text="+36" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-19" class="stock-row">
+                        <theme:ItemIcon item="ItemAmmo" />
+                        <ui:Label class="stock-row__code" text="AMMO" />
+                        <ui:Label name="qty" class="stock-row__qty" text="430" />
+                        <ui:Label name="trend" class="stock-row__trend u-down" text="−20" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="stock-20" class="stock-row">
+                        <theme:ItemIcon item="ItemNuclearCore" />
+                        <ui:Label class="stock-row__code" text="NUCLEAR CORE" />
+                        <ui:Label name="qty" class="stock-row__qty" text="2" />
+                        <ui:Label name="trend" class="stock-row__trend" text="·" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="board" class="board" picking-mode="Ignore">
+                <ui:VisualElement name="board-view" class="board__view" picking-mode="Ignore">
+                    <ui:VisualElement class="board__tabs">
+                        <ui:Button name="tab-system" class="board__tab board__tab--active" text="SYSTEM KEPLER" />
+                        <ui:Button name="tab-galaxy" class="board__tab" text="GALAXY" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="inflight-strip" class="inflight-strip">
+                    <ui:Label class="u-caption" text="IN FLIGHT" />
+                    <ui:VisualElement name="inflight-list" style="flex-direction: row;">
+                        <theme:DashedFrame class="u-inflight">
+                            <ui:Label class="u-text" text="Move · Fleet B → Kepler-6" />
+                            <ui:Label class="u-num u-inflight__eta" text="43t" />
+                        </theme:DashedFrame>
+                        <theme:DashedFrame class="u-inflight u-inflight--running">
+                            <ui:Label class="u-text" text="ScanBelt · Rim lane" />
+                            <ui:Label class="u-num u-inflight__eta" text="running" />
+                        </theme:DashedFrame>
+                        <theme:DashedFrame class="u-inflight u-inflight--waiting">
+                            <ui:Label class="u-text" text="Activate · Fleet C" />
+                            <ui:Label class="u-num u-inflight__eta" text="warm-up 120t" />
+                        </theme:DashedFrame>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="side" class="side">
+                <ui:VisualElement name="fleet-card" class="fleet-card">
+                    <ui:VisualElement class="fleet-card__head">
+                        <ui:Label name="fleet-name" class="fleet-card__name" text="FLEET B" />
+                        <ui:Label name="fleet-state" class="section-meta" text="TIER 3 · IN TRANSIT" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="fleet-card__parts">
+                        <ui:VisualElement class="part">
+                            <ui:Label class="part__label" text="LINE" />
+                            <ui:Label name="part-line" class="part__value" text="12" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="part">
+                            <ui:Label class="part__label" text="EW" />
+                            <ui:Label name="part-ew" class="part__value" text="5" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="part">
+                            <ui:Label class="part__label" text="SUPPLY" />
+                            <ui:Label name="part-supply" class="part__value" text="2" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="part">
+                            <ui:Label class="part__label" text="CARGO" />
+                            <ui:Label name="part-cargo" class="part__value" text="0" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="thermal" class="gauge">
+                        <ui:VisualElement class="gauge__head">
+                            <ui:Label class="gauge__label" text="GUN TEMPERATURE" />
+                            <ui:Label name="thermal-value" class="gauge__value" text="68 °C" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="gauge__track">
+                            <ui:VisualElement name="thermal-fill" class="gauge__fill" style="width: 53%;" />
+                            <ui:VisualElement name="thermal-release" class="gauge__mark" style="left: 61%;" />
+                            <ui:VisualElement name="thermal-lock" class="gauge__mark gauge__mark--lock" style="left: 78%;" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="gauge__scale">
+                            <ui:Label name="thermal-min" text="20" />
+                            <ui:Label name="thermal-limits" text="release 75 · lock 90" />
+                            <ui:Label name="thermal-max" text="110" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="stat-grid">
+                        <ui:VisualElement class="stat">
+                            <ui:Label class="stat__label" text="Ammo" />
+                            <ui:Label name="stat-ammo" class="stat__value" text="64" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="stat">
+                            <ui:Label class="stat__label" text="Battery" />
+                            <ui:Label name="stat-battery" class="stat__value" text="40" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="stat">
+                            <ui:Label class="stat__label" text="Coolant" />
+                            <ui:Label name="stat-coolant" class="stat__value" text="22" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="stat">
+                            <ui:Label class="stat__label" text="Fuel" />
+                            <ui:Label name="stat-fuel" class="stat__value" text="310" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="stat">
+                            <ui:Label class="stat__label" text="Ψ firepower" />
+                            <ui:Label name="stat-psi" class="stat__value" text="120" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="stat">
+                            <ui:Label class="stat__label" text="Ω point defence" />
+                            <ui:Label name="stat-omega" class="stat__value" text="100" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement>
+                        <ui:Label class="gauge__label" text="RATE OF FIRE" />
+                        <ui:VisualElement name="rof" class="seg">
+                            <ui:Button name="rof-50" class="seg__item" text="50%" />
+                            <ui:Button name="rof-100" class="seg__item seg__item--on" text="100%" />
+                            <ui:Button name="rof-150" class="seg__item" text="150%" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="orders">
+                        <ui:Button name="order-move" class="u-btn" text="Move" />
+                        <ui:Button name="order-hold" class="u-btn u-btn--secondary" text="Hold" />
+                        <ui:Button name="order-reverse" class="u-btn u-btn--secondary" text="Reverse" />
+                        <ui:Button name="order-vent" class="u-btn u-btn--danger" text="Vent coolant" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="market" class="market">
+                    <ui:VisualElement class="market__head">
+                        <ui:Label class="section-title section-title--wto" text="WTO MARKET" />
+                        <ui:Label name="market-window" class="section-meta" text="VWAP · 1h" style="font-size: 11px;" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="market-row market-row--head">
+                        <ui:Label class="market-row__item" text="ITEM" />
+                        <ui:Label text="BID" />
+                        <ui:Label text="ASK" />
+                        <ui:Label class="market-row__delta" text="Δ" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="market-0" class="market-row">
+                        <ui:Label name="item" class="market-row__item" text="FUEL" />
+                        <ui:Label name="bid" text="11.80" />
+                        <ui:Label name="ask" text="12.40" />
+                        <ui:Label name="delta" class="market-row__delta u-up" text="+3.1%" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="market-1" class="market-row">
+                        <ui:Label name="item" class="market-row__item" text="BATTERY" />
+                        <ui:Label name="bid" text="24.10" />
+                        <ui:Label name="ask" text="25.00" />
+                        <ui:Label name="delta" class="market-row__delta u-up" text="+0.8%" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="market-2" class="market-row">
+                        <ui:Label name="item" class="market-row__item" text="COOLANT" />
+                        <ui:Label name="bid" text="17.35" />
+                        <ui:Label name="ask" text="18.90" />
+                        <ui:Label name="delta" class="market-row__delta u-up" text="+9.4%" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="market-3" class="market-row">
+                        <ui:Label name="item" class="market-row__item" text="AMMO" />
+                        <ui:Label name="bid" text="9.60" />
+                        <ui:Label name="ask" text="10.05" />
+                        <ui:Label name="delta" class="market-row__delta u-down" text="−2.2%" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="market-4" class="market-row">
+                        <ui:Label name="item" class="market-row__item" text="STEEL" />
+                        <ui:Label name="bid" text="6.20" />
+                        <ui:Label name="ask" text="6.45" />
+                        <ui:Label name="delta" class="market-row__delta u-down" text="−0.4%" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

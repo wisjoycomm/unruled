@@ -1,0 +1,485 @@
+/*
+ * Main screen layout (mockup 1440x900): 56 px top telemetry, 260 px stockpile dock, the board in the middle with a
+ * 52 px in-flight strip, 360 px fleet card + WTO market on the right. Colours and type come from Theme/Unruled.uss.
+ * The board area has no background: the board renderer draws behind the UI.
+ */
+
+.main {
+    flex-grow: 1;
+}
+
+/* The fonts' line boxes are tall; dense readouts drop label padding and pin their heights to the mockup's spacing. */
+.top-bar__label, .top-bar__value, .part__label, .part__value, .stat__label, .stat__value {
+    padding: 0;
+    margin: 0;
+}
+
+.main__body {
+    flex-grow: 1;
+    flex-direction: row;
+    min-height: 0;
+}
+
+/* ---------- Top telemetry ---------- */
+
+.top-bar {
+    height: 56px;
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 20px;
+    background-color: var(--u-panel);
+    border-bottom-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.top-bar__brand {
+    -unity-font-definition: url("Theme/Fonts/ChakraPetch-Bold.asset");
+    font-size: 22px;
+    letter-spacing: 1.3px;
+    margin-right: 28px;
+}
+
+.top-bar__stat {
+    margin-right: 28px;
+}
+
+.top-bar__label {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 11px;
+    height: 14px;
+    color: var(--u-ink-dim);
+}
+
+.top-bar__value {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-SemiBold.asset");
+    font-size: 15px;
+    height: 19px;
+}
+
+.top-bar__value--you {
+    color: var(--u-you);
+}
+
+.top-bar__spacer {
+    flex-grow: 1;
+}
+
+.top-bar__group {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 20px;
+}
+
+.top-bar__group > .u-noaa, .top-bar__group > .u-tag {
+    margin-left: 6px;
+}
+
+.u-noaa--0 {
+    border-width: 1px;
+    border-color: var(--u-rule-strong);
+    color: var(--u-ink-dim);
+}
+
+.top-bar__group > .u-tag {
+    padding: 4px 8px;
+}
+
+/* ---------- Stockpile dock ---------- */
+
+.dock {
+    width: 260px;
+    flex-shrink: 0;
+    background-color: var(--u-panel);
+    border-right-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.dock__head {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 14px 16px 10px 16px;
+    border-bottom-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.section-title {
+    -unity-font-definition: url("Theme/Fonts/ChakraPetch-SemiBold.asset");
+    font-size: 15px;
+    letter-spacing: 0.9px;
+}
+
+.section-title--wto {
+    color: var(--u-wto);
+}
+
+.section-meta {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 12px;
+    color: var(--u-ink-dim);
+}
+
+.dock__list {
+    padding: 4px 0;
+}
+
+.stock-row {
+    flex-direction: row;
+    align-items: center;
+    height: 30px;
+    padding: 0 16px;
+}
+
+.stock-row > .u-icon {
+    margin-right: 10px;
+}
+
+.stock-row__code {
+    flex-grow: 1;
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 12px;
+    color: var(--u-ink-soft);
+}
+
+.stock-row__qty {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Medium.asset");
+    font-size: 13px;
+}
+
+.stock-row__trend {
+    width: 44px;
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 11px;
+    -unity-text-align: middle-right;
+    color: var(--u-ink-dim);
+}
+
+/* ---------- Board and in-flight strip ---------- */
+
+.board {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.board__view {
+    flex-grow: 1;
+}
+
+.board__tabs {
+    position: absolute;
+    left: 16px;
+    top: 16px;
+    flex-direction: row;
+}
+
+.unity-button.board__tab {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 12px;
+    min-height: 32px;
+    padding: 0 12px;
+    margin: 0 6px 0 0;
+    border-radius: 0;
+    border-width: 1px;
+    border-color: var(--u-rule);
+    background-image: none;
+    background-color: var(--u-void);
+    color: var(--u-ink-dim);
+}
+
+.unity-button.board__tab--active {
+    background-color: var(--u-raised);
+    border-color: var(--u-rule-strong);
+    color: var(--u-ink);
+}
+
+.inflight-strip {
+    height: 52px;
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 14px;
+    background-color: var(--u-panel);
+    border-top-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.inflight-strip > .u-caption {
+    font-size: 11px;
+    margin-right: 14px;
+}
+
+.inflight-strip .u-inflight {
+    padding: 6px 10px;
+    margin-right: 10px;
+}
+
+.inflight-strip .u-inflight > .u-text {
+    font-size: 13px;
+    margin-right: 10px;
+}
+
+.u-inflight--running {
+    --u-dash-color: var(--u-wto);
+}
+
+.u-inflight--running > .u-inflight__eta {
+    color: var(--u-wto);
+}
+
+.u-inflight--waiting {
+    --u-dash-color: var(--u-rule-strong);
+}
+
+.u-inflight--waiting > .u-text, .u-inflight--waiting > .u-inflight__eta {
+    color: var(--u-ink-soft);
+}
+
+/* ---------- Right column: fleet card and market ---------- */
+
+.side {
+    width: 360px;
+    flex-shrink: 0;
+    background-color: var(--u-panel);
+    border-left-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.fleet-card {
+    padding: 16px;
+    border-bottom-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.fleet-card > * {
+    margin-bottom: 12px;
+}
+
+.fleet-card > .orders {
+    margin-bottom: -8px;
+}
+
+.fleet-card__head {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.fleet-card__name {
+    -unity-font-definition: url("Theme/Fonts/ChakraPetch-Bold.asset");
+    font-size: 20px;
+    letter-spacing: 0.8px;
+}
+
+.fleet-card__parts {
+    flex-direction: row;
+    margin-left: -6px;
+}
+
+.part {
+    flex-grow: 1;
+    flex-basis: 0;
+    padding: 8px;
+    margin-left: 6px;
+    background-color: var(--u-void);
+}
+
+.part__label {
+    font-size: 11px;
+    height: 15px;
+    color: var(--u-ink-dim);
+}
+
+.part__value {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-SemiBold.asset");
+    font-size: 18px;
+    height: 24px;
+}
+
+.gauge__head {
+    flex-direction: row;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.gauge__label {
+    font-size: 12px;
+    color: var(--u-ink-dim);
+}
+
+.gauge__value {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 12px;
+    color: var(--u-thermal-hot);
+}
+
+.gauge__track {
+    height: 10px;
+    background-color: var(--u-void);
+    border-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.gauge__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background-color: var(--u-thermal-hot);
+}
+
+.gauge__fill--nominal {
+    background-color: var(--u-thermal-nominal);
+}
+
+.gauge__fill--locked {
+    background-color: var(--u-thermal-locked);
+}
+
+.gauge__mark {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    background-color: var(--u-ink);
+}
+
+.gauge__mark--lock {
+    background-color: var(--u-danger);
+}
+
+.gauge__scale {
+    flex-direction: row;
+    justify-content: space-between;
+    margin-top: 6px;
+}
+
+.gauge__scale > Label {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 11px;
+    color: var(--u-ink-dim);
+}
+
+.stat-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+
+.stat {
+    width: 46%;
+    height: 20px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.stat__label {
+    font-size: 13px;
+    color: var(--u-ink-dim);
+}
+
+.stat__value {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 13px;
+}
+
+.seg {
+    flex-direction: row;
+    margin-top: 6px;
+    border-width: 1px;
+    border-left-width: 0;
+    border-color: var(--u-rule-strong);
+}
+
+.unity-button.seg__item {
+    flex-grow: 1;
+    flex-basis: 0;
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 13px;
+    min-height: 36px;
+    margin: 0;
+    border-radius: 0;
+    border-width: 0;
+    border-left-width: 1px;
+    border-color: var(--u-rule-strong);
+    background-image: none;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--u-ink-soft);
+}
+
+.unity-button.seg__item:hover {
+    background-color: var(--u-raised);
+}
+
+.unity-button.seg__item--on {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-SemiBold.asset");
+    background-color: var(--u-you);
+    color: var(--u-void);
+}
+
+.unity-button.seg__item--on:hover {
+    background-color: var(--u-you-hover);
+}
+
+.orders {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+
+.orders > .u-btn {
+    width: 49%;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.market {
+    flex-grow: 1;
+    padding: 16px;
+}
+
+.market__head {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 10px;
+}
+
+.market-row {
+    flex-direction: row;
+    height: 20px;
+    margin-bottom: 10px;
+}
+
+.market-row--head {
+    height: 21px;
+    padding-bottom: 6px;
+    border-bottom-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.market-row > Label {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 13px;
+    flex-basis: 0;
+    flex-grow: 1;
+    -unity-text-align: middle-right;
+    padding: 0;
+}
+
+.market-row--head > Label {
+    font-size: 11px;
+    color: var(--u-ink-dim);
+}
+
+.market-row > .market-row__item {
+    flex-grow: 1.6;
+    -unity-text-align: middle-left;
+}
+
+.market-row > .market-row__delta {
+    flex-grow: 0.9;
+}
