@@ -12,8 +12,24 @@ namespace Unruled.Core.Simulation
     {
         public static GameBalanceConfig Create() =>
             new GameBalanceConfig(
-                CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateRefineryBalance(),
+                CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateRefineryBalance(), CreateMiningBalance(),
                 CreateSystemFactionBalance());
+
+        /// <summary>
+        /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,
+        /// barren husk -0.20 ESI, core fracture 4x (speed 100% per GDD §2.1 B).
+        /// PROVISIONAL: 10-tick cycle, 10 ore and 1 fuel + 1 coolant per rig per cycle.
+        /// </summary>
+        public static MiningBalance CreateMiningBalance() => new MiningBalance(
+            cycleTicks: 10,
+            yieldPerRigPerCycle: 10,
+            fuelPerRigPerCycle: 1,
+            coolantPerRigPerCycle: 1,
+            surface: new MiningDepth(speedPercent: 100, fuelCoolantMultiplier: 1),
+            deepCrust: new MiningDepth(speedPercent: 50, fuelCoolantMultiplier: 2),
+            coreFracture: new MiningDepth(speedPercent: 100, fuelCoolantMultiplier: 4),
+            deepCoreEsiDropMilli: 50,
+            barrenHuskEsiDropMilli: 200);
 
         /// <summary>
         /// GDD §2.2 A: 10-tick cycle, idle at 20% upkeep, brownout from G2.

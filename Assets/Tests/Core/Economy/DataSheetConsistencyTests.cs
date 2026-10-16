@@ -56,6 +56,48 @@ namespace Unruled.Tests.Core.Economy
             }
         }
 
+        [Test]
+        public void LifecycleTab_MatchesMiningBalance()
+        {
+            var rows = ReadTable("## 02_Planetary_Lifecycle");
+            var mining = DefaultGameBalance.CreateMiningBalance();
+
+            var pristine = FindRow(rows, "PRISTINE_WORLD");
+            Assert.AreEqual(mining.Surface.SpeedPercent, LeadingNumber(pristine[3]), "surface speed");
+            Assert.AreEqual(mining.Surface.FuelCoolantMultiplier, LeadingNumber(pristine[4]), "surface cost");
+
+            var deep = FindRow(rows, "DEEP_CORE_STRIPPING");
+            Assert.AreEqual(mining.DeepCrust.SpeedPercent, LeadingNumber(deep[3]), "deep speed");
+            Assert.AreEqual(mining.DeepCrust.FuelCoolantMultiplier, LeadingNumber(deep[4]), "deep cost");
+            Assert.AreEqual(mining.DeepCoreEsiDropMilli, -ToMilli(deep[5].Split(' ')[0]), "deep ESI drop");
+
+            var husk = FindRow(rows, "DEPLETED_BARREN_HUSK");
+            Assert.AreEqual(mining.BarrenHuskEsiDropMilli, -ToMilli(husk[5].Split(' ')[0]), "husk ESI drop");
+
+            var irradiated = FindRow(rows, "IRRADIATED_DEAD_WORLD");
+            Assert.AreEqual(mining.CoreFracture.FuelCoolantMultiplier, LeadingNumber(irradiated[4]), "core cost");
+        }
+
+        private static string[] FindRow(List<string[]> rows, string stateCode)
+        {
+            foreach (var row in rows)
+                if (row[1] == stateCode)
+                    return row;
+            Assert.Fail($"State {stateCode} not found in lifecycle tab");
+            return null;
+        }
+
+        // "100% Speed" -> 100, "2.0x FUEL / 2.0x COOLANT" -> 2
+        private static int LeadingNumber(string cell)
+        {
+            int end = 0;
+            while (end < cell.Length && (char.IsDigit(cell[end]) || cell[end] == '.'))
+                end++;
+            decimal value = decimal.Parse(cell.Substring(0, end), CultureInfo.InvariantCulture);
+            Assert.AreEqual(decimal.Truncate(value), value, $"'{cell}' is not a whole number");
+            return (int)value;
+        }
+
         private static List<string[]> ReadTable(string heading)
         {
             Assert.IsTrue(File.Exists(SheetPath), $"Data sheet not found at {SheetPath}");

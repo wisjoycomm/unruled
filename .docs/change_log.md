@@ -18,3 +18,4 @@
 - 2026-10-16 - Claude - Add GameBalanceConfig, DefaultGameBalance and RecipeDatabase (20 items, 10 recipes, base prices) with a data-sheet consistency test.
 - 2026-10-16 - Claude - Add SplitMix64, FixedMath integer trig, SiteInfo component and deterministic SystemSeedGenerator with provisional layout defaults.
 - 2026-10-16 - Claude - Add RefinerySystem (idle/active/brownout), SiteWeather, WhoQuarantineSystem; amend rule 4 for shared components.
+- 2026-10-16 - Claude - Add MiningSystem and MineralDeposit (3 depths, fuel/coolant cost, planet lifecycle ESI drops) with tests.

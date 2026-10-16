@@ -10,6 +10,7 @@ Where the project is heading, why, and rule exceptions. Build order follows GDD 
 - 2026-10-16 — **Universe layout numbers are provisional** (`DefaultGameBalance.CreateUniverseGenBalance`: 8 orbits, r 300 + 180·i ± 25, R_HZ 840, W_HZ 700, ±0.05 atmo noise, ±10° jitter); only the 120 min spacing is from the GDD. Move them into the data sheet when designed.
 - 2026-10-16 — **WHO quarantine is a per-site system (`WhoQuarantineSystem`), not a refinery state.** GDD §2.2 A.4 says it locks export launches off the planet, so production keeps running; exports check `SiteQuarantine.IsExportLocked`.
 - 2026-10-16 — **Shared components (e.g. `Stockpile`) may be changed by several systems** through their own methods, in the fixed `SimClock` order (rule 4 amended). Refinery upkeep is accrued in `Refinery.AccruedUpkeep` until a credits ledger exists; base upkeep 10/cycle and 1 battery per storm cycle are provisional.
+- 2026-10-16 — **Mining numbers are partly provisional** (`DefaultGameBalance.CreateMiningBalance`): depth speeds, fuel/coolant multipliers and ESI drops come from data sheet tab 02; the 10-tick cycle, 10 ore and 1 fuel + 1 coolant per rig per cycle are proposed until the sheet defines them. Depths are mined surface → deep crust → core fracture (only when unlocked), never mixed in one cycle.
 
 ## Exceptions
 
