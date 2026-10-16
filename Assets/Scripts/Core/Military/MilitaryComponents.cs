@@ -15,19 +15,4 @@ namespace Unruled.Core.Military
     {
         public int OwnerPlayerId;
     }
-
-    /// <summary>
-    /// ECS component: where a fleet is and what the radar knows about it. PLACEHOLDER until the Sprint 3 fleet model;
-    /// exactly one of <see cref="Site"/> and <see cref="Lane"/> is set.
-    /// </summary>
-    public struct FleetPresence
-    {
-        public int OwnerPlayerId;
-        public EntityId Site;
-        public EntityId Lane;
-        public int EwShips;
-        public long RevealedUntilTick;
-        public long RwrWarningTick; // tick a hostile focused scan's RWR alarm fired; 0 = none
-        public bool IsReversing;
-    }
 }

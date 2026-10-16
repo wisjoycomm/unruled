@@ -28,3 +28,4 @@
 - 2026-10-16 - Claude - Add SignalLatencySolver (Dijkstra relay hops, relocation x2, R3 blackout), CommandIssuer, PlayerHq/RelayStation/FleetPresence.
 - 2026-10-16 - Claude - Add FocusedRadarSystem (2-battery surge, RWR at 15, reveal at 60/120 with ECM, cancel, reverse) and its commands.
 - 2026-10-16 - Claude - Update overview for Sprint 2; Sprint 2 plan finished and archived to .docs/plan/sprint-2.md.
+- 2026-10-16 - Claude - Sprint 3 step 1: split fleet components (FleetUnit/FleetMotion/FleetSensors + cargo hold), FleetBalance from tab 03, IAEA Tier-5 reveal; FleetPresence removed.

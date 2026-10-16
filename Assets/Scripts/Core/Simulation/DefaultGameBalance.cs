@@ -15,7 +15,7 @@ namespace Unruled.Core.Simulation
             new GameBalanceConfig(
                 CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateStarlaneBalance(), CreateNoaaBalance(),
                 CreateRefineryBalance(), CreateMiningBalance(),
-                CreateLifecycleBalance(), CreateLatencyBalance(), CreateRadarBalance(),
+                CreateLifecycleBalance(), CreateLatencyBalance(), CreateRadarBalance(), CreateFleetBalance(),
                 CreateSystemFactionBalance());
 
         /// <summary>
@@ -45,6 +45,40 @@ namespace Unruled.Core.Simulation
             jammedIntegrationTicks: 120,
             jamBatteries: 2,
             revealTicks: 60);
+
+        /// <summary>
+        /// Data sheet tab 03: hourly upkeep per ship, combat burn multipliers, 80% mothball discount, warm-up 60–180
+        /// ticks, IAEA reveal for Tier 5. PROVISIONAL: base speed 5 map units per tick and 1 fuel per ship per 100 units
+        /// (scaled by the lane tier's speed and fuel multiplier).
+        /// </summary>
+        public static FleetBalance CreateFleetBalance() => new FleetBalance(
+            new[]
+            {
+                new ShipTierRules(
+                    new[] { Milli(ItemId.ItemOxygen, 1000), Milli(ItemId.ItemRations, 1000) },
+                    new[] { Milli(ItemId.ItemAmmo, 1000), Milli(ItemId.ItemFuel, 1000) },
+                    mothballUpkeepDiscountPercent: 80, mothballWarmupTicks: 60, iaeaGlobalReveal: false),
+                new ShipTierRules(
+                    new[] { Milli(ItemId.ItemOxygen, 1000), Milli(ItemId.ItemRations, 1000), Milli(ItemId.ItemSteel, 500) },
+                    new[] { Milli(ItemId.ItemAmmo, 1200), Milli(ItemId.ItemFuel, 1200) },
+                    mothballUpkeepDiscountPercent: 80, mothballWarmupTicks: 90, iaeaGlobalReveal: false),
+                new ShipTierRules(
+                    new[] { Milli(ItemId.ItemOxygen, 2000), Milli(ItemId.ItemCoolant, 2000), Milli(ItemId.ItemAlloy, 1000) },
+                    new[] { Milli(ItemId.ItemAmmo, 2000), Milli(ItemId.ItemCoolant, 2000) },
+                    mothballUpkeepDiscountPercent: 80, mothballWarmupTicks: 120, iaeaGlobalReveal: false),
+                new ShipTierRules(
+                    new[] { Milli(ItemId.ItemCoolant, 3000), Milli(ItemId.ItemBattery, 2000), Milli(ItemId.ItemMicrochip, 1000) },
+                    new[] { Milli(ItemId.ItemAmmo, 2500), Milli(ItemId.ItemCoolant, 2500), Milli(ItemId.ItemBattery, 2000) },
+                    mothballUpkeepDiscountPercent: 80, mothballWarmupTicks: 150, iaeaGlobalReveal: false),
+                new ShipTierRules(
+                    new[] { Milli(ItemId.ItemCoolant, 5000), Milli(ItemId.ItemAlloy, 2000), Milli(ItemId.ItemMicrochip, 2000) },
+                    new[] { Milli(ItemId.ItemAmmo, 3500), Milli(ItemId.ItemCoolant, 4000) },
+                    mothballUpkeepDiscountPercent: 80, mothballWarmupTicks: 180, iaeaGlobalReveal: true)
+            },
+            baseSpeedMilliPerTick: 5000,
+            fuelPerShipPer100UnitsMilli: 1000);
+
+        private static ItemAmount Milli(ItemId item, int milli) => new ItemAmount(item, milli);
 
         /// <summary>
         /// GDD §2.4 A and data sheet tab 04: 15 ticks at the core base, 35 per hop, 8 per relayed hop, x2 while the

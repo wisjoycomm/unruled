@@ -24,11 +24,11 @@ namespace Unruled.Core.Military
         private readonly SignalLatencySolver _solver;
         private readonly ComponentStore<SiteInfo> _sites;
         private readonly ComponentStore<StarlaneEdge> _lanes;
-        private readonly ComponentStore<FleetPresence> _fleets;
+        private readonly ComponentStore<FleetMotion> _fleets;
 
         public CommandIssuer(
             SimClock clock, SignalLatencySolver solver, ComponentStore<SiteInfo> sites,
-            ComponentStore<StarlaneEdge> lanes, ComponentStore<FleetPresence> fleets)
+            ComponentStore<StarlaneEdge> lanes, ComponentStore<FleetMotion> fleets)
         {
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _solver = solver ?? throw new ArgumentNullException(nameof(solver));

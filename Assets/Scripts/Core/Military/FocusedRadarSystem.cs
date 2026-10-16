@@ -17,42 +17,57 @@ namespace Unruled.Core.Military
     }
 
     /// <summary>
-    /// Focused radar timeline (GDD §2.4 B, anti-strobe §4.1). Owns <see cref="RadarScan"/> and the radar fields of
-    /// <see cref="FleetPresence"/>.
+    /// Focused radar timeline (GDD §2.4 B, anti-strobe §4.1). Owns <see cref="RadarScan"/> and <see cref="FleetSensors"/>.
+    /// Fleets of a tier with the IAEA global reveal (tab 03, Tier 5) are revealed every tick.
     /// ScanBelt (target: a bypass lane) pays the startup batteries at once from the scanner's core-base stockpile.
     /// At +RWR ticks, hostile fleets on the lane with EW ships get the RWR alarm. EcmJam (target: a warned EW fleet,
     /// paid from its owner's core base) stretches every hostile scan on its lane to the jammed time. When a scan's
     /// time is up, hostile fleets on the lane that are not reversing are revealed. CancelScan ends it with no refund
-    /// and no result. Reverse (target: own fleet) flags the fleet as withdrawing. Invalid orders change nothing.
+    /// and no result. Invalid orders change nothing.
     /// </summary>
     public sealed class FocusedRadarSystem : ISimSystem, ICommandHandler
     {
         private readonly World _world;
         private readonly ComponentStore<RadarScan> _scans;
-        private readonly ComponentStore<FleetPresence> _fleets;
+        private readonly ComponentStore<FleetUnit> _units;
+        private readonly ComponentStore<FleetMotion> _motions;
+        private readonly ComponentStore<FleetSensors> _sensors;
         private readonly ComponentStore<StarlaneEdge> _lanes;
         private readonly ComponentStore<PlayerHq> _players;
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly RadarBalance _balance;
+        private readonly FleetBalance _fleetBalance;
 
         private EntityId[] _finished = new EntityId[16];
 
         public FocusedRadarSystem(
-            World world, ComponentStore<RadarScan> scans, ComponentStore<FleetPresence> fleets,
-            ComponentStore<StarlaneEdge> lanes, ComponentStore<PlayerHq> players, ComponentStore<Stockpile> stockpiles,
-            RadarBalance balance)
+            World world, ComponentStore<RadarScan> scans, ComponentStore<FleetUnit> units,
+            ComponentStore<FleetMotion> motions, ComponentStore<FleetSensors> sensors, ComponentStore<StarlaneEdge> lanes,
+            ComponentStore<PlayerHq> players, ComponentStore<Stockpile> stockpiles, RadarBalance balance,
+            FleetBalance fleetBalance)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _scans = scans ?? throw new ArgumentNullException(nameof(scans));
-            _fleets = fleets ?? throw new ArgumentNullException(nameof(fleets));
+            _units = units ?? throw new ArgumentNullException(nameof(units));
+            _motions = motions ?? throw new ArgumentNullException(nameof(motions));
+            _sensors = sensors ?? throw new ArgumentNullException(nameof(sensors));
             _lanes = lanes ?? throw new ArgumentNullException(nameof(lanes));
             _players = players ?? throw new ArgumentNullException(nameof(players));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
+            _fleetBalance = fleetBalance ?? throw new ArgumentNullException(nameof(fleetBalance));
         }
 
         public void OnTick(long tick)
         {
+            for (int f = 0; f < _units.Count; f++)
+            {
+                if (!_fleetBalance.Tier(_units.At(f).TechTier).IaeaGlobalReveal)
+                    continue;
+                ref var sensors = ref _sensors.Get(_units.EntityAt(f));
+                sensors.RevealedUntilTick = Math.Max(sensors.RevealedUntilTick, tick + 1);
+            }
+
             int finished = 0;
             for (int i = 0; i < _scans.Count; i++)
             {
@@ -62,22 +77,26 @@ namespace Unruled.Core.Military
                 if (!scan.RwrFired && elapsed >= _balance.RwrDelayTicks)
                 {
                     scan.RwrFired = true;
-                    for (int f = 0; f < _fleets.Count; f++)
+                    for (int f = 0; f < _units.Count; f++)
                     {
-                        ref var fleet = ref _fleets.At(f);
-                        if (fleet.Lane == scan.Lane && fleet.OwnerPlayerId != scan.OwnerPlayerId && fleet.EwShips > 0)
-                            fleet.RwrWarningTick = tick;
+                        ref var unit = ref _units.At(f);
+                        var fleet = _units.EntityAt(f);
+                        if (unit.OwnerPlayerId != scan.OwnerPlayerId && unit.EwShips > 0 && _motions.Get(fleet).Lane == scan.Lane)
+                            _sensors.Get(fleet).RwrWarningTick = tick;
                     }
                 }
 
                 if (elapsed < scan.IntegrationTicks)
                     continue;
 
-                for (int f = 0; f < _fleets.Count; f++)
+                for (int f = 0; f < _units.Count; f++)
                 {
-                    ref var fleet = ref _fleets.At(f);
-                    if (fleet.Lane == scan.Lane && fleet.OwnerPlayerId != scan.OwnerPlayerId && !fleet.IsReversing)
-                        fleet.RevealedUntilTick = Math.Max(fleet.RevealedUntilTick, tick + _balance.RevealTicks);
+                    var fleet = _units.EntityAt(f);
+                    ref var motion = ref _motions.Get(fleet);
+                    if (_units.At(f).OwnerPlayerId == scan.OwnerPlayerId || motion.Lane != scan.Lane || motion.IsReversing)
+                        continue;
+                    ref var sensors = ref _sensors.Get(fleet);
+                    sensors.RevealedUntilTick = Math.Max(sensors.RevealedUntilTick, tick + _balance.RevealTicks);
                 }
                 if (finished == _finished.Length)
                     Array.Resize(ref _finished, finished * 2);
@@ -100,9 +119,6 @@ namespace Unruled.Core.Military
                     break;
                 case CommandType.EcmJam:
                     Jam(command.PlayerId, command.Target);
-                    break;
-                case CommandType.Reverse:
-                    Reverse(command.PlayerId, command.Target);
                     break;
                 default:
                     throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
@@ -134,17 +150,18 @@ namespace Unruled.Core.Military
 
         private void Jam(int playerId, EntityId fleetId)
         {
-            if (!_fleets.Has(fleetId))
+            if (!_units.Has(fleetId))
                 return;
-            ref var fleet = ref _fleets.Get(fleetId);
-            if (fleet.OwnerPlayerId != playerId || fleet.EwShips <= 0 || fleet.RwrWarningTick == 0 || fleet.Lane.IsNull)
+            ref var unit = ref _units.Get(fleetId);
+            var lane = _motions.Get(fleetId).Lane;
+            if (unit.OwnerPlayerId != playerId || unit.EwShips <= 0 || _sensors.Get(fleetId).RwrWarningTick == 0 || lane.IsNull)
                 return;
 
             bool anyHostileScan = false;
             for (int i = 0; i < _scans.Count; i++)
             {
                 ref var scan = ref _scans.At(i);
-                if (scan.Lane == fleet.Lane && scan.OwnerPlayerId != playerId &&
+                if (scan.Lane == lane && scan.OwnerPlayerId != playerId &&
                     scan.IntegrationTicks < _balance.JammedIntegrationTicks)
                     anyHostileScan = true;
             }
@@ -154,18 +171,9 @@ namespace Unruled.Core.Military
             for (int i = 0; i < _scans.Count; i++)
             {
                 ref var scan = ref _scans.At(i);
-                if (scan.Lane == fleet.Lane && scan.OwnerPlayerId != playerId)
+                if (scan.Lane == lane && scan.OwnerPlayerId != playerId)
                     scan.IntegrationTicks = Math.Max(scan.IntegrationTicks, _balance.JammedIntegrationTicks);
             }
-        }
-
-        private void Reverse(int playerId, EntityId fleetId)
-        {
-            if (!_fleets.Has(fleetId))
-                return;
-            ref var fleet = ref _fleets.Get(fleetId);
-            if (fleet.OwnerPlayerId == playerId)
-                fleet.IsReversing = true;
         }
 
         private int FindScan(int playerId, EntityId lane)

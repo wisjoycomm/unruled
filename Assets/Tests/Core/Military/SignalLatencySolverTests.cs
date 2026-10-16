@@ -65,8 +65,8 @@ namespace Unruled.Tests.Core.Military
 
         private EntityId Fleet(EntityId site, EntityId lane, int ewShips, int owner = Me)
         {
-            var fleet = _sim.World.Create();
-            _sim.Fleets.Add(fleet, new FleetPresence { OwnerPlayerId = owner, Site = site, Lane = lane, EwShips = ewShips });
+            var fleet = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = owner, TechTier = 1, EwShips = ewShips }, _s[0]);
+            _sim.FleetMotions.Get(fleet) = new FleetMotion { Site = site, Lane = lane };
             return fleet;
         }
 

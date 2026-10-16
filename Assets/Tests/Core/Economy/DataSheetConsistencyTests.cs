@@ -5,6 +5,7 @@ using System.IO;
 using NUnit.Framework;
 using Unruled.Core.Board;
 using Unruled.Core.Economy;
+using Unruled.Core.Military;
 using Unruled.Core.Simulation;
 using UnityEngine;
 
@@ -133,6 +134,40 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(
                 $"Triggers at {radar.RwrDelayTicks}s ({radar.IntegrationTicks - radar.RwrDelayTicks}s before reveal)", rwr[2]);
             StringAssert.Contains($"Jamming ({radar.JammedIntegrationTicks}s)", rwr[4]);
+        }
+
+        [Test]
+        public void ShipsTab_MatchesFleetBalance()
+        {
+            var rows = ReadTable("## 03_Ships_And_Upkeep");
+            Assert.AreEqual(FleetBalance.TierCount, rows.Count, "tier row count");
+            var fleets = DefaultGameBalance.CreateFleetBalance();
+
+            for (byte tier = 1; tier <= FleetBalance.TierCount; tier++)
+            {
+                var row = rows[tier - 1];
+                StringAssert.StartsWith($"Tier_{tier}_", row[0]);
+                var rules = fleets.Tier(tier);
+
+                AssertAmounts(row[2], '+', rules.UpkeepPerShipHour, $"tier {tier} upkeep");
+                AssertAmounts(row[3], '/', rules.CombatBurnMultipliers, $"tier {tier} combat burn");
+                Assert.AreEqual($"{rules.MothballUpkeepDiscountPercent}% Off", row[4], $"tier {tier} mothball discount");
+                StringAssert.StartsWith($"{rules.MothballWarmupTicks} Ticks", row[5], $"tier {tier} warm-up");
+                Assert.AreEqual(rules.IaeaGlobalReveal, row[6].StartsWith("TRUE", StringComparison.Ordinal), $"tier {tier} IAEA");
+            }
+        }
+
+        // "1x OXYGEN + 0.5x STEEL" -> (ItemOxygen, 1000), (ItemSteel, 500)
+        private static void AssertAmounts(string cell, char separator, ItemAmount[] expected, string name)
+        {
+            var parts = cell.Split(separator);
+            Assert.AreEqual(expected.Length, parts.Length, $"{name} '{cell}'");
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var amount = parts[i].Trim().Split(new[] { "x " }, StringSplitOptions.None);
+                Assert.AreEqual(ToEnumName("ITEM_" + amount[1]), expected[i].Item.ToString(), $"{name} item {i}");
+                Assert.AreEqual(ToMilli(amount[0]), expected[i].Milli, $"{name} amount {i}");
+            }
         }
 
         // "Speed 60% | Fuel 4.5x | Storm G1-G2" -> 60, 4500, highest storm level 2

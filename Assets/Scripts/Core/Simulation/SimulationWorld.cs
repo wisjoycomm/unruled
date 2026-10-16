@@ -31,7 +31,9 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<SiteQuarantine> Quarantines;
         public readonly ComponentStore<PlayerHq> Players;
         public readonly ComponentStore<RelayStation> Relays;
-        public readonly ComponentStore<FleetPresence> Fleets;
+        public readonly ComponentStore<FleetUnit> Fleets;
+        public readonly ComponentStore<FleetMotion> FleetMotions;
+        public readonly ComponentStore<FleetSensors> FleetSensors;
         public readonly ComponentStore<RadarScan> RadarScans;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
@@ -58,11 +60,14 @@ namespace Unruled.Core.Simulation
             Quarantines = World.CreateStore<SiteQuarantine>();
             Players = World.CreateStore<PlayerHq>();
             Relays = World.CreateStore<RelayStation>();
-            Fleets = World.CreateStore<FleetPresence>();
+            Fleets = World.CreateStore<FleetUnit>();
+            FleetMotions = World.CreateStore<FleetMotion>();
+            FleetSensors = World.CreateStore<FleetSensors>();
             RadarScans = World.CreateStore<RadarScan>();
 
-            Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, balance.Latency);
-            Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, Fleets);
+            Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, FleetMotions,
+                balance.Latency);
+            Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, FleetMotions);
 
             // Fixed tick order: weather first, then producers before consumers, watchers last.
             Clock.Register(new NoaaWeatherEngine(
@@ -75,12 +80,33 @@ namespace Unruled.Core.Simulation
             Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, balance.Recipes, balance.Refinery));
             Clock.Register(new WhoQuarantineSystem(Quarantines, Stockpiles, balance.SystemFactions));
 
-            var radar = new FocusedRadarSystem(World, RadarScans, Fleets, Starlanes, Players, Stockpiles, balance.Radar);
+            var movement = new FleetMovementSystem(Fleets, FleetMotions);
+            Clock.Register(movement);
+            Commands.Register(CommandType.Reverse, movement);
+
+            var radar = new FocusedRadarSystem(
+                World, RadarScans, Fleets, FleetMotions, FleetSensors, Starlanes, Players, Stockpiles, balance.Radar,
+                balance.Fleets);
             Clock.Register(radar);
             Commands.Register(CommandType.ScanBelt, radar);
             Commands.Register(CommandType.CancelScan, radar);
             Commands.Register(CommandType.EcmJam, radar);
-            Commands.Register(CommandType.Reverse, radar);
+        }
+
+        /// <summary>World setup: creates a fleet at a site with every fleet component and an empty cargo hold.</summary>
+        public EntityId CreateFleet(in FleetUnit unit, EntityId site)
+        {
+            if (unit.TechTier < 1 || unit.TechTier > FleetBalance.TierCount)
+                throw new ArgumentOutOfRangeException(nameof(unit), $"Tech tier {unit.TechTier} is not 1..{FleetBalance.TierCount}.");
+            if (!Sites.Has(site))
+                throw new ArgumentException($"{site} is not a site.", nameof(site));
+
+            var fleet = World.Create();
+            Fleets.Add(fleet, unit);
+            FleetMotions.Add(fleet, new FleetMotion { Site = site });
+            FleetSensors.Add(fleet, default);
+            Stockpiles.Add(fleet, default);
+            return fleet;
         }
 
         /// <summary>

@@ -27,7 +27,8 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<LaneWeather> _laneWeather;
         private readonly ComponentStore<PlayerHq> _players;
         private readonly ComponentStore<RelayStation> _relays;
-        private readonly ComponentStore<FleetPresence> _fleets;
+        private readonly ComponentStore<FleetUnit> _units;
+        private readonly ComponentStore<FleetMotion> _motions;
         private readonly LatencyBalance _balance;
 
         // Stamp arrays: an entry counts only when it equals the current query's stamp, so nothing is cleared per query.
@@ -43,7 +44,8 @@ namespace Unruled.Core.Military
         public SignalLatencySolver(
             StarlaneGraph graph, ComponentStore<StarlaneEdge> lanes, ComponentStore<SiteWeather> siteWeather,
             ComponentStore<LaneWeather> laneWeather, ComponentStore<PlayerHq> players,
-            ComponentStore<RelayStation> relays, ComponentStore<FleetPresence> fleets, LatencyBalance balance)
+            ComponentStore<RelayStation> relays, ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions,
+            LatencyBalance balance)
         {
             _graph = graph ?? throw new ArgumentNullException(nameof(graph));
             _lanes = lanes ?? throw new ArgumentNullException(nameof(lanes));
@@ -51,7 +53,8 @@ namespace Unruled.Core.Military
             _laneWeather = laneWeather ?? throw new ArgumentNullException(nameof(laneWeather));
             _players = players ?? throw new ArgumentNullException(nameof(players));
             _relays = relays ?? throw new ArgumentNullException(nameof(relays));
-            _fleets = fleets ?? throw new ArgumentNullException(nameof(fleets));
+            _units = units ?? throw new ArgumentNullException(nameof(units));
+            _motions = motions ?? throw new ArgumentNullException(nameof(motions));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
         }
 
@@ -124,15 +127,16 @@ namespace Unruled.Core.Military
                 if (_relays.At(i).OwnerPlayerId == playerId)
                     Stamp(ref _relaySiteStamp, _relays.EntityAt(i).Index);
             }
-            for (int i = 0; i < _fleets.Count; i++)
+            for (int i = 0; i < _units.Count; i++)
             {
-                ref var fleet = ref _fleets.At(i);
-                if (fleet.OwnerPlayerId != playerId || fleet.EwShips <= 0)
+                ref var unit = ref _units.At(i);
+                if (unit.OwnerPlayerId != playerId || unit.EwShips <= 0)
                     continue;
-                if (!fleet.Site.IsNull)
-                    Stamp(ref _relaySiteStamp, fleet.Site.Index);
-                if (!fleet.Lane.IsNull)
-                    Stamp(ref _relayLaneStamp, fleet.Lane.Index);
+                ref var motion = ref _motions.Get(_units.EntityAt(i));
+                if (!motion.Site.IsNull)
+                    Stamp(ref _relaySiteStamp, motion.Site.Index);
+                if (!motion.Lane.IsNull)
+                    Stamp(ref _relayLaneStamp, motion.Lane.Index);
             }
 
             RunDijkstra(hq.CoreBase);

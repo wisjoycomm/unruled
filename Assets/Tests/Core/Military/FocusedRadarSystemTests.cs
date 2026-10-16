@@ -64,12 +64,14 @@ namespace Unruled.Tests.Core.Military
 
         private EntityId Fleet(int owner, EntityId lane, int ewShips)
         {
-            var fleet = _sim.World.Create();
-            _sim.Fleets.Add(fleet, new FleetPresence { OwnerPlayerId = owner, Lane = lane, EwShips = ewShips });
+            var fleet = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = owner, TechTier = 1, EwShips = ewShips }, _scannerBase);
+            _sim.FleetMotions.Get(fleet) = new FleetMotion { Lane = lane, FromSite = _scannerBase };
             return fleet;
         }
 
-        private ref FleetPresence F(EntityId fleet) => ref _sim.Fleets.Get(fleet);
+        private ref FleetSensors F(EntityId fleet) => ref _sim.FleetSensors.Get(fleet);
+
+        private bool IsReversing(EntityId fleet) => _sim.FleetMotions.Get(fleet).IsReversing;
 
         private void Order(CommandType type, int player, EntityId target, long at) =>
             _sim.Clock.Enqueue(new DelayedPlayerCommand
@@ -142,7 +144,7 @@ namespace Unruled.Tests.Core.Military
             RunTo(Start + _b.IntegrationTicks);
             Assert.AreEqual(Start + _b.IntegrationTicks + _b.RevealTicks, F(stays).RevealedUntilTick);
             Assert.AreEqual(0, F(runs).RevealedUntilTick);
-            Assert.IsTrue(F(runs).IsReversing);
+            Assert.IsTrue(IsReversing(runs));
             Assert.AreEqual(0, _sim.RadarScans.Count, "finished scans are removed");
         }
 
@@ -152,7 +154,7 @@ namespace Unruled.Tests.Core.Military
             var fleet = Fleet(Hider, _belt, ewShips: 0);
             Order(CommandType.Reverse, Scanner, fleet, Start);
             RunTo(Start);
-            Assert.IsFalse(F(fleet).IsReversing);
+            Assert.IsFalse(IsReversing(fleet));
         }
 
         [Test]
@@ -189,6 +191,18 @@ namespace Unruled.Tests.Core.Military
             Assert.AreEqual(10 - 3 * _b.StartupBatteries, BatteriesAt(_scannerBase));
             Assert.AreEqual(0, F(hider).RevealedUntilTick);
             Assert.AreEqual(0, _sim.RadarScans.Count);
+        }
+
+        [Test]
+        public void IaeaTier_IsRevealedEveryTick_WithoutAnyScan()
+        {
+            var flagship = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Hider, TechTier = 5, LineShips = 1 }, _hiderBase);
+            var escort = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Hider, TechTier = 4, LineShips = 1 }, _hiderBase);
+            Assert.IsTrue(_sim.Balance.Fleets.Tier(5).IaeaGlobalReveal);
+
+            RunTo(Start);
+            Assert.Greater(F(flagship).RevealedUntilTick, Start);
+            Assert.AreEqual(0, F(escort).RevealedUntilTick);
         }
     }
 }
