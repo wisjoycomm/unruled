@@ -34,6 +34,7 @@ namespace Unruled.Core.Simulation
         public readonly NewGameBalance NewGame;
         public readonly ResearchBalance Research;
         public readonly ShipyardBalance Shipyard;
+        public readonly SiteControlBalance SiteControl;
 
         public GameBalanceConfig(
             RecipeDatabase recipes, UniverseGenBalance universe, StarlaneBalance starlanes, NoaaBalance weather,
@@ -42,7 +43,7 @@ namespace Unruled.Core.Simulation
             RelocationBalance relocation, LedgerBalance ledger, StaBalance sta, LeaderboardBalance leaderboard,
             WtoBalance wto, WtoContractBalance contracts, SystemAuthorityBalance authority,
             SystemFactionBalance systemFactions, AiBalance ai, NewGameBalance newGame,
-            ResearchBalance research, ShipyardBalance shipyard)
+            ResearchBalance research, ShipyardBalance shipyard, SiteControlBalance siteControl)
         {
             Recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
             Universe = universe ?? throw new ArgumentNullException(nameof(universe));
@@ -67,6 +68,7 @@ namespace Unruled.Core.Simulation
             NewGame = newGame ?? throw new ArgumentNullException(nameof(newGame));
             Research = research ?? throw new ArgumentNullException(nameof(research));
             Shipyard = shipyard ?? throw new ArgumentNullException(nameof(shipyard));
+            SiteControl = siteControl ?? throw new ArgumentNullException(nameof(siteControl));
         }
     }
 }

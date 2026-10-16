@@ -22,7 +22,11 @@ namespace Unruled.Core.Simulation
                 CreateStaBalance(), CreateLeaderboardBalance(), CreateWtoBalance(),
                 CreateWtoContractBalance(), CreateSystemAuthorityBalance(),
                 CreateSystemFactionBalance(), CreateAiBalance(), CreateNewGameBalance(),
-                CreateResearchBalance(), CreateShipyardBalance());
+                CreateResearchBalance(), CreateShipyardBalance(), CreateSiteControlBalance());
+
+        /// <summary>PROVISIONAL: an outpost takes 10 steel + 5 batteries from the claiming fleet's hold.</summary>
+        public static SiteControlBalance CreateSiteControlBalance() => new SiteControlBalance(
+            new[] { new ItemStack(ItemId.ItemSteel, 10), new ItemStack(ItemId.ItemBattery, 5) });
 
         /// <summary>
         /// Tab 03 Build_And_Repair_Items: tier 1 steel; 2 steel + battery; 3 alloy + ammo; 4 alloy + microchip; 5 nuclear
@@ -104,7 +108,8 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,
         /// barren husk -0.20 ESI, core fracture 4x (speed 100% per GDD §2.1 B); drills take 180 ticks to retract (§2.1 B).
-        /// PROVISIONAL: 10-tick cycle, 10 ore and 1 fuel + 1 coolant per rig per cycle.
+        /// PROVISIONAL: 10-tick cycle, 10 ore and 1 fuel + 1 coolant per rig per cycle; a rig costs 10 steel + 5 coolant,
+        /// at most 10 rigs per deposit.
         /// </summary>
         public static MiningBalance CreateMiningBalance() => new MiningBalance(
             cycleTicks: 10,
@@ -116,7 +121,9 @@ namespace Unruled.Core.Simulation
             coreFracture: new MiningDepth(speedPercent: 100, fuelCoolantMultiplier: 4),
             deepCoreEsiDropMilli: 50,
             barrenHuskEsiDropMilli: 200,
-            drillRetractTicks: 180);
+            drillRetractTicks: 180,
+            maxRigsPerDeposit: 10,
+            rigCost: new[] { new ItemStack(ItemId.ItemSteel, 10), new ItemStack(ItemId.ItemCoolant, 5) });
 
         /// <summary>
         /// GDD §2.4 B and data sheet tab 04: 2 batteries to start, RWR at 15 ticks, reveal after 60 ticks (120 under
@@ -331,14 +338,17 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §2.2 A: 10-tick cycle, idle at 20% upkeep, brownout from G2.
-        /// PROVISIONAL: base upkeep 10 per cycle and 1 battery per storm cycle are not in the GDD or data sheet.
+        /// PROVISIONAL: base upkeep 10 per cycle and 1 battery per storm cycle are not in the GDD or data sheet; a refinery
+        /// costs 20 steel + 5 batteries, at most 4 per site.
         /// </summary>
         public static RefineryBalance CreateRefineryBalance() => new RefineryBalance(
             cycleTicks: 10,
             baseUpkeepPerCycle: 10,
             idleUpkeepPercent: 20,
             brownoutMinGeoLevel: 2,
-            batteryPerBrownoutCycle: 1);
+            batteryPerBrownoutCycle: 1,
+            maxRefineriesPerSite: 4,
+            buildCost: new[] { new ItemStack(ItemId.ItemSteel, 20), new ItemStack(ItemId.ItemBattery, 5) });
 
         /// <summary>GDD §2.2 A.4 and data sheet tab 01: WHO quarantine after more than 30 starved ticks, for 300 ticks.</summary>
         public static SystemFactionBalance CreateSystemFactionBalance() => new SystemFactionBalance(

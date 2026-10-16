@@ -53,7 +53,8 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
 15. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
 16. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
 
-`MiningSystem` also handles `RetractDrills` and `PlanetLifecycleSystem` handles `Terraform`.
+`MiningSystem` also handles `RetractDrills` and `BuildRig`, `RefinerySystem` handles `BuildRefinery`, and
+`PlanetLifecycleSystem` handles `Terraform`. `SiteControlSystem` is not on the clock: it only handles `ClaimSite`.
 
 In each tick, due commands run before the systems. Shared components (`Stockpile`) change only through their own
 methods, in this order (rule 4).
@@ -84,6 +85,8 @@ methods, in this order (rule 4).
     paralysis).
   - `ShipyardSystem` + `ShipyardBalance`: `ShipBuildOrder` queue at the core base and retrofits; it adds ships
     (`FleetUnit.Gain`) and raises fleet tiers.
+  - `SiteControlSystem` + `SiteControlBalance`: the only writer of `SiteInfo.OwnerPlayerId` during play; a docked
+    fleet unloads the claim cost to take a neutral site or an undefended rival site (never a core base).
   - Fleet components (`FleetComponents.cs`), one owner each: `FleetUnit` (ship counts by class; combat),
     `FleetMotion` (site or lane progress; movement), `FleetReadiness` (mothball, warm-up, unsupplied; upkeep),
     `FleetCombatState` (ROF, focus, temperature, damage carry; combat), `FleetSensors` (reveal, RWR; radar). A

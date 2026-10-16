@@ -22,7 +22,7 @@ namespace Unruled.Tests.Core.Research
             var calm = new NoaaBalance(600, 0, new[] { 1, 0, 0, 0, 0 }, 100, 100, 100, 100);
             var balance = new GameBalanceConfig(d.Recipes, d.Universe, d.Starlanes, calm, d.Refinery, d.Mining,
                 d.Lifecycle, d.Latency, d.Radar, d.Fleets, d.Combat, d.Relocation, d.Ledger, d.Sta, d.Leaderboard, d.Wto,
-                d.Contracts, d.Authority, d.SystemFactions, d.Ai, d.NewGame, d.Research, d.Shipyard);
+                d.Contracts, d.Authority, d.SystemFactions, d.Ai, d.NewGame, d.Research, d.Shipyard, d.SiteControl);
             _sim = new SimulationWorld(balance, worldSeed: 9);
             _sim.GenerateSystem(21, clusterId: 0);
             var core = _sim.Sites.EntityAt(0);

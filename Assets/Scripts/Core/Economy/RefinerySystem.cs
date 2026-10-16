@@ -10,9 +10,12 @@ namespace Unruled.Core.Economy
     /// geomagnetic storm without spare batteries -> GridBrownout (idle upkeep); otherwise one Leontief batch.
     /// Upkeep is added to <see cref="Refinery.AccruedUpkeep"/>, then the whole debt is paid from the site owner's wallet
     /// if it can be (all or nothing). An unowned site, or an owner without a wallet, keeps the debt.
+    /// BuildRefinery (target: a site the player owns; ParamA = the refined item to make) pays the build cost from the
+    /// site's stock and adds a refinery, up to the cap per site. Invalid or unaffordable orders change nothing.
     /// </summary>
-    public sealed class RefinerySystem : ISimSystem
+    public sealed class RefinerySystem : ISimSystem, ICommandHandler
     {
+        private readonly World _world;
         private readonly ComponentStore<Refinery> _refineries;
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly ComponentStore<SiteWeather> _weather;
@@ -22,10 +25,11 @@ namespace Unruled.Core.Economy
         private readonly RefineryBalance _balance;
 
         public RefinerySystem(
-            ComponentStore<Refinery> refineries, ComponentStore<Stockpile> stockpiles,
+            World world, ComponentStore<Refinery> refineries, ComponentStore<Stockpile> stockpiles,
             ComponentStore<SiteWeather> weather, ComponentStore<SiteInfo> sites, Ledger ledger, RecipeDatabase recipes,
             RefineryBalance balance)
         {
+            _world = world ?? throw new ArgumentNullException(nameof(world));
             _refineries = refineries ?? throw new ArgumentNullException(nameof(refineries));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _weather = weather ?? throw new ArgumentNullException(nameof(weather));
@@ -75,6 +79,30 @@ namespace Unruled.Core.Economy
                 refinery.AccruedUpkeep += _balance.BaseUpkeepPerCycle;
                 PayUpkeep(ref refinery);
             }
+        }
+
+        public void Handle(in DelayedPlayerCommand command, long tick)
+        {
+            if (command.CommandType != CommandType.BuildRefinery)
+                throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
+            var site = command.Target;
+            var output = (ItemId)command.ParamA;
+            if (command.ParamA < 0 || command.ParamA > byte.MaxValue || !ItemIds.IsRefined(output) ||
+                !_sites.Has(site) || _sites.Get(site).OwnerPlayerId != command.PlayerId || !_stockpiles.Has(site))
+                return;
+            int built = 0;
+            for (int i = 0; i < _refineries.Count; i++)
+                if (_refineries.At(i).Site == site)
+                    built++;
+            if (built >= _balance.MaxRefineriesPerSite)
+                return;
+            ref var stock = ref _stockpiles.Get(site);
+            for (int i = 0; i < _balance.BuildCostCount; i++)
+                if (!stock.Has(_balance.BuildCost(i).Item, _balance.BuildCost(i).Quantity))
+                    return;
+            for (int i = 0; i < _balance.BuildCostCount; i++)
+                stock.Add(_balance.BuildCost(i).Item, -_balance.BuildCost(i).Quantity);
+            _refineries.Add(_world.Create(), new Refinery { Site = site, Output = output });
         }
 
         private void PayUpkeep(ref Refinery refinery)

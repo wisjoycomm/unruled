@@ -12,7 +12,9 @@ namespace Unruled.Core.Economy
     /// A deposit whose site lacks the fuel or coolant for this cycle stalls. A depth is never mixed in one cycle.
     /// Depletion lifecycle changes belong to <see cref="Board.PlanetLifecycleSystem"/>, which runs next.
     /// RetractDrills (target: a deposit on a site the player owns) stops the rigs at once; they are gone from the
-    /// deposit when the retract time is over (GDD §2.1 B). Invalid orders change nothing.
+    /// deposit when the retract time is over (GDD §2.1 B). BuildRig (target: a deposit on a site the player owns;
+    /// ParamA = rigs) pays each rig's cost from the site's stock and adds the rigs, up to the cap per deposit.
+    /// Invalid or unaffordable orders change nothing.
     /// </summary>
     public sealed class MiningSystem : ISimSystem, ICommandHandler
     {
@@ -57,15 +59,35 @@ namespace Unruled.Core.Economy
 
         public void Handle(in DelayedPlayerCommand command, long tick)
         {
-            if (command.CommandType != CommandType.RetractDrills)
+            if (command.CommandType != CommandType.RetractDrills && command.CommandType != CommandType.BuildRig)
                 throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
             if (!_deposits.Has(command.Target))
                 return;
             ref var deposit = ref _deposits.Get(command.Target);
-            if (deposit.RigCount == 0 || deposit.RetractUntilTick > 0 || !_sites.Has(deposit.Site) ||
+            if (deposit.RetractUntilTick > 0 || !_sites.Has(deposit.Site) ||
                 _sites.Get(deposit.Site).OwnerPlayerId != command.PlayerId)
                 return;
+            if (command.CommandType == CommandType.BuildRig)
+            {
+                BuildRigs(ref deposit, command.ParamA);
+                return;
+            }
+            if (deposit.RigCount == 0)
+                return;
             deposit.RetractUntilTick = tick + _balance.DrillRetractTicks;
+        }
+
+        private void BuildRigs(ref MineralDeposit deposit, int rigs)
+        {
+            if (rigs < 1 || rigs > _balance.MaxRigsPerDeposit - deposit.RigCount || !_stockpiles.Has(deposit.Site))
+                return;
+            ref var stock = ref _stockpiles.Get(deposit.Site);
+            for (int i = 0; i < _balance.RigCostCount; i++)
+                if (!stock.Has(_balance.RigCost(i).Item, _balance.RigCost(i).Quantity * rigs))
+                    return;
+            for (int i = 0; i < _balance.RigCostCount; i++)
+                stock.Add(_balance.RigCost(i).Item, -_balance.RigCost(i).Quantity * rigs);
+            deposit.RigCount += rigs;
         }
 
         private void MineDeposit(ref MineralDeposit deposit)

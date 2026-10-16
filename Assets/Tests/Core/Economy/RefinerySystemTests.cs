@@ -32,7 +32,7 @@ namespace Unruled.Tests.Core.Economy
             _wallets = _world.CreateStore<Wallet>();
             _ledger = new Ledger(_wallets);
             _system = new RefinerySystem(
-                _refineries, _stockpiles, _weather, _sites, _ledger, DefaultGameBalance.CreateRecipeDatabase(), _balance);
+                _world, _refineries, _stockpiles, _weather, _sites, _ledger, DefaultGameBalance.CreateRecipeDatabase(), _balance);
 
             _site = _world.Create();
             _stockpiles.Add(_site, default);

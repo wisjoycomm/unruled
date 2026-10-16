@@ -1,4 +1,5 @@
 using System;
+using Unruled.Core.Simulation;
 
 namespace Unruled.Core.Economy
 {
@@ -20,7 +21,8 @@ namespace Unruled.Core.Economy
     /// <summary>
     /// Mining numbers: per cycle each rig yields <see cref="YieldPerRigPerCycle"/> x speed% ore and burns
     /// fuel and coolant x the depth multiplier. ESI drops are milli-units. Pulling the drills out takes
-    /// <see cref="DrillRetractTicks"/>.
+    /// <see cref="DrillRetractTicks"/>. A new rig costs <see cref="RigCost"/> items from the site, up to
+    /// <see cref="MaxRigsPerDeposit"/> rigs per deposit.
     /// </summary>
     public sealed class MiningBalance
     {
@@ -34,11 +36,14 @@ namespace Unruled.Core.Economy
         public readonly int DeepCoreEsiDropMilli;
         public readonly int BarrenHuskEsiDropMilli;
         public readonly int DrillRetractTicks;
+        public readonly int MaxRigsPerDeposit;
+        private readonly ItemStack[] _rigCost;
 
         public MiningBalance(
             int cycleTicks, int yieldPerRigPerCycle, int fuelPerRigPerCycle, int coolantPerRigPerCycle,
             MiningDepth surface, MiningDepth deepCrust, MiningDepth coreFracture,
-            int deepCoreEsiDropMilli, int barrenHuskEsiDropMilli, int drillRetractTicks)
+            int deepCoreEsiDropMilli, int barrenHuskEsiDropMilli, int drillRetractTicks, int maxRigsPerDeposit,
+            ItemStack[] rigCost)
         {
             if (cycleTicks < 1) throw new ArgumentOutOfRangeException(nameof(cycleTicks));
             if (yieldPerRigPerCycle < 1) throw new ArgumentOutOfRangeException(nameof(yieldPerRigPerCycle));
@@ -47,6 +52,8 @@ namespace Unruled.Core.Economy
             if (deepCoreEsiDropMilli < 0) throw new ArgumentOutOfRangeException(nameof(deepCoreEsiDropMilli));
             if (barrenHuskEsiDropMilli < 0) throw new ArgumentOutOfRangeException(nameof(barrenHuskEsiDropMilli));
             if (drillRetractTicks < 1) throw new ArgumentOutOfRangeException(nameof(drillRetractTicks));
+            if (maxRigsPerDeposit < 1) throw new ArgumentOutOfRangeException(nameof(maxRigsPerDeposit));
+            if (rigCost == null || rigCost.Length == 0) throw new ArgumentException("Rig cost required.", nameof(rigCost));
 
             CycleTicks = cycleTicks;
             YieldPerRigPerCycle = yieldPerRigPerCycle;
@@ -58,6 +65,12 @@ namespace Unruled.Core.Economy
             DeepCoreEsiDropMilli = deepCoreEsiDropMilli;
             BarrenHuskEsiDropMilli = barrenHuskEsiDropMilli;
             DrillRetractTicks = drillRetractTicks;
+            MaxRigsPerDeposit = maxRigsPerDeposit;
+            _rigCost = (ItemStack[])rigCost.Clone();
         }
+
+        public int RigCostCount => _rigCost.Length;
+
+        public ItemStack RigCost(int index) => _rigCost[index];
     }
 }

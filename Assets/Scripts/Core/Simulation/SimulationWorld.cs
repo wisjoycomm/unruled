@@ -157,10 +157,14 @@ namespace Unruled.Core.Simulation
             var mining = new MiningSystem(Deposits, Sites, Stockpiles, balance.Mining, TechGates);
             Clock.Register(mining);
             Commands.Register(CommandType.RetractDrills, mining);
+            Commands.Register(CommandType.BuildRig, mining);
             Lifecycle = new PlanetLifecycleSystem(Sites, Deposits, Stockpiles, balance.Mining, balance.Lifecycle, TechGates);
             Clock.Register(Lifecycle);
             Commands.Register(CommandType.Terraform, Lifecycle);
-            Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, Sites, Ledger, balance.Recipes, balance.Refinery));
+            var refineries = new RefinerySystem(
+                World, Refineries, Stockpiles, Weather, Sites, Ledger, balance.Recipes, balance.Refinery);
+            Clock.Register(refineries);
+            Commands.Register(CommandType.BuildRefinery, refineries);
             Market = new WtoMarketEngine(
                 World, WtoOrders, ItemMarkets, Sites, Stockpiles, StolenGoods, Ledger, WtoEscrow, Rates, ContractSystem,
                 Authority, balance.Wto);
@@ -216,6 +220,8 @@ namespace Unruled.Core.Simulation
             Clock.Register(shipyard);
             Commands.Register(CommandType.BuildShips, shipyard);
             Commands.Register(CommandType.Retrofit, shipyard);
+            Commands.Register(CommandType.ClaimSite, new SiteControlSystem(
+                Sites, Players, Fleets, FleetMotions, FleetReadiness, FleetCombat, Stockpiles, balance.SiteControl));
             Clock.Register(ContractSystem);
             Audit = new LeaderboardAuditSystem(
                 Standings, Wallets, Sites, Fleets, Stockpiles, Ledger, WtoFeePool, StaTollPool, Market, balance.Leaderboard);
