@@ -1,4 +1,5 @@
 using System;
+using Unruled.Core.Board;
 using Unruled.Core.Economy;
 
 namespace Unruled.Core.Simulation
@@ -7,10 +8,12 @@ namespace Unruled.Core.Simulation
     public sealed class GameBalanceConfig
     {
         public readonly RecipeDatabase Recipes;
+        public readonly UniverseGenBalance Universe;
 
-        public GameBalanceConfig(RecipeDatabase recipes)
+        public GameBalanceConfig(RecipeDatabase recipes, UniverseGenBalance universe)
         {
             Recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
+            Universe = universe ?? throw new ArgumentNullException(nameof(universe));
         }
     }
 }

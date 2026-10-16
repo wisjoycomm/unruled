@@ -1,3 +1,4 @@
+using Unruled.Core.Board;
 using Unruled.Core.Economy;
 
 namespace Unruled.Core.Simulation
@@ -8,7 +9,24 @@ namespace Unruled.Core.Simulation
     /// </summary>
     public static class DefaultGameBalance
     {
-        public static GameBalanceConfig Create() => new GameBalanceConfig(CreateRecipeDatabase());
+        public static GameBalanceConfig Create() =>
+            new GameBalanceConfig(CreateRecipeDatabase(), CreateUniverseGenBalance());
+
+        /// <summary>
+        /// PROVISIONAL: only MinSiteSpacing (120) comes from the GDD; the rest are proposed defaults until the
+        /// data sheet defines them. 8 orbits from r = 300 to ~1560, habitable zone centred on orbit 3.
+        /// </summary>
+        public static UniverseGenBalance CreateUniverseGenBalance() => new UniverseGenBalance(
+            sitesPerSystem: 8,
+            minRadius: 300,
+            radiusStep: 180,
+            radiusNoise: 25,
+            minSiteSpacing: 120,
+            angleStep: 40503, // 2*PI / golden ratio, in binary angle units
+            angleJitter: 1820, // ~10 degrees
+            habitableRadius: 840,
+            habitableWidth: 700,
+            atmoNoiseMilli: 50);
 
         public static RecipeDatabase CreateRecipeDatabase()
         {
