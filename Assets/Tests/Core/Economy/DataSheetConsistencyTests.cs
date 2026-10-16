@@ -137,6 +137,19 @@ namespace Unruled.Tests.Core.Economy
         }
 
         [Test]
+        public void RoutesTab_MatchesCombatBalance()
+        {
+            var rows = ReadTable("## 04_Routes_Radar_Latency");
+            var combat = DefaultGameBalance.CreateCombatBalance();
+
+            Assert.AreEqual("Attacker == Defender (No Fortification)", FindRow(rows, "In_Transit_1v1_Encounter")[2]);
+            Assert.AreEqual($"Defender +{combat.FortificationPdPercent}% PD & Planet Vault Access",
+                FindRow(rows, "Planetary_1v1_Siege")[2]);
+            Assert.AreEqual($"-{combat.FlankStepPercent}% Defender PD per extra attack lane",
+                FindRow(rows, "Multi_Lane_Flanking_Bonus")[2]);
+        }
+
+        [Test]
         public void ShipsTab_MatchesFleetBalance()
         {
             var rows = ReadTable("## 03_Ships_And_Upkeep");

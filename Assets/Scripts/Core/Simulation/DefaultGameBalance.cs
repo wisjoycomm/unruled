@@ -16,6 +16,7 @@ namespace Unruled.Core.Simulation
                 CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateStarlaneBalance(), CreateNoaaBalance(),
                 CreateRefineryBalance(), CreateMiningBalance(),
                 CreateLifecycleBalance(), CreateLatencyBalance(), CreateRadarBalance(), CreateFleetBalance(),
+                CreateCombatBalance(),
                 CreateSystemFactionBalance());
 
         /// <summary>
@@ -78,6 +79,42 @@ namespace Unruled.Core.Simulation
             upkeepIntervalTicks: 3_600,
             baseSpeedMilliPerTick: 5000,
             fuelPerShipPer100UnitsMilli: 1000);
+
+        /// <summary>
+        /// GDD §2.4 C and data sheet tab 04: 5-tick salvo, ROF 50/100/150%, defender +35% PD at its own site, -20% PD
+        /// per extra lane (floor 20%, at most 3 extra), guns lock above 90 °C until below 75 °C, cook-off 5% hull.
+        /// PROVISIONAL: Alpha 10 and Beta 20 (a 2:1 line:EW fleet exactly cancels an equal one), hull 100/60/80/50 for
+        /// line/EW/supply/cargo, 0.1 ammo per line ship and 0.1 battery per EW ship per salvo, 0.2 coolant per ship per
+        /// venting salvo, tenders hand over 2 of each per salvo up to 10 in a hold, ambient 20 °C, +4 °C per salvo at
+        /// 100% ROF (x ROF²), -4 °C passive, -15 °C venting.
+        /// </summary>
+        public static CombatBalance CreateCombatBalance() => new CombatBalance(
+            salvoCycleTicks: 5,
+            lineAlpha: 10,
+            ewBeta: 20,
+            conservationRofPercent: 50,
+            standardRofPercent: 100,
+            overdriveRofPercent: 150,
+            fortificationPdPercent: 35,
+            flankStepPercent: 20,
+            flankFloorPercent: 20,
+            maxExtraLanes: 3,
+            lineHp: 100,
+            ewHp: 60,
+            supplyHp: 80,
+            cargoHp: 50,
+            ammoPerLineShipMilli: 100,
+            batteryPerEwShipMilli: 100,
+            ventCoolantPerShipMilli: 200,
+            tenderTransferPerSalvo: 2,
+            resupplyTarget: 10,
+            ambientMilli: 20_000,
+            fireHeatMilli: 4_000,
+            passiveCoolMilli: 4_000,
+            ventCoolMilli: 15_000,
+            overheatMilli: 90_000,
+            overheatReleaseMilli: 75_000,
+            cookOffHullPercent: 5);
 
         private static ItemAmount Milli(ItemId item, int milli) => new ItemAmount(item, milli);
 

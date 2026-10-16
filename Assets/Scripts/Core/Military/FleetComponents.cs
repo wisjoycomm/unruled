@@ -44,6 +44,19 @@ namespace Unruled.Core.Military
                 default: return CargoConvoys;
             }
         }
+
+        /// <summary>Removes lost ships of one class (combat only).</summary>
+        public void Lose(TargetFocusClass shipClass, int ships)
+        {
+            if (ships < 0 || ships > Count(shipClass)) throw new System.ArgumentOutOfRangeException(nameof(ships));
+            switch (shipClass)
+            {
+                case TargetFocusClass.LineShips: LineShips -= ships; break;
+                case TargetFocusClass.EwShips: EwShips -= ships; break;
+                case TargetFocusClass.SupplyTenders: SupplyTenders -= ships; break;
+                default: CargoConvoys -= ships; break;
+            }
+        }
     }
 
     /// <summary>
@@ -70,6 +83,25 @@ namespace Unruled.Core.Military
 
         /// <summary>Whether the fleet may move or fire on this tick.</summary>
         public bool CanAct(long tick) => !IsMothballed && !IsUnsupplied && tick >= WarmupUntilTick;
+    }
+
+    /// <summary>
+    /// ECS component: salvo combat state (GDD §2.4 C). Supply debts accumulate milli-units until a whole item is due;
+    /// <see cref="DamageCarry"/> holds damage (hundredths) not yet enough to destroy a ship.
+    /// </summary>
+    public struct FleetCombatState
+    {
+        public TargetFocusClass Focus;
+        public RofStance Rof;
+        public int TemperatureMilli;
+        public bool IsOverheated; // guns locked, ammo cooking off
+        public bool IsVenting;
+        public long EngagedUntilTick; // pinned on its lane while engaged
+        public long FiredAtTick;
+        public long DamageCarry;
+        public int AmmoDebtMilli;
+        public int BatteryDebtMilli;
+        public int CoolantDebtMilli;
     }
 
     /// <summary>ECS component: what enemy sensors know about a fleet.</summary>

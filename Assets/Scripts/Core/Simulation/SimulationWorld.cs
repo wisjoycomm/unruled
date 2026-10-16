@@ -35,6 +35,7 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<FleetMotion> FleetMotions;
         public readonly ComponentStore<FleetSensors> FleetSensors;
         public readonly ComponentStore<FleetReadiness> FleetReadiness;
+        public readonly ComponentStore<FleetCombatState> FleetCombat;
         public readonly ComponentStore<RadarScan> RadarScans;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
@@ -66,6 +67,7 @@ namespace Unruled.Core.Simulation
             FleetMotions = World.CreateStore<FleetMotion>();
             FleetSensors = World.CreateStore<FleetSensors>();
             FleetReadiness = World.CreateStore<FleetReadiness>();
+            FleetCombat = World.CreateStore<FleetCombatState>();
             RadarScans = World.CreateStore<RadarScan>();
 
             Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, FleetMotions,
@@ -89,11 +91,19 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Activate, upkeep);
 
             Movement = new FleetMovementSystem(
-                Fleets, FleetMotions, FleetReadiness, Starlanes, Stockpiles, balance.Starlanes, balance.Fleets);
+                Fleets, FleetMotions, FleetReadiness, FleetCombat, Starlanes, Stockpiles, balance.Starlanes, balance.Fleets);
             Clock.Register(Movement);
             Commands.Register(CommandType.Move, Movement);
             Commands.Register(CommandType.Hold, Movement);
             Commands.Register(CommandType.Reverse, Movement);
+
+            var combat = new SalvoCombatEngine(
+                World, Fleets, FleetMotions, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, balance.Combat,
+                balance.Fleets);
+            Clock.Register(combat);
+            Commands.Register(CommandType.SetRof, combat);
+            Commands.Register(CommandType.SetFocus, combat);
+            Commands.Register(CommandType.VentCoolant, combat);
 
             var radar = new FocusedRadarSystem(
                 World, RadarScans, Fleets, FleetMotions, FleetSensors, Starlanes, Players, Stockpiles, balance.Radar,
@@ -117,6 +127,10 @@ namespace Unruled.Core.Simulation
             FleetMotions.Add(fleet, new FleetMotion { Site = site });
             FleetSensors.Add(fleet, default);
             FleetReadiness.Add(fleet, default);
+            FleetCombat.Add(fleet, new FleetCombatState
+            {
+                Rof = RofStance.Standard100, TemperatureMilli = Balance.Combat.AmbientMilli
+            });
             Stockpiles.Add(fleet, default);
             return fleet;
         }

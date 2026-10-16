@@ -31,3 +31,4 @@
 - 2026-10-16 - Claude - Sprint 3 step 1: split fleet components (FleetUnit/FleetMotion/FleetSensors + cargo hold), FleetBalance from tab 03, IAEA Tier-5 reveal; FleetPresence removed.
 - 2026-10-16 - Claude - Sprint 3 step 2: FleetMovementSystem (Move one lane per order with fuel and tech-tier gate, Hold/resume, Reverse); DelayedPlayerCommand.ParamEntity.
 - 2026-10-16 - Claude - Sprint 3 step 3: FleetUpkeepSystem + FleetReadiness (hourly tab-03 upkeep per ship, 80% mothball discount, warm-up by tier, unpaid = grounded); Mothball/Activate commands.
+- 2026-10-16 - Claude - Sprint 3 step 4: SalvoCombatEngine (5-tick Hughes salvo, fortification +35% PD with vault access, 90° multi-lane flank, tender hot resupply, thermal lock/cook-off/vent, lane pinning); SetRof/SetFocus/VentCoolant.

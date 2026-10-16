@@ -12,7 +12,8 @@ namespace Unruled.Core.Military
     /// fuel from the fleet's hold at departure: ships x fuel per 100 units x length x tier fuel multiplier, rounded up.
     /// Lanes above the fleet's tech tier (storm shortcuts) are refused. Each tick a moving fleet advances base speed x
     /// tier speed %, and arrives at the far end when it has covered the lane.
-    /// Fleets that cannot act (<see cref="FleetReadiness.CanAct"/>) neither depart nor advance.
+    /// Fleets that cannot act (<see cref="FleetReadiness.CanAct"/>) neither depart nor advance; a fleet engaged in
+    /// combat on its lane is pinned there unless it is reversing.
     /// Hold (ParamA 1 = hold, 0 = resume) stops a fleet mid-lane. Reverse turns it back towards the site it left (and ends a hold).
     /// Invalid orders change nothing.
     /// </summary>
@@ -21,6 +22,7 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<FleetUnit> _units;
         private readonly ComponentStore<FleetMotion> _motions;
         private readonly ComponentStore<FleetReadiness> _readiness;
+        private readonly ComponentStore<FleetCombatState> _combat;
         private readonly ComponentStore<StarlaneEdge> _lanes;
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly StarlaneBalance _laneBalance;
@@ -28,12 +30,13 @@ namespace Unruled.Core.Military
 
         public FleetMovementSystem(
             ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions, ComponentStore<FleetReadiness> readiness,
-            ComponentStore<StarlaneEdge> lanes,
+            ComponentStore<FleetCombatState> combat, ComponentStore<StarlaneEdge> lanes,
             ComponentStore<Stockpile> stockpiles, StarlaneBalance laneBalance, FleetBalance balance)
         {
             _units = units ?? throw new ArgumentNullException(nameof(units));
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
             _readiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
+            _combat = combat ?? throw new ArgumentNullException(nameof(combat));
             _lanes = lanes ?? throw new ArgumentNullException(nameof(lanes));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _laneBalance = laneBalance ?? throw new ArgumentNullException(nameof(laneBalance));
@@ -45,7 +48,10 @@ namespace Unruled.Core.Military
             for (int i = 0; i < _motions.Count; i++)
             {
                 ref var motion = ref _motions.At(i);
-                if (motion.Lane.IsNull || motion.IsHolding || !_readiness.Get(_motions.EntityAt(i)).CanAct(tick))
+                var fleet = _motions.EntityAt(i);
+                if (motion.Lane.IsNull || motion.IsHolding || !_readiness.Get(fleet).CanAct(tick))
+                    continue;
+                if (!motion.IsReversing && tick <= _combat.Get(fleet).EngagedUntilTick)
                     continue;
 
                 ref var edge = ref _lanes.Get(motion.Lane);
