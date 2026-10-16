@@ -29,6 +29,9 @@ namespace Unruled.View.UI
 
         public FleetCard Fleet => _fleet;
 
+        /// <summary>Phone layout switch; null before <see cref="Bind"/>.</summary>
+        public CompactLayout Layout { get; private set; }
+
         public Button SystemTab { get; private set; }
 
         public Button GalaxyTab { get; private set; }
@@ -44,6 +47,7 @@ namespace Unruled.View.UI
             _fleet = new FleetCard(root);
             _inFlight = new InFlightStrip(root);
             _ops = new OperationsPanel(root);
+            Layout = new CompactLayout(root);
             BoardView = TopTelemetryHud.Require<VisualElement>(root, "board-view");
             SystemTab = TopTelemetryHud.Require<Button>(root, "tab-system");
             GalaxyTab = TopTelemetryHud.Require<Button>(root, "tab-galaxy");

@@ -409,5 +409,10 @@
                 </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>
+        <ui:VisualElement name="compact-nav" class="seg compact-nav">
+            <ui:Button name="nav-0" class="seg__item" text="STOCK" />
+            <ui:Button name="nav-1" class="seg__item seg__item--on" text="BOARD" />
+            <ui:Button name="nav-2" class="seg__item" text="FLEET · OPS" />
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

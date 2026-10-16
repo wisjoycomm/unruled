@@ -66,3 +66,4 @@
 - 2026-10-16 - Claude - Operations panel: side tabs MARKET/BASE/SITE with buttons for stress test, audit, ship builds, retrofit, jump gate, claim, rigs, pause/retract drills, refineries and caps, cargo transfer and convoy routes (Play Mode capture still pending).
 - 2026-10-16 - Claude - Save games: SaveGame write/load of the whole world as MessagePack (in-house codec, explicit append-only formatters, SchemaVersion 1); World/ComponentStore restore hooks; round-trip, lockstep and schema tests.
 - 2026-10-16 - Claude - GameSession continues the saved game at start-up and autosaves every sim hour and on pause/quit; an unreadable save is kept aside and reported.
+- 2026-10-16 - Claude - Phone layout: CompactLayout switches below 1100 px to a full-width board with a STOCK / BOARD / FLEET · OPS bottom bar; the top bar wraps.

@@ -1,7 +1,8 @@
 /*
  * Main screen layout (mockup 1440x900): 56 px top telemetry, 260 px stockpile dock, the board in the middle with a
  * 52 px in-flight strip, 360 px fleet card + WTO market on the right. Colours and type come from Theme/Unruled.uss.
- * The board area has no background: the board renderer draws behind the UI.
+ * The board area has no background: the board renderer draws behind the UI. Below 1100 px wide, CompactLayout adds
+ * main--compact (phone layout, end of file).
  */
 
 .main {
@@ -551,4 +552,59 @@
 
 .market-row > .market-row__delta {
     flex-grow: 0.9;
+}
+
+/* ---------- Phone layout (main--compact) ---------- */
+
+.compact-nav {
+    display: none;
+    flex-shrink: 0;
+    height: 52px;
+    margin: 0;
+    background-color: var(--u-panel);
+    border-top-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.compact-nav > .unity-button.seg__item {
+    height: 100%;
+    font-size: 14px;
+}
+
+.main--compact > .compact-nav {
+    display: flex;
+}
+
+.main--compact .top-bar {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 6px 12px;
+}
+
+.main--compact .top-bar__brand, .main--compact .top-bar__spacer {
+    display: none;
+}
+
+.main--compact .top-bar__stat {
+    margin: 2px 16px 2px 0;
+}
+
+.main--compact .top-bar__group {
+    margin: 4px 12px 2px 0;
+}
+
+.main--compact .dock, .main--compact .side {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    border-left-width: 0;
+    border-right-width: 0;
+}
+
+.main--compact.main--show-dock .dock, .main--compact.main--show-side .side {
+    display: flex;
 }
