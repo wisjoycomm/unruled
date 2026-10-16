@@ -38,8 +38,12 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<FleetCombatState> FleetCombat;
         public readonly ComponentStore<CapitalRelocation> Relocations;
         public readonly ComponentStore<RadarScan> RadarScans;
+        public readonly ComponentStore<Wallet> Wallets;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
+        public readonly Ledger Ledger;
+        public readonly EntityId WtoFeePool;
+        public readonly EntityId StaTollPool;
         public readonly PlanetLifecycleSystem Lifecycle;
         public readonly FleetFactory FleetFactory;
         public readonly FleetMovementSystem Movement;
@@ -73,6 +77,13 @@ namespace Unruled.Core.Simulation
             FleetCombat = World.CreateStore<FleetCombatState>();
             Relocations = World.CreateStore<CapitalRelocation>();
             RadarScans = World.CreateStore<RadarScan>();
+            Wallets = World.CreateStore<Wallet>();
+
+            Ledger = new Ledger(Wallets);
+            WtoFeePool = World.Create();
+            Wallets.Add(WtoFeePool, new Wallet { Pool = TaxPoolKind.WtoMarketFees });
+            StaTollPool = World.Create();
+            Wallets.Add(StaTollPool, new Wallet { Pool = TaxPoolKind.StaTollGates });
 
             Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, FleetMotions,
                 balance.Latency);
@@ -90,7 +101,7 @@ namespace Unruled.Core.Simulation
             Lifecycle = new PlanetLifecycleSystem(Sites, Deposits, Stockpiles, balance.Mining, balance.Lifecycle);
             Clock.Register(Lifecycle);
             Commands.Register(CommandType.Terraform, Lifecycle);
-            Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, balance.Recipes, balance.Refinery));
+            Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, Sites, Ledger, balance.Recipes, balance.Refinery));
             Clock.Register(new WhoQuarantineSystem(Quarantines, Stockpiles, balance.SystemFactions));
 
             var upkeep = new FleetUpkeepSystem(Fleets, FleetReadiness, FleetMotions, Stockpiles, balance.Fleets);
@@ -126,6 +137,19 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.ScanBelt, radar);
             Commands.Register(CommandType.CancelScan, radar);
             Commands.Register(CommandType.EcmJam, radar);
+        }
+
+        /// <summary>World setup: creates a player's HQ with its core base and a wallet holding the starting credits.</summary>
+        public EntityId CreatePlayer(int playerId, EntityId coreBase)
+        {
+            if (playerId <= 0) throw new ArgumentOutOfRangeException(nameof(playerId));
+            if (Ledger.TryFindPlayerWallet(playerId, out _))
+                throw new InvalidOperationException($"Player {playerId} already exists.");
+            var hq = World.Create();
+            Players.Add(hq, new PlayerHq { PlayerId = playerId, CoreBase = coreBase });
+            Wallets.Add(hq, new Wallet { OwnerPlayerId = playerId });
+            Ledger.Grant(hq, Balance.Ledger.StartingCents);
+            return hq;
         }
 
         /// <summary>World setup: creates a fleet at a site with every fleet component and an empty cargo hold.</summary>

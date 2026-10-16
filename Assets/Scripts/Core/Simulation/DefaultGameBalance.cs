@@ -16,7 +16,7 @@ namespace Unruled.Core.Simulation
                 CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateStarlaneBalance(), CreateNoaaBalance(),
                 CreateRefineryBalance(), CreateMiningBalance(),
                 CreateLifecycleBalance(), CreateLatencyBalance(), CreateRadarBalance(), CreateFleetBalance(),
-                CreateCombatBalance(), CreateRelocationBalance(),
+                CreateCombatBalance(), CreateRelocationBalance(), CreateLedgerBalance(),
                 CreateSystemFactionBalance());
 
         /// <summary>
@@ -123,6 +123,9 @@ namespace Unruled.Core.Simulation
         /// PROVISIONAL: costs 20 alloy + 50 fuel + 20 battery (teardown) and 20 coolant + 20 battery (bootstrap), all
         /// paid from the old core base when ordered; durations rolled uniformly inside each range.
         /// </summary>
+        /// <summary>PROVISIONAL: every player starts with 10,000 credits (the GDD gives no starting money).</summary>
+        public static LedgerBalance CreateLedgerBalance() => new LedgerBalance(startingCents: 10_000 * Wallet.CentsPerCredit);
+
         public static RelocationBalance CreateRelocationBalance() => new RelocationBalance(
             teardownMinTicks: 900,
             teardownMaxTicks: 1_800,

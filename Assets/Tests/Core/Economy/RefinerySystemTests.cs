@@ -12,6 +12,9 @@ namespace Unruled.Tests.Core.Economy
         private ComponentStore<Stockpile> _stockpiles;
         private ComponentStore<SiteWeather> _weather;
         private ComponentStore<Refinery> _refineries;
+        private ComponentStore<SiteInfo> _sites;
+        private ComponentStore<Wallet> _wallets;
+        private Ledger _ledger;
         private RefineryBalance _balance;
         private RefinerySystem _system;
         private EntityId _site;
@@ -25,8 +28,11 @@ namespace Unruled.Tests.Core.Economy
             _weather = _world.CreateStore<SiteWeather>();
             _refineries = _world.CreateStore<Refinery>();
             _balance = DefaultGameBalance.CreateRefineryBalance();
+            _sites = _world.CreateStore<SiteInfo>();
+            _wallets = _world.CreateStore<Wallet>();
+            _ledger = new Ledger(_wallets);
             _system = new RefinerySystem(
-                _refineries, _stockpiles, _weather, DefaultGameBalance.CreateRecipeDatabase(), _balance);
+                _refineries, _stockpiles, _weather, _sites, _ledger, DefaultGameBalance.CreateRecipeDatabase(), _balance);
 
             _site = _world.Create();
             _stockpiles.Add(_site, default);
@@ -138,6 +144,33 @@ namespace Unruled.Tests.Core.Economy
             RunCycles(1);
 
             Assert.AreEqual(RefineryState.ActiveProduction, Plant.State);
+        }
+
+        [Test]
+        public void Upkeep_IsBurnedFromTheOwnersWallet_ElseCarriedAsDebt()
+        {
+            const int owner = 3;
+            _sites.Add(_site, new SiteInfo { OwnerPlayerId = owner });
+            var wallet = _world.Create();
+            _wallets.Add(wallet, new Wallet { OwnerPlayerId = owner });
+            long cycleCents = _balance.BaseUpkeepPerCycle * Wallet.CentsPerCredit;
+            _ledger.Grant(wallet, cycleCents * 2 - 1);
+            Stock.Add(ItemId.RawWater, 5);
+            Stock.Add(ItemId.RawNitrogen, 5);
+
+            RunCycles(1);
+            Assert.AreEqual(0, Plant.AccruedUpkeep);
+            Assert.AreEqual(cycleCents - 1, _ledger.Balance(wallet));
+
+            _system.OnTick(2L * _balance.CycleTicks);
+            Assert.AreEqual(_balance.BaseUpkeepPerCycle, Plant.AccruedUpkeep, "short by one cent: the cycle is owed");
+            Assert.AreEqual(cycleCents - 1, _ledger.Balance(wallet), "nothing is paid partly");
+            Assert.AreEqual(2, Stock.Get(ItemId.ItemOxygen), "debt does not stop production");
+
+            _ledger.Grant(wallet, cycleCents + 1);
+            _system.OnTick(3L * _balance.CycleTicks);
+            Assert.AreEqual(0, Plant.AccruedUpkeep, "the debt and the new cycle are paid together");
+            Assert.AreEqual(0, _ledger.Balance(wallet));
         }
 
         private sealed class NoCommands : ICommandHandler

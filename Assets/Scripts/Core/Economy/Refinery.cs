@@ -17,6 +17,6 @@ namespace Unruled.Core.Economy
         public EntityId Site;
         public ItemId Output;
         public RefineryState State;
-        public long AccruedUpkeep; // upkeep units owed; settled by the economy later
+        public long AccruedUpkeep; // upkeep credits owed that the site owner could not pay yet
     }
 }
