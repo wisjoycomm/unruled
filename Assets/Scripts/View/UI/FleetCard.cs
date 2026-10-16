@@ -228,7 +228,7 @@ namespace Unruled.View.UI
             _state.text = _refusal;
         }
 
-        private static string RefusalText(IssueResult result)
+        internal static string RefusalText(IssueResult result)
         {
             switch (result)
             {

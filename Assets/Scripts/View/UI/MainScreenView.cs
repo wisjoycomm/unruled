@@ -20,6 +20,7 @@ namespace Unruled.View.UI
         private ContractAndMarketUI _market;
         private FleetCard _fleet;
         private InFlightStrip _inFlight;
+        private OperationsPanel _ops;
         private SimulationWorld _sim;
         private long _shownTick = -1;
 
@@ -42,6 +43,7 @@ namespace Unruled.View.UI
             _market = new ContractAndMarketUI(root);
             _fleet = new FleetCard(root);
             _inFlight = new InFlightStrip(root);
+            _ops = new OperationsPanel(root);
             BoardView = TopTelemetryHud.Require<VisualElement>(root, "board-view");
             SystemTab = TopTelemetryHud.Require<Button>(root, "tab-system");
             GalaxyTab = TopTelemetryHud.Require<Button>(root, "tab-galaxy");
@@ -52,6 +54,8 @@ namespace Unruled.View.UI
             _market.Bind(sim);
             _fleet.Bind(sim, playerId);
             _inFlight.Bind(sim, playerId);
+            _ops.Bind(sim, playerId);
+            _ops.SelectFleet(_fleet.Fleet);
             _top.SetSelection(_fleet.Fleet);
             _shownTick = -1;
             RefreshAll();
@@ -71,16 +75,20 @@ namespace Unruled.View.UI
             if (_fleet == null)
                 return;
             _fleet.Select(fleet);
+            _ops.SelectFleet(fleet);
             _top.SetSelection(fleet);
             RefreshAll();
         }
 
-        /// <summary>Selects a site or lane: latency to it, and the selected fleet's Move destination.</summary>
+        /// <summary>
+        /// Selects a site or lane: latency to it, the selected fleet's Move destination and, for a site, the SITE tab.
+        /// </summary>
         public void SelectTarget(EntityId siteOrLane)
         {
             if (_fleet == null)
                 return;
             _fleet.SetMoveTarget(siteOrLane);
+            _ops.SelectSite(siteOrLane);
             _top.SetSelection(siteOrLane);
             RefreshAll();
         }
@@ -99,6 +107,7 @@ namespace Unruled.View.UI
             _market.Refresh();
             _fleet.Refresh();
             _inFlight.Refresh();
+            _ops.Refresh();
         }
     }
 }

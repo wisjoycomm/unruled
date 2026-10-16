@@ -24,6 +24,9 @@ namespace Unruled.View.UI
             "Convoy route", "Refinery cap", "Pause drills"
         };
 
+        internal static string CommandName(CommandType type) =>
+            (int)type < CommandNames.Length ? CommandNames[(int)type] : "Order";
+
         private readonly DashedFrame[] _rows = new DashedFrame[Slots];
         private readonly Label[] _text = new Label[Slots];
         private readonly Label[] _eta = new Label[Slots];
@@ -117,8 +120,7 @@ namespace Unruled.View.UI
 
         private string Describe(in DelayedPlayerCommand command)
         {
-            int type = (int)command.CommandType;
-            string name = type < CommandNames.Length ? CommandNames[type] : "Order";
+            string name = CommandName(command.CommandType);
             var target = command.Target;
             if (_sim.Fleets.Has(target))
             {

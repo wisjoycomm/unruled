@@ -263,6 +263,11 @@
                         <ui:Button name="order-vent" class="u-btn u-btn--danger" text="Vent coolant" />
                     </ui:VisualElement>
                 </ui:VisualElement>
+                <ui:VisualElement name="side-tabs" class="seg side-tabs">
+                    <ui:Button name="side-tab-0" class="seg__item seg__item--on" text="MARKET" />
+                    <ui:Button name="side-tab-1" class="seg__item" text="BASE" />
+                    <ui:Button name="side-tab-2" class="seg__item" text="SITE" />
+                </ui:VisualElement>
                 <ui:VisualElement name="market" class="market">
                     <ui:VisualElement class="market__head">
                         <ui:Label class="section-title section-title--wto" text="WTO MARKET" />
@@ -305,6 +310,103 @@
                         <ui:Label name="delta" class="market-row__delta u-down" text="−0.4%" />
                     </ui:VisualElement>
                 </ui:VisualElement>
+                <ui:ScrollView name="ops-base" class="ops" style="display: none;">
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:Label class="gauge__label" text="RESEARCH" />
+                            <ui:Label name="research-status" class="section-meta" text="TIER 1 · TELEMETRY 0%" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-stress-test" class="u-btn" text="Stress test" />
+                            <ui:Button name="do-audit" class="u-btn u-btn--secondary" text="Join audit" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:Label class="gauge__label" text="SHIPYARD" />
+                            <ui:Label name="ship-status" class="section-meta" text="TIER 1 · 0 QUEUED" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="seg">
+                            <ui:Button name="ship-class-0" class="seg__item seg__item--on" text="LINE" />
+                            <ui:Button name="ship-class-1" class="seg__item" text="EW" />
+                            <ui:Button name="ship-class-2" class="seg__item" text="SUPPLY" />
+                            <ui:Button name="ship-class-3" class="seg__item" text="CARGO" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="seg">
+                            <ui:Button name="ship-count-0" class="seg__item seg__item--on" text="×1" />
+                            <ui:Button name="ship-count-1" class="seg__item" text="×5" />
+                            <ui:Button name="ship-count-2" class="seg__item" text="×10" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders ops__orders">
+                            <ui:Button name="do-build-ships" class="u-btn" text="Build ships" />
+                            <ui:Button name="do-retrofit" class="u-btn u-btn--secondary" text="Retrofit fleet" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:Label class="gauge__label" text="JUMP GATE" />
+                            <ui:Label name="gate-status" class="section-meta" text="DORMANT" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-open-gate" class="u-btn" text="Open gate" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:Label name="base-feedback" class="section-meta ops__feedback" text="" />
+                </ui:ScrollView>
+                <ui:ScrollView name="ops-site" class="ops" style="display: none;">
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:Label name="site-name" class="section-title" text="KEPLER-3" />
+                            <ui:Label name="site-owner" class="section-meta" text="YOURS" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-claim" class="u-btn" text="Claim site" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="item-picker">
+                            <ui:Button name="item-prev" class="u-btn u-btn--secondary item-picker__step" text="‹" />
+                            <ui:Label name="item-name" class="item-picker__name" text="WATER" />
+                            <ui:Button name="item-next" class="u-btn u-btn--secondary item-picker__step" text="›" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:Label class="gauge__label" text="DRILLS" />
+                            <ui:Label name="drill-status" class="section-meta" text="0 DEPOSITS" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-rig" class="u-btn" text="Build rig" />
+                            <ui:Button name="do-pause" class="u-btn u-btn--secondary" text="Pause drills" />
+                            <ui:Button name="do-retract" class="u-btn u-btn--danger" text="Retract drills" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:Label class="gauge__label" text="REFINERY" />
+                            <ui:Label name="refinery-status" class="section-meta" text="NONE" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-refinery" class="u-btn" text="Build refinery" />
+                        </ui:VisualElement>
+                        <ui:Label class="gauge__label" text="OUTPUT CAP" />
+                        <ui:VisualElement class="seg">
+                            <ui:Button name="cap-0" class="seg__item" text="NONE" />
+                            <ui:Button name="cap-1" class="seg__item" text="1,000" />
+                            <ui:Button name="cap-2" class="seg__item" text="5,000" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:Label class="gauge__label" text="SELECTED FLEET" />
+                            <ui:Label name="cargo-status" class="section-meta" text="NO FLEET" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-load" class="u-btn" text="Load 100" />
+                            <ui:Button name="do-unload" class="u-btn u-btn--secondary" text="Unload 100" />
+                            <ui:Button name="do-route" class="u-btn u-btn--secondary" text="Convoy route here" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:Label name="site-feedback" class="section-meta ops__feedback" text="" />
+                </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
