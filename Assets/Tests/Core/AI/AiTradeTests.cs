@@ -1,0 +1,153 @@
+using NUnit.Framework;
+using Unruled.Core.AI;
+using Unruled.Core.Board;
+using Unruled.Core.Ecs;
+using Unruled.Core.Economy;
+using Unruled.Core.Military;
+using Unruled.Core.Research;
+using Unruled.Core.Simulation;
+
+namespace Unruled.Tests.Core.AI
+{
+    /// <summary>One AI player with a core base; its WTO orders.</summary>
+    public class AiTradeTests
+    {
+        private const int Me = 1;
+        private const byte Trader = 2; // Industrialist_Trader
+
+        private SimulationWorld _sim;
+        private EntityId _home, _hq;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 3);
+            _home = _sim.World.Create();
+            _sim.Sites.Add(_home, new SiteInfo { OwnerPlayerId = Me });
+            _sim.Stockpiles.Add(_home, default);
+            _sim.Weather.Add(_home, default);
+            _hq = _sim.CreatePlayer(Me, _home);
+            _sim.Standings.Get(_hq).IsAudited = true;
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.Retooling; // no stress test to bid for unless a test says so
+        }
+
+        private AiOrder? Find(AiAction action)
+        {
+            _sim.Ai.Assign(_hq, Trader);
+            while (_sim.Clock.CurrentTick % _sim.Balance.Ai.ThinkIntervalTicks != 0)
+                _sim.Clock.Advance(1);
+            int n = _sim.Ai.Think(_sim.Clock.CurrentTick);
+            for (int i = 0; i < n; i++)
+                if (_sim.Ai.OrderAt(i).Action == action)
+                    return _sim.Ai.OrderAt(i);
+            return null;
+        }
+
+        private void RunPendingOrders()
+        {
+            for (int i = 0; i < 1_000 && _sim.Clock.PendingCommandCount > 0; i++)
+                _sim.Clock.Advance(1);
+            Assert.AreEqual(0, _sim.Clock.PendingCommandCount, "orders arrived");
+        }
+
+        private int Orders(OrderSide side)
+        {
+            int n = 0;
+            for (int i = 0; i < _sim.WtoOrders.Count; i++)
+                if (_sim.WtoOrders.At(i).Side == side)
+                    n++;
+            return n;
+        }
+
+        private long Price(ItemId item, int percent) =>
+            _sim.Market.ReferencePriceCents(item, _sim.Clock.CurrentTick) * (100 + percent) / 100;
+
+        [Test]
+        public void SellsABatchOfSurplus_UnderTheReferencePrice_ThenCancelsItWhenStale()
+        {
+            var ai = _sim.Balance.Ai;
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawBiomass, ai.SellAbove + ai.SellBatch);
+
+            var order = Find(AiAction.SellSurplus);
+            Assert.IsTrue(order.HasValue);
+            Assert.AreEqual(IssueResult.Issued, order.Value.Result);
+            Assert.IsFalse(Find(AiAction.SellSurplus).HasValue, "one sell order in flight at a time");
+            RunPendingOrders();
+
+            Assert.AreEqual(1, _sim.WtoOrders.Count);
+            ref var placed = ref _sim.WtoOrders.At(0);
+            Assert.AreEqual(OrderSide.Sell, placed.Side);
+            Assert.AreEqual(ai.SellBatch, placed.Remaining);
+            Assert.AreEqual(Price(ItemId.RawBiomass, -ai.TradePricePercent), placed.PriceCents);
+            Assert.AreEqual(ai.SellAbove, _sim.Stockpiles.Get(_home).Get(ItemId.RawBiomass));
+            Assert.IsFalse(Find(AiAction.SellSurplus).HasValue, "stock is back at the threshold");
+
+            _sim.Clock.Advance(ai.TradeOrderTicks);
+            Assert.IsTrue(Find(AiAction.CancelOrder).HasValue);
+            RunPendingOrders();
+            Assert.AreEqual(0, Orders(OrderSide.Sell), "cancelled");
+            Assert.AreEqual(ai.SellAbove + ai.SellBatch, _sim.Stockpiles.Get(_home).Get(ItemId.RawBiomass), "goods back");
+        }
+
+        [Test]
+        public void SellsIntoARivalBid_AtItsPrice_OnlyWhenAConvoyCanReachIt()
+        {
+            var ai = _sim.Balance.Ai;
+            var rivalSite = _sim.World.Create();
+            _sim.Sites.Add(rivalSite, new SiteInfo { OwnerPlayerId = 2, PosX = 200 });
+            long bidPrice = Price(ItemId.ItemSteel, 10);
+            _sim.WtoOrders.Add(_sim.World.Create(), new WtoOrder
+            {
+                OwnerPlayerId = 2, Item = ItemId.ItemSteel, Side = OrderSide.Buy, PriceCents = bidPrice, Remaining = 40,
+                Site = rivalSite
+            });
+            _sim.Stockpiles.Get(_home).Add(ItemId.ItemSteel, ai.FillAbove + 25);
+
+            Assert.IsFalse(Find(AiAction.SellSurplus).HasValue, "no starlane, so the contract could not be delivered");
+
+            var lane = _sim.World.Create();
+            _sim.Starlanes.Add(lane, new StarlaneEdge { SiteA = _home, SiteB = rivalSite, Tier = StarlaneTier.StaHighway, Length = 200 });
+            _sim.LaneWeather.Add(lane, default);
+            _sim.Graph.Rebuild(_sim.Starlanes);
+            _sim.Clock.Advance(1);
+            Assert.IsTrue(Find(AiAction.SellSurplus).HasValue);
+            DelayedPlayerCommand sell = default;
+            for (int i = 0; i < _sim.Clock.PendingCommandCount; i++)
+                if (_sim.Clock.PendingAt(i).CommandType == CommandType.PlaceSellOrder)
+                    sell = _sim.Clock.PendingAt(i);
+            Assert.AreEqual((int)ItemId.ItemSteel, sell.ParamA);
+            Assert.AreEqual(25, sell.ParamB, "all of the stock above the fill floor");
+            Assert.AreEqual(bidPrice, sell.ParamC, "at the bid's price");
+        }
+
+        [Test]
+        public void BidsOverTheReferencePrice_ForWhatTheStressTestLacks()
+        {
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.StressTest;
+            var cost = _sim.Balance.Research.Tier(2).StressTestCost;
+            for (int i = 1; i < cost.Length; i++)
+                _sim.Stockpiles.Get(_home).Add(cost[i].Item, cost[i].Quantity);
+
+            var order = Find(AiAction.BuyShortfall);
+            Assert.IsTrue(order.HasValue);
+            RunPendingOrders();
+
+            Assert.AreEqual(1, _sim.WtoOrders.Count);
+            ref var bid = ref _sim.WtoOrders.At(0);
+            Assert.AreEqual(OrderSide.Buy, bid.Side);
+            Assert.AreEqual(cost[0].Item, bid.Item);
+            Assert.AreEqual(cost[0].Quantity, bid.Remaining);
+            Assert.AreEqual(Price(cost[0].Item, _sim.Balance.Ai.TradePricePercent), bid.PriceCents);
+            Assert.IsFalse(Find(AiAction.BuyShortfall).HasValue, "already bidding");
+        }
+
+        [Test]
+        public void DoesNotBid_WithoutTheCredits()
+        {
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.StressTest;
+            _sim.Ledger.TryFindPlayerWallet(Me, out var wallet);
+            _sim.Ledger.Burn(wallet, _sim.Ledger.Balance(wallet));
+            Assert.IsFalse(Find(AiAction.BuyShortfall).HasValue);
+        }
+    }
+}

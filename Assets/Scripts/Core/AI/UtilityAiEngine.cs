@@ -36,7 +36,10 @@ namespace Unruled.Core.AI
         BuildRefinery = 17,
         PauseDrills = 18,
         AuditOptIn = 19,
-        AssaultCitadel = 20
+        AssaultCitadel = 20,
+        SellSurplus = 21,
+        BuyShortfall = 22,
+        CancelOrder = 23
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -117,6 +120,10 @@ namespace Unruled.Core.AI
         private readonly ComponentStore<Refinery> _refineries;
         private readonly ComponentStore<PlayerStanding> _standings;
         private readonly ComponentStore<SystemCitadel> _citadels;
+        private readonly ComponentStore<WtoOrder> _wtoOrders;
+        private readonly ComponentStore<ItemMarket> _markets;
+        private readonly Ledger _ledger;
+        private readonly IMarketRates _rates;
         private readonly CommandIssuer _issuer;
         private readonly RoutePlanner _routes;
         private readonly ITechGates _tech;
@@ -133,6 +140,7 @@ namespace Unruled.Core.AI
         private readonly ConvoyBalance _convoyBalance;
         private readonly NewGameBalance _newGame;
         private readonly FleetBalance _fleetBalance;
+        private readonly WtoBalance _wtoBalance;
 
         private FleetRoute _route;
 
@@ -147,7 +155,9 @@ namespace Unruled.Core.AI
             ComponentStore<RadarScan> scans, ComponentStore<TechProgress> progress, ComponentStore<JumpGate> gates,
             ComponentStore<ConvoyRoute> convoyRoutes, ComponentStore<ShipBuildOrder> shipOrders,
             ComponentStore<Refinery> refineries, ComponentStore<PlayerStanding> standings, ComponentStore<SystemCitadel> citadels,
-            CommandIssuer issuer, RoutePlanner routes, ITechGates tech, GameBalanceConfig config)
+            ComponentStore<WtoOrder> wtoOrders, ComponentStore<ItemMarket> markets, Ledger ledger, IMarketRates rates,
+            CommandIssuer issuer,
+            RoutePlanner routes, ITechGates tech, GameBalanceConfig config)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             _controllers = controllers ?? throw new ArgumentNullException(nameof(controllers));
@@ -169,6 +179,10 @@ namespace Unruled.Core.AI
             _refineries = refineries ?? throw new ArgumentNullException(nameof(refineries));
             _standings = standings ?? throw new ArgumentNullException(nameof(standings));
             _citadels = citadels ?? throw new ArgumentNullException(nameof(citadels));
+            _wtoOrders = wtoOrders ?? throw new ArgumentNullException(nameof(wtoOrders));
+            _markets = markets ?? throw new ArgumentNullException(nameof(markets));
+            _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
+            _rates = rates ?? throw new ArgumentNullException(nameof(rates));
             _issuer = issuer ?? throw new ArgumentNullException(nameof(issuer));
             _routes = routes ?? throw new ArgumentNullException(nameof(routes));
             _tech = tech ?? throw new ArgumentNullException(nameof(tech));
@@ -185,6 +199,7 @@ namespace Unruled.Core.AI
             _convoyBalance = config.Convoys;
             _newGame = config.NewGame;
             _fleetBalance = config.Fleets;
+            _wtoBalance = config.Wto;
         }
 
         /// <summary>The orders tried by the last think that ran, in decision order.</summary>
@@ -234,6 +249,7 @@ namespace Unruled.Core.AI
                 ThinkRadar(player, preset, _controllers.EntityAt(c));
                 ThinkProgress(player, preset, _controllers.EntityAt(c));
                 ThinkEconomy(player, preset, _controllers.EntityAt(c));
+                ThinkTrade(player, preset, _controllers.EntityAt(c), tick);
             }
             return _orderCount;
         }
@@ -568,6 +584,141 @@ namespace Unruled.Core.AI
                 }, AiAction.BuildRefinery, Score(preset.ResupplyLogisticsWeight, Full));
                 return;
             }
+        }
+
+        // WTO: cancels its orders open past the trade window; sells surplus into a rival's bid, or else lists one batch
+        // under the reference price; bids over it for the first item the next stress test still lacks. Orders are sized
+        // to what the wallet can lock (the seller's escrow deposit; the buyer's payment, from its bid budget). One
+        // order of a kind in flight at a time.
+        private void ThinkTrade(in PlayerHq player, AiPreset preset, EntityId hq, long tick)
+        {
+            if (!_stockpiles.Has(player.CoreBase) || !_ledger.TryFindPlayerWallet(player.PlayerId, out var wallet))
+                return;
+            int weight = preset.ResupplyLogisticsWeight;
+            for (int o = 0; o < _wtoOrders.Count; o++)
+            {
+                ref var order = ref _wtoOrders.At(o);
+                if (order.OwnerPlayerId != player.PlayerId || tick - order.PlacedTick < _balance.TradeOrderTicks ||
+                    _issuer.IsInFlight(player.PlayerId, CommandType.CancelOrder, order.Site))
+                    continue;
+                Issue(new DelayedPlayerCommand
+                {
+                    PlayerId = player.PlayerId, CommandType = CommandType.CancelOrder, Target = order.Site,
+                    ParamEntity = _wtoOrders.EntityAt(o)
+                }, AiAction.CancelOrder, Score(weight, Threshold));
+                break;
+            }
+
+            ref var stock = ref _stockpiles.Get(player.CoreBase);
+            if (!_issuer.IsInFlight(player.PlayerId, CommandType.PlaceSellOrder, player.CoreBase) &&
+                (FindBidToFill(player, hq, ref stock, out var sellItem, out long ask, out long wanted) ||
+                 FindSurplusToList(player.PlayerId, hq, ref stock, tick, out sellItem, out ask, out wanted)))
+            {
+                // The engine rounds the whole deposit down, so price the cap the same way.
+                long depositPercent = ask * _rates.EscrowRatePercent(player.PlayerId);
+                long quantity = depositPercent > 0 ? Math.Min(wanted, _ledger.Balance(wallet) * 100 / depositPercent) : wanted;
+                if (quantity > 0)
+                    Issue(new DelayedPlayerCommand
+                    {
+                        PlayerId = player.PlayerId, CommandType = CommandType.PlaceSellOrder, Target = player.CoreBase,
+                        ParamA = (int)sellItem, ParamB = (int)quantity, ParamC = (int)ask
+                    }, AiAction.SellSurplus, Score(weight, Threshold));
+            }
+
+            if (!_progress.Has(hq) || _progress.Get(hq).Stage > ResearchStage.StressTest ||
+                _issuer.IsInFlight(player.PlayerId, CommandType.PlaceBuyOrder, player.CoreBase))
+                return;
+            var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
+            for (int i = 0; i < cost.Length; i++)
+            {
+                int missing = cost[i].Quantity - stock.Get(cost[i].Item);
+                if (missing <= 0 || HasOpenOrder(player.PlayerId, cost[i].Item, OrderSide.Buy))
+                    continue;
+                long price = TradePrice(cost[i].Item, tick, _balance.TradePricePercent);
+                long quantity = Math.Min(missing, _ledger.Balance(wallet) * _balance.BidBudgetPercent / 100 / price);
+                if (quantity == 0)
+                    return;
+                Issue(new DelayedPlayerCommand
+                {
+                    PlayerId = player.PlayerId, CommandType = CommandType.PlaceBuyOrder, Target = player.CoreBase,
+                    ParamA = (int)cost[i].Item, ParamB = (int)quantity, ParamC = (int)price
+                }, AiAction.BuyShortfall, Score(weight, Full));
+                return;
+            }
+        }
+
+        // Core stock above a threshold and what the next stress test needs.
+        private int Surplus(EntityId hq, ref Stockpile stock, ItemId item, int keep) =>
+            stock.Get(item) - ResearchReserve(hq, item) - keep;
+
+        // The best rival bid for an item the player has surplus of and isn't already selling, at a site a contract convoy
+        // can reach from the core base (else the contract is void): sold into at its price.
+        private bool FindBidToFill(in PlayerHq player, EntityId hq, ref Stockpile stock, out ItemId item, out long price,
+            out long wanted)
+        {
+            item = ItemId.None;
+            price = 0;
+            wanted = 0;
+            for (int o = 0; o < _wtoOrders.Count; o++)
+            {
+                ref var bid = ref _wtoOrders.At(o);
+                if (bid.Side != OrderSide.Buy || bid.OwnerPlayerId == player.PlayerId || bid.PriceCents <= price)
+                    continue;
+                int surplus = Surplus(hq, ref stock, bid.Item, _balance.FillAbove);
+                if (surplus <= 0 || HasOpenOrder(player.PlayerId, bid.Item, OrderSide.Sell) ||
+                    !_routes.TryPlan(player.CoreBase, bid.Site, WtoContractSystem.ConvoyTier, ref _route))
+                    continue;
+                item = bid.Item;
+                price = bid.PriceCents;
+                wanted = Math.Min(Math.Min(bid.Remaining, surplus), _balance.SellBatch);
+            }
+            return wanted > 0;
+        }
+
+        // With no listing of its own open, a batch of the first item in surplus by a whole batch, under the reference price.
+        private bool FindSurplusToList(int playerId, EntityId hq, ref Stockpile stock, long tick, out ItemId item, out long price,
+            out long wanted)
+        {
+            item = ItemId.None;
+            price = 0;
+            wanted = 0;
+            for (int o = 0; o < _wtoOrders.Count; o++)
+                if (_wtoOrders.At(o).OwnerPlayerId == playerId && _wtoOrders.At(o).Side == OrderSide.Sell)
+                    return false;
+            for (int slot = 0; slot < ItemIds.Count; slot++)
+            {
+                var candidate = ItemIds.FromSlot(slot);
+                if (Surplus(hq, ref stock, candidate, _balance.SellAbove) < _balance.SellBatch)
+                    continue;
+                item = candidate;
+                price = TradePrice(candidate, tick, -_balance.TradePricePercent);
+                wanted = _balance.SellBatch;
+                return true;
+            }
+            return false;
+        }
+
+        private bool HasOpenOrder(int playerId, ItemId item, OrderSide side)
+        {
+            for (int o = 0; o < _wtoOrders.Count; o++)
+            {
+                ref var order = ref _wtoOrders.At(o);
+                if (order.OwnerPlayerId == playerId && order.Item == item && order.Side == side)
+                    return true;
+            }
+            return false;
+        }
+
+        // Reference price moved by percent (within the WTO band, which is wider); at least one cent.
+        private long TradePrice(ItemId item, long tick, int percent)
+        {
+            for (int m = 0; m < _markets.Count; m++)
+            {
+                ref var market = ref _markets.At(m);
+                if (market.Item == item)
+                    return Math.Max(1, market.ReferencePriceCents(tick, _wtoBalance.VwapWindowTicks) * (100 + percent) / 100);
+            }
+            throw new InvalidOperationException($"No WTO market for {item}.");
         }
 
         private bool HasIdleConvoy(int playerId)

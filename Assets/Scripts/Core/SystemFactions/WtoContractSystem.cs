@@ -54,7 +54,8 @@ namespace Unruled.Core.SystemFactions
     /// </summary>
     public sealed class WtoContractSystem : ISimSystem, ITradeSettlement
     {
-        private const byte ConvoyTier = 1;
+        /// <summary>Tech tier of the convoys contracts launch, and so of the routes a contract can use.</summary>
+        public const byte ConvoyTier = 1;
 
         private readonly World _world;
         private readonly ComponentStore<WtoContract> _contracts;

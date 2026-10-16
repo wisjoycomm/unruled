@@ -34,6 +34,8 @@ namespace Unruled.Tests.Core.AI
             sim.Graph.Rebuild(sim.Starlanes);
             hq = sim.CreatePlayer(Me, home);
             sim.Standings.Get(hq).IsAudited = true; // so the audit opt-in doesn't add an order to every think
+            sim.Ledger.TryFindPlayerWallet(Me, out var wallet);
+            sim.Ledger.Burn(wallet, sim.Ledger.Balance(wallet)); // and no WTO bids for the stress test
             return sim;
         }
 
