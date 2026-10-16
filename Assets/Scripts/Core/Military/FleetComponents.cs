@@ -74,6 +74,42 @@ namespace Unruled.Core.Military
         public bool IsReversing;
     }
 
+    /// <summary>
+    /// ECS component: the lanes a fleet still has to take after its current one (blittable fixed buffers of lane
+    /// index and generation). Owned by <see cref="FleetMovementSystem"/>.
+    /// </summary>
+    public unsafe struct FleetRoute
+    {
+        public const int MaxLanes = 32;
+
+        private fixed int _laneIndex[MaxLanes];
+        private fixed int _laneGeneration[MaxLanes];
+        public int Count;
+        public int Next; // the lane to depart on at the next site
+
+        public bool HasNext => Next < Count;
+
+        public EntityId LaneAt(int i)
+        {
+            if (i < 0 || i >= Count) throw new System.ArgumentOutOfRangeException(nameof(i));
+            return new EntityId(_laneIndex[i], _laneGeneration[i]);
+        }
+
+        public void Append(EntityId lane)
+        {
+            if (Count == MaxLanes) throw new System.InvalidOperationException("Route is full.");
+            _laneIndex[Count] = lane.Index;
+            _laneGeneration[Count] = lane.Generation;
+            Count++;
+        }
+
+        public void Clear()
+        {
+            Count = 0;
+            Next = 0;
+        }
+    }
+
     /// <summary>ECS component: mothball and upkeep state of a fleet (tab 03).</summary>
     public struct FleetReadiness
     {
@@ -102,6 +138,7 @@ namespace Unruled.Core.Military
         public int AmmoDebtMilli;
         public int BatteryDebtMilli;
         public int CoolantDebtMilli;
+        public int FuelDebtMilli;
     }
 
     /// <summary>ECS component: what enemy sensors know about a fleet.</summary>

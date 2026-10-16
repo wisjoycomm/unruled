@@ -95,6 +95,24 @@ namespace Unruled.Tests.Core.Military
         private ref FleetCombatState C(EntityId fleet) => ref _sim.FleetCombat.Get(fleet);
 
         [Test]
+        public void ActingFleets_BurnFuel_ByShipsAndTierFuelBurn()
+        {
+            var a = OnOpenLane(Fleet(Attacker, 10, 5, supplies: 100));
+            var d = OnOpenLane(Fleet(Defender, 10, 5, supplies: 100));
+            U(d).TechTier = 2;
+            _sim.Stockpiles.Get(a).Add(ItemId.ItemFuel, 50);
+            _sim.Stockpiles.Get(d).Add(ItemId.ItemFuel, 50);
+
+            Salvos(10);
+
+            // 15 ships x 0.02 fuel x 10 salvos = 3 at tier 1; tier 2 burns 1.2x = 3.6, paid in whole units as owed.
+            long tier1 = 15L * _b.FuelPerShipPerSalvoMilli * 10;
+            long tier2 = tier1 * _sim.Balance.Fleets.Tier(2).BurnMilli(ItemId.ItemFuel) / 1000;
+            Assert.AreEqual(50 - tier1 / 1000, _sim.Stockpiles.Get(a).Get(ItemId.ItemFuel));
+            Assert.AreEqual(50 - tier2 / 1000, _sim.Stockpiles.Get(d).Get(ItemId.ItemFuel));
+        }
+
+        [Test]
         public void InTransit_OneVsOne_IsAStalemate()
         {
             var a = OnOpenLane(Fleet(Attacker, 10, 5, supplies: 100));

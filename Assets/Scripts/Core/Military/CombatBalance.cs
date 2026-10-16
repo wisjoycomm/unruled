@@ -34,6 +34,7 @@ namespace Unruled.Core.Military
         public readonly int OverheatMilli;
         public readonly int OverheatReleaseMilli;
         public readonly int CookOffHullPercent;
+        public readonly int FuelPerShipPerSalvoMilli; // manoeuvring fuel of every acting ship, times the tier's fuel burn
 
         public CombatBalance(
             int salvoCycleTicks, int lineAlpha, int ewBeta, int conservationRofPercent, int standardRofPercent,
@@ -41,7 +42,7 @@ namespace Unruled.Core.Military
             int maxExtraLanes, int lineHp, int ewHp, int supplyHp, int cargoHp, int ammoPerLineShipMilli,
             int batteryPerEwShipMilli, int ventCoolantPerShipMilli, int tenderTransferPerSalvo, int resupplyTarget,
             int ambientMilli, int fireHeatMilli, int passiveCoolMilli, int ventCoolMilli, int overheatMilli,
-            int overheatReleaseMilli, int cookOffHullPercent)
+            int overheatReleaseMilli, int cookOffHullPercent, int fuelPerShipPerSalvoMilli)
         {
             if (salvoCycleTicks < 1) throw new ArgumentOutOfRangeException(nameof(salvoCycleTicks));
             if (lineAlpha < 0) throw new ArgumentOutOfRangeException(nameof(lineAlpha));
@@ -60,6 +61,7 @@ namespace Unruled.Core.Military
                 throw new ArgumentOutOfRangeException(nameof(overheatReleaseMilli));
             if (fireHeatMilli < 0 || passiveCoolMilli < 0 || ventCoolMilli < 0) throw new ArgumentOutOfRangeException(nameof(fireHeatMilli));
             if (cookOffHullPercent < 0 || cookOffHullPercent > 100) throw new ArgumentOutOfRangeException(nameof(cookOffHullPercent));
+            if (fuelPerShipPerSalvoMilli < 0) throw new ArgumentOutOfRangeException(nameof(fuelPerShipPerSalvoMilli));
 
             SalvoCycleTicks = salvoCycleTicks;
             LineAlpha = lineAlpha;
@@ -87,6 +89,7 @@ namespace Unruled.Core.Military
             OverheatMilli = overheatMilli;
             OverheatReleaseMilli = overheatReleaseMilli;
             CookOffHullPercent = cookOffHullPercent;
+            FuelPerShipPerSalvoMilli = fuelPerShipPerSalvoMilli;
         }
 
         public int RofPercent(RofStance stance)

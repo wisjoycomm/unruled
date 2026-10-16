@@ -12,6 +12,7 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<SiteInfo> _sites;
         private readonly ComponentStore<FleetUnit> _units;
         private readonly ComponentStore<FleetMotion> _motions;
+        private readonly ComponentStore<FleetRoute> _routes;
         private readonly ComponentStore<FleetSensors> _sensors;
         private readonly ComponentStore<FleetReadiness> _readiness;
         private readonly ComponentStore<FleetCombatState> _combat;
@@ -20,7 +21,7 @@ namespace Unruled.Core.Military
 
         public FleetFactory(
             World world, ComponentStore<SiteInfo> sites, ComponentStore<FleetUnit> units,
-            ComponentStore<FleetMotion> motions, ComponentStore<FleetSensors> sensors,
+            ComponentStore<FleetMotion> motions, ComponentStore<FleetRoute> routes, ComponentStore<FleetSensors> sensors,
             ComponentStore<FleetReadiness> readiness, ComponentStore<FleetCombatState> combat,
             ComponentStore<Stockpile> stockpiles, CombatBalance combatBalance)
         {
@@ -28,6 +29,7 @@ namespace Unruled.Core.Military
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _units = units ?? throw new ArgumentNullException(nameof(units));
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
+            _routes = routes ?? throw new ArgumentNullException(nameof(routes));
             _sensors = sensors ?? throw new ArgumentNullException(nameof(sensors));
             _readiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
             _combat = combat ?? throw new ArgumentNullException(nameof(combat));
@@ -45,6 +47,7 @@ namespace Unruled.Core.Military
             var fleet = _world.Create();
             _units.Add(fleet, unit);
             _motions.Add(fleet, new FleetMotion { Site = site });
+            _routes.Add(fleet, default);
             _sensors.Add(fleet, default);
             _readiness.Add(fleet, default);
             _combat.Add(fleet, new FleetCombatState

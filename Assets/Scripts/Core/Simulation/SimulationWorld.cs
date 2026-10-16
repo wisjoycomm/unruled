@@ -33,6 +33,7 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<RelayStation> Relays;
         public readonly ComponentStore<FleetUnit> Fleets;
         public readonly ComponentStore<FleetMotion> FleetMotions;
+        public readonly ComponentStore<FleetRoute> FleetRoutes;
         public readonly ComponentStore<FleetSensors> FleetSensors;
         public readonly ComponentStore<FleetReadiness> FleetReadiness;
         public readonly ComponentStore<FleetCombatState> FleetCombat;
@@ -46,6 +47,7 @@ namespace Unruled.Core.Simulation
         public readonly EntityId StaTollPool;
         public readonly PlanetLifecycleSystem Lifecycle;
         public readonly FleetFactory FleetFactory;
+        public readonly RoutePlanner Routes;
         public readonly FleetMovementSystem Movement;
         public readonly CapitalRelocationSystem Relocation;
         public readonly SignalLatencySolver Latency;
@@ -72,6 +74,7 @@ namespace Unruled.Core.Simulation
             Relays = World.CreateStore<RelayStation>();
             Fleets = World.CreateStore<FleetUnit>();
             FleetMotions = World.CreateStore<FleetMotion>();
+            FleetRoutes = World.CreateStore<FleetRoute>();
             FleetSensors = World.CreateStore<FleetSensors>();
             FleetReadiness = World.CreateStore<FleetReadiness>();
             FleetCombat = World.CreateStore<FleetCombatState>();
@@ -89,7 +92,7 @@ namespace Unruled.Core.Simulation
                 balance.Latency);
             Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, FleetMotions, Players, Relocations);
             FleetFactory = new FleetFactory(
-                World, Sites, Fleets, FleetMotions, FleetSensors, FleetReadiness, FleetCombat, Stockpiles, balance.Combat);
+                World, Sites, Fleets, FleetMotions, FleetRoutes, FleetSensors, FleetReadiness, FleetCombat, Stockpiles, balance.Combat);
 
             // Fixed tick order: weather first, then producers before consumers, watchers last.
             Clock.Register(new NoaaWeatherEngine(
@@ -109,8 +112,10 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Mothball, upkeep);
             Commands.Register(CommandType.Activate, upkeep);
 
+            Routes = new RoutePlanner(Graph, Starlanes, balance.Starlanes, balance.Fleets);
             Movement = new FleetMovementSystem(
-                Fleets, FleetMotions, FleetReadiness, FleetCombat, Starlanes, Stockpiles, balance.Starlanes, balance.Fleets);
+                Fleets, FleetMotions, FleetRoutes, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, Routes,
+                balance.Starlanes, balance.Fleets);
             Clock.Register(Movement);
             Commands.Register(CommandType.Move, Movement);
             Commands.Register(CommandType.Hold, Movement);

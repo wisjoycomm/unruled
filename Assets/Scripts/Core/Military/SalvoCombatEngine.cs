@@ -175,6 +175,9 @@ namespace Unruled.Core.Military
                 if (!_readiness.Get(fleet).CanAct(tick))
                     continue;
 
+                long fuel = (long)unit.TotalShips * _balance.FuelPerShipPerSalvoMilli * tier.BurnMilli(ItemId.ItemFuel) / 1000;
+                Consume(i, ItemId.ItemFuel, ref state.FuelDebtMilli, fuel, site);
+
                 if (!state.IsOverheated && unit.LineShips > 0 && HasSupply(i, ItemId.ItemAmmo, site))
                 {
                     int rof = _balance.RofPercent(state.Rof);

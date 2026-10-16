@@ -36,3 +36,4 @@
 - 2026-10-16 - Claude - Sprint 3 step 6: CapitalRelocationSystem (RelocateBase: teardown/convoy/bootstrap, hostile lock, escort, upfront costs, convoy loss = 15 min paralysis, 48 h cooldown); FleetFactory; teardown halves base fortification.
 - 2026-10-16 - Claude - Sprint 3 step 7: overview and roadmap updated for fleets, combat and relocation; plan archived as .docs/plan/sprint-3.md.
 - 2026-10-16 - Claude - Sprint 4 step 1: credits ledger (Wallet in cents, Ledger transfer/burn/grant, WTO and STA tax pools, CreatePlayer with starting credits); refinery upkeep paid from the site owner's wallet, unpaid upkeep carried as debt.
+- 2026-10-16 - Claude - Sprint 4 step 2: multi-lane routes (Move to a destination site, RoutePlanner Dijkstra by travel time and tech tier, FleetRoute fixed buffer, fuel per lane at each departure); combat burns fuel per acting ship x tab-03 fuel burn.

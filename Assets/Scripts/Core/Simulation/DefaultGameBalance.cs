@@ -87,7 +87,7 @@ namespace Unruled.Core.Simulation
         /// PROVISIONAL: Alpha 10 and Beta 20 (a 2:1 line:EW fleet exactly cancels an equal one), hull 100/60/80/50 for
         /// line/EW/supply/cargo, 0.1 ammo per line ship and 0.1 battery per EW ship per salvo, 0.2 coolant per ship per
         /// venting salvo, tenders hand over 2 of each per salvo up to 10 in a hold, ambient 20 °C, +4 °C per salvo at
-        /// 100% ROF (x ROF²), -4 °C passive, -15 °C venting.
+        /// 100% ROF (x ROF²), -4 °C passive, -15 °C venting, 0.02 fuel per acting ship per salvo (x the tab-03 fuel burn).
         /// </summary>
         public static CombatBalance CreateCombatBalance() => new CombatBalance(
             salvoCycleTicks: 5,
@@ -115,7 +115,8 @@ namespace Unruled.Core.Simulation
             ventCoolMilli: 15_000,
             overheatMilli: 90_000,
             overheatReleaseMilli: 75_000,
-            cookOffHullPercent: 5);
+            cookOffHullPercent: 5,
+            fuelPerShipPerSalvoMilli: 20);
 
         /// <summary>
         /// GDD §2.4 A, §4.2 and data sheet tab 04: teardown 900–1800 ticks with the old base at 50% defence bonus,
