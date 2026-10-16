@@ -121,6 +121,20 @@ namespace Unruled.Tests.Core.Economy
             StringAssert.Contains($"x{latency.RelocationMultiplier}", FindRow(rows, "Phase_2_Capital_Convoy")[4]);
         }
 
+        [Test]
+        public void RoutesTab_MatchesRadarBalance()
+        {
+            var rows = ReadTable("## 04_Routes_Radar_Latency");
+            var radar = DefaultGameBalance.CreateRadarBalance();
+
+            Assert.AreEqual($"{radar.StartupBatteries}x ITEM_BATTERY", FindRow(rows, "Startup_Surge_Cost")[3]);
+            StringAssert.StartsWith($"{radar.IntegrationTicks} Ticks", FindRow(rows, "Coherent_Integration_Time")[2]);
+            var rwr = FindRow(rows, "RWR_Stealth_Early_Warning");
+            Assert.AreEqual(
+                $"Triggers at {radar.RwrDelayTicks}s ({radar.IntegrationTicks - radar.RwrDelayTicks}s before reveal)", rwr[2]);
+            StringAssert.Contains($"Jamming ({radar.JammedIntegrationTicks}s)", rwr[4]);
+        }
+
         // "Speed 60% | Fuel 4.5x | Storm G1-G2" -> 60, 4500, highest storm level 2
         private static void AssertTier(string[] row, StarlaneTierRules rules, string name)
         {

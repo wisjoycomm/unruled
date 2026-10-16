@@ -17,12 +17,14 @@ namespace Unruled.Core.Simulation
         public readonly MiningBalance Mining;
         public readonly LifecycleBalance Lifecycle;
         public readonly LatencyBalance Latency;
+        public readonly RadarBalance Radar;
         public readonly SystemFactionBalance SystemFactions;
 
         public GameBalanceConfig(
             RecipeDatabase recipes, UniverseGenBalance universe, StarlaneBalance starlanes, NoaaBalance weather,
             RefineryBalance refinery, MiningBalance mining,
-            LifecycleBalance lifecycle, LatencyBalance latency, SystemFactionBalance systemFactions)
+            LifecycleBalance lifecycle, LatencyBalance latency, RadarBalance radar,
+            SystemFactionBalance systemFactions)
         {
             Recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
             Universe = universe ?? throw new ArgumentNullException(nameof(universe));
@@ -32,6 +34,7 @@ namespace Unruled.Core.Simulation
             Mining = mining ?? throw new ArgumentNullException(nameof(mining));
             Lifecycle = lifecycle ?? throw new ArgumentNullException(nameof(lifecycle));
             Latency = latency ?? throw new ArgumentNullException(nameof(latency));
+            Radar = radar ?? throw new ArgumentNullException(nameof(radar));
             SystemFactions = systemFactions ?? throw new ArgumentNullException(nameof(systemFactions));
         }
     }

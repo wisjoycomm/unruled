@@ -10,7 +10,9 @@ namespace Unruled.Core.Simulation
         ScanBelt = 4,
         SetRof = 5,
         RelocateBase = 6,
-        Terraform = 7
+        Terraform = 7,
+        CancelScan = 8,
+        EcmJam = 9
     }
 
     /// <summary>A player or AI command that takes effect after signal latency. Shared by players and the Server 2 AI.</summary>

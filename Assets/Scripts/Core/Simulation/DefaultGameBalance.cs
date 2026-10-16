@@ -15,7 +15,8 @@ namespace Unruled.Core.Simulation
             new GameBalanceConfig(
                 CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateStarlaneBalance(), CreateNoaaBalance(),
                 CreateRefineryBalance(), CreateMiningBalance(),
-                CreateLifecycleBalance(), CreateLatencyBalance(), CreateSystemFactionBalance());
+                CreateLifecycleBalance(), CreateLatencyBalance(), CreateRadarBalance(),
+                CreateSystemFactionBalance());
 
         /// <summary>
         /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,
@@ -32,6 +33,18 @@ namespace Unruled.Core.Simulation
             coreFracture: new MiningDepth(speedPercent: 100, fuelCoolantMultiplier: 4),
             deepCoreEsiDropMilli: 50,
             barrenHuskEsiDropMilli: 200);
+
+        /// <summary>
+        /// GDD §2.4 B and data sheet tab 04: 2 batteries to start, RWR at 15 ticks, reveal after 60 ticks (120 under
+        /// ECM), 2 batteries to jam. PROVISIONAL: a reveal lasts 60 ticks.
+        /// </summary>
+        public static RadarBalance CreateRadarBalance() => new RadarBalance(
+            startupBatteries: 2,
+            rwrDelayTicks: 15,
+            integrationTicks: 60,
+            jammedIntegrationTicks: 120,
+            jamBatteries: 2,
+            revealTicks: 60);
 
         /// <summary>
         /// GDD §2.4 A and data sheet tab 04: 15 ticks at the core base, 35 per hop, 8 per relayed hop, x2 while the

@@ -32,6 +32,7 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<PlayerHq> Players;
         public readonly ComponentStore<RelayStation> Relays;
         public readonly ComponentStore<FleetPresence> Fleets;
+        public readonly ComponentStore<RadarScan> RadarScans;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly PlanetLifecycleSystem Lifecycle;
@@ -58,6 +59,7 @@ namespace Unruled.Core.Simulation
             Players = World.CreateStore<PlayerHq>();
             Relays = World.CreateStore<RelayStation>();
             Fleets = World.CreateStore<FleetPresence>();
+            RadarScans = World.CreateStore<RadarScan>();
 
             Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, balance.Latency);
             Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, Fleets);
@@ -72,6 +74,13 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Terraform, Lifecycle);
             Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, balance.Recipes, balance.Refinery));
             Clock.Register(new WhoQuarantineSystem(Quarantines, Stockpiles, balance.SystemFactions));
+
+            var radar = new FocusedRadarSystem(World, RadarScans, Fleets, Starlanes, Players, Stockpiles, balance.Radar);
+            Clock.Register(radar);
+            Commands.Register(CommandType.ScanBelt, radar);
+            Commands.Register(CommandType.CancelScan, radar);
+            Commands.Register(CommandType.EcmJam, radar);
+            Commands.Register(CommandType.Reverse, radar);
         }
 
         /// <summary>

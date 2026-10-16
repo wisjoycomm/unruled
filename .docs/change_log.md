@@ -26,3 +26,4 @@
 - 2026-10-16 - Claude - Add starlane tiers, StarlaneGraph (CSR), StarlaneGenerator, FixedMath.Sqrt and SimulationWorld.GenerateSystem.
 - 2026-10-16 - Claude - Add NoaaWeatherEngine (seeded storm fronts, site and lane weather, irradiation S4) and world seed on SimulationWorld.
 - 2026-10-16 - Claude - Add SignalLatencySolver (Dijkstra relay hops, relocation x2, R3 blackout), CommandIssuer, PlayerHq/RelayStation/FleetPresence.
+- 2026-10-16 - Claude - Add FocusedRadarSystem (2-battery surge, RWR at 15, reveal at 60/120 with ECM, cancel, reverse) and its commands.
