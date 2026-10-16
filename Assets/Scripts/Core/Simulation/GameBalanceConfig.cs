@@ -1,6 +1,7 @@
 using System;
 using Unruled.Core.Board;
 using Unruled.Core.Economy;
+using Unruled.Core.Military;
 using Unruled.Core.SystemFactions;
 
 namespace Unruled.Core.Simulation
@@ -15,12 +16,13 @@ namespace Unruled.Core.Simulation
         public readonly RefineryBalance Refinery;
         public readonly MiningBalance Mining;
         public readonly LifecycleBalance Lifecycle;
+        public readonly LatencyBalance Latency;
         public readonly SystemFactionBalance SystemFactions;
 
         public GameBalanceConfig(
             RecipeDatabase recipes, UniverseGenBalance universe, StarlaneBalance starlanes, NoaaBalance weather,
             RefineryBalance refinery, MiningBalance mining,
-            LifecycleBalance lifecycle, SystemFactionBalance systemFactions)
+            LifecycleBalance lifecycle, LatencyBalance latency, SystemFactionBalance systemFactions)
         {
             Recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
             Universe = universe ?? throw new ArgumentNullException(nameof(universe));
@@ -29,6 +31,7 @@ namespace Unruled.Core.Simulation
             Refinery = refinery ?? throw new ArgumentNullException(nameof(refinery));
             Mining = mining ?? throw new ArgumentNullException(nameof(mining));
             Lifecycle = lifecycle ?? throw new ArgumentNullException(nameof(lifecycle));
+            Latency = latency ?? throw new ArgumentNullException(nameof(latency));
             SystemFactions = systemFactions ?? throw new ArgumentNullException(nameof(systemFactions));
         }
     }

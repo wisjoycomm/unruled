@@ -1,5 +1,6 @@
 using Unruled.Core.Board;
 using Unruled.Core.Economy;
+using Unruled.Core.Military;
 using Unruled.Core.SystemFactions;
 
 namespace Unruled.Core.Simulation
@@ -14,7 +15,7 @@ namespace Unruled.Core.Simulation
             new GameBalanceConfig(
                 CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateStarlaneBalance(), CreateNoaaBalance(),
                 CreateRefineryBalance(), CreateMiningBalance(),
-                CreateLifecycleBalance(), CreateSystemFactionBalance());
+                CreateLifecycleBalance(), CreateLatencyBalance(), CreateSystemFactionBalance());
 
         /// <summary>
         /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,
@@ -31,6 +32,18 @@ namespace Unruled.Core.Simulation
             coreFracture: new MiningDepth(speedPercent: 100, fuelCoolantMultiplier: 4),
             deepCoreEsiDropMilli: 50,
             barrenHuskEsiDropMilli: 200);
+
+        /// <summary>
+        /// GDD §2.4 A and data sheet tab 04: 15 ticks at the core base, 35 per hop, 8 per relayed hop, x2 while the
+        /// capital convoy is in transit. PROVISIONAL: an R3+ radio blackout on the target blocks orders (GDD §1.1 says
+        /// R3+ storms "lock communications"; laser comms that pierce them come with Tier 4 research).
+        /// </summary>
+        public static LatencyBalance CreateLatencyBalance() => new LatencyBalance(
+            baseTicks: 15,
+            hopTicks: 35,
+            relayedHopTicks: 8,
+            relocationMultiplier: 2,
+            blackoutRadioLevel: 3);
 
         /// <summary>
         /// PROVISIONAL (not in the GDD or data sheet): each system rolls every 10 min with a 25% chance of a new front;

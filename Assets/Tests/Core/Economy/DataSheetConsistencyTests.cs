@@ -106,6 +106,21 @@ namespace Unruled.Tests.Core.Economy
             StringAssert.Contains($"Tech Tier {lanes.Shortcut.MinTechTier}", FindRow(rows, "Hazard_Storm_Shortcut")[3]);
         }
 
+        [Test]
+        public void RoutesTab_MatchesLatencyBalance()
+        {
+            var rows = ReadTable("## 04_Routes_Radar_Latency");
+            var latency = DefaultGameBalance.CreateLatencyBalance();
+
+            Assert.AreEqual("Latency = 15 Ticks (15 Seconds)", FindRow(rows, "At_Core_Base_Cluster")[2], "core base cell changed");
+            Assert.AreEqual(15, latency.BaseTicks);
+            Assert.AreEqual($"Latency = {latency.BaseTicks} + (Hops * {latency.HopTicks} Ticks)",
+                FindRow(rows, "Distant_No_Relay_Chain")[2]);
+            Assert.AreEqual($"Latency = {latency.BaseTicks} + (Hops * {latency.RelayedHopTicks} Ticks)",
+                FindRow(rows, "Distant_With_Relay_Chain")[2]);
+            StringAssert.Contains($"x{latency.RelocationMultiplier}", FindRow(rows, "Phase_2_Capital_Convoy")[4]);
+        }
+
         // "Speed 60% | Fuel 4.5x | Storm G1-G2" -> 60, 4500, highest storm level 2
         private static void AssertTier(string[] row, StarlaneTierRules rules, string name)
         {

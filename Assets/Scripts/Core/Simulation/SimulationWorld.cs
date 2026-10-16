@@ -2,6 +2,7 @@ using System;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
+using Unruled.Core.Military;
 using Unruled.Core.SystemFactions;
 
 namespace Unruled.Core.Simulation
@@ -28,9 +29,14 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<MineralDeposit> Deposits;
         public readonly ComponentStore<Refinery> Refineries;
         public readonly ComponentStore<SiteQuarantine> Quarantines;
+        public readonly ComponentStore<PlayerHq> Players;
+        public readonly ComponentStore<RelayStation> Relays;
+        public readonly ComponentStore<FleetPresence> Fleets;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly PlanetLifecycleSystem Lifecycle;
+        public readonly SignalLatencySolver Latency;
+        public readonly CommandIssuer Issuer;
 
         public SimulationWorld(GameBalanceConfig balance, ulong worldSeed, long startTick = 0)
         {
@@ -49,6 +55,12 @@ namespace Unruled.Core.Simulation
             Deposits = World.CreateStore<MineralDeposit>();
             Refineries = World.CreateStore<Refinery>();
             Quarantines = World.CreateStore<SiteQuarantine>();
+            Players = World.CreateStore<PlayerHq>();
+            Relays = World.CreateStore<RelayStation>();
+            Fleets = World.CreateStore<FleetPresence>();
+
+            Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, balance.Latency);
+            Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, Fleets);
 
             // Fixed tick order: weather first, then producers before consumers, watchers last.
             Clock.Register(new NoaaWeatherEngine(

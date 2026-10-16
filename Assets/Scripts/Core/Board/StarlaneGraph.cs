@@ -16,6 +16,9 @@ namespace Unruled.Core.Board
 
         public int SiteCapacity => _siteCapacity;
 
+        /// <summary>Total adjacency slots (twice the lane count).</summary>
+        public int SlotCount => _offsets[_siteCapacity];
+
         public void Rebuild(ComponentStore<StarlaneEdge> lanes)
         {
             if (lanes == null) throw new ArgumentNullException(nameof(lanes));
@@ -62,9 +65,13 @@ namespace Unruled.Core.Board
         }
 
         /// <summary>First adjacency slot of the site; iterate slots up to <see cref="End"/>.</summary>
-        public int Start(EntityId site) => site.Index < _siteCapacity ? _offsets[site.Index] : 0;
+        public int Start(EntityId site) => Start(site.Index);
 
-        public int End(EntityId site) => site.Index < _siteCapacity ? _offsets[site.Index + 1] : 0;
+        public int End(EntityId site) => End(site.Index);
+
+        public int Start(int siteIndex) => siteIndex < _siteCapacity ? _offsets[siteIndex] : 0;
+
+        public int End(int siteIndex) => siteIndex < _siteCapacity ? _offsets[siteIndex + 1] : 0;
 
         public EntityId NeighborAt(int slot) => _neighbors[slot];
 

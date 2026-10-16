@@ -25,3 +25,4 @@
 - 2026-10-16 - Claude - Add PlanetLifecycleSystem (depletion, nuclear strike 3B, Terraform command 4); move lifecycle out of MiningSystem; add command target generation.
 - 2026-10-16 - Claude - Add starlane tiers, StarlaneGraph (CSR), StarlaneGenerator, FixedMath.Sqrt and SimulationWorld.GenerateSystem.
 - 2026-10-16 - Claude - Add NoaaWeatherEngine (seeded storm fronts, site and lane weather, irradiation S4) and world seed on SimulationWorld.
+- 2026-10-16 - Claude - Add SignalLatencySolver (Dijkstra relay hops, relocation x2, R3 blackout), CommandIssuer, PlayerHq/RelayStation/FleetPresence.
