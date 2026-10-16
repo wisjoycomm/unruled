@@ -15,5 +15,6 @@ namespace Unruled.Core.Economy
         public int CoreFractureReserve;
         public bool IsCoreFractureUnlocked;
         public int RigCount;
+        public long RetractUntilTick; // drills being pulled out; 0 = not retracting
     }
 }

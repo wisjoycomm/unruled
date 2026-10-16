@@ -78,7 +78,9 @@ namespace Unruled.Core.Simulation
             Clock.Register(new NoaaWeatherEngine(
                 World, StormFronts, Sites, Weather, Starlanes, LaneWeather, balance.Weather, balance.Starlanes,
                 balance.Lifecycle, worldSeed));
-            Clock.Register(new MiningSystem(Deposits, Stockpiles, balance.Mining));
+            var mining = new MiningSystem(Deposits, Sites, Stockpiles, balance.Mining);
+            Clock.Register(mining);
+            Commands.Register(CommandType.RetractDrills, mining);
             Lifecycle = new PlanetLifecycleSystem(Sites, Deposits, Stockpiles, balance.Mining, balance.Lifecycle);
             Clock.Register(Lifecycle);
             Commands.Register(CommandType.Terraform, Lifecycle);

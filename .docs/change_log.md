@@ -32,3 +32,4 @@
 - 2026-10-16 - Claude - Sprint 3 step 2: FleetMovementSystem (Move one lane per order with fuel and tech-tier gate, Hold/resume, Reverse); DelayedPlayerCommand.ParamEntity.
 - 2026-10-16 - Claude - Sprint 3 step 3: FleetUpkeepSystem + FleetReadiness (hourly tab-03 upkeep per ship, 80% mothball discount, warm-up by tier, unpaid = grounded); Mothball/Activate commands.
 - 2026-10-16 - Claude - Sprint 3 step 4: SalvoCombatEngine (5-tick Hughes salvo, fortification +35% PD with vault access, 90° multi-lane flank, tender hot resupply, thermal lock/cook-off/vent, lane pinning); SetRof/SetFocus/VentCoolant.
+- 2026-10-16 - Claude - Sprint 3 step 5: RetractDrills command; MiningSystem stops a deposit at once and frees its rigs after 180 ticks.

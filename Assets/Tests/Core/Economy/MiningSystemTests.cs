@@ -28,7 +28,7 @@ namespace Unruled.Tests.Core.Economy
             _stockpiles = _world.CreateStore<Stockpile>();
             _deposits = _world.CreateStore<MineralDeposit>();
             _balance = DefaultGameBalance.CreateMiningBalance();
-            _system = new MiningSystem(_deposits, _stockpiles, _balance);
+            _system = new MiningSystem(_deposits, _sites, _stockpiles, _balance);
             _lifecycle = new PlanetLifecycleSystem(
                 _sites, _deposits, _stockpiles, _balance, DefaultGameBalance.CreateLifecycleBalance());
             _tick = 0;
@@ -183,6 +183,34 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(Yield(_balance.CoreFracture, 1), Stock.Get(ItemId.RawIron));
             Assert.AreEqual(1000 - Fuel(_balance.CoreFracture, 1), Stock.Get(ItemId.ItemFuel));
             Assert.AreEqual(PlanetLifecycleState.IrradiatedDeadWorld, Site.LifecycleState);
+        }
+
+        [Test]
+        public void RetractDrills_StopsMiningAtOnce_AndFreesTheRigsAfterTheRetractTime()
+        {
+            Site.OwnerPlayerId = 1;
+            var deposit = AddDeposit(surface: 0, deep: 1000, rigs: 2);
+            RunCycles(1);
+            int mined = Stock.Get(ItemId.RawIron);
+            Assert.Greater(mined, 0);
+
+            var order = new DelayedPlayerCommand { PlayerId = 2, CommandType = CommandType.RetractDrills, Target = deposit };
+            _system.Handle(order, _tick);
+            Assert.AreEqual(0, _deposits.Get(deposit).RetractUntilTick, "only the site owner can retract");
+
+            order.PlayerId = 1;
+            _system.Handle(order, _tick);
+            long done = _tick + _balance.DrillRetractTicks;
+            Assert.AreEqual(done, _deposits.Get(deposit).RetractUntilTick);
+
+            RunCycles(_balance.DrillRetractTicks / _balance.CycleTicks - 1);
+            Assert.AreEqual(mined, Stock.Get(ItemId.RawIron), "retracting drills mine nothing");
+            Assert.AreEqual(2, _deposits.Get(deposit).RigCount, "rigs are still in the ground");
+
+            RunCycles(1);
+            Assert.AreEqual(done, _tick);
+            Assert.AreEqual(0, _deposits.Get(deposit).RigCount);
+            Assert.AreEqual(0, _deposits.Get(deposit).RetractUntilTick);
         }
 
         [Test]

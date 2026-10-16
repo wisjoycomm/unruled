@@ -1,4 +1,5 @@
 using System;
+using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Simulation;
 
@@ -8,30 +9,59 @@ namespace Unruled.Core.Economy
     /// Mines every deposit once per cycle (GDD §2.1 B): surface, then deep crust, then core fracture once unlocked.
     /// A deposit whose site lacks the fuel or coolant for this cycle stalls. A depth is never mixed in one cycle.
     /// Depletion lifecycle changes belong to <see cref="Board.PlanetLifecycleSystem"/>, which runs next.
+    /// RetractDrills (target: a deposit on a site the player owns) stops the rigs at once; they are gone from the
+    /// deposit when the retract time is over (GDD §2.1 B). Invalid orders change nothing.
     /// </summary>
-    public sealed class MiningSystem : ISimSystem
+    public sealed class MiningSystem : ISimSystem, ICommandHandler
     {
         private enum Depth : byte { Surface, DeepCrust, CoreFracture }
 
         private readonly ComponentStore<MineralDeposit> _deposits;
+        private readonly ComponentStore<SiteInfo> _sites;
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly MiningBalance _balance;
 
         public MiningSystem(
-            ComponentStore<MineralDeposit> deposits, ComponentStore<Stockpile> stockpiles, MiningBalance balance)
+            ComponentStore<MineralDeposit> deposits, ComponentStore<SiteInfo> sites, ComponentStore<Stockpile> stockpiles,
+            MiningBalance balance)
         {
             _deposits = deposits ?? throw new ArgumentNullException(nameof(deposits));
+            _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
         }
 
         public void OnTick(long tick)
         {
-            if (tick % _balance.CycleTicks != 0)
-                return;
-
+            bool cycle = tick % _balance.CycleTicks == 0;
             for (int i = 0; i < _deposits.Count; i++)
-                MineDeposit(ref _deposits.At(i));
+            {
+                ref var deposit = ref _deposits.At(i);
+                if (deposit.RetractUntilTick > 0)
+                {
+                    if (tick >= deposit.RetractUntilTick)
+                    {
+                        deposit.RigCount = 0;
+                        deposit.RetractUntilTick = 0;
+                    }
+                    continue;
+                }
+                if (cycle)
+                    MineDeposit(ref deposit);
+            }
+        }
+
+        public void Handle(in DelayedPlayerCommand command, long tick)
+        {
+            if (command.CommandType != CommandType.RetractDrills)
+                throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
+            if (!_deposits.Has(command.Target))
+                return;
+            ref var deposit = ref _deposits.Get(command.Target);
+            if (deposit.RigCount == 0 || deposit.RetractUntilTick > 0 || !_sites.Has(deposit.Site) ||
+                _sites.Get(deposit.Site).OwnerPlayerId != command.PlayerId)
+                return;
+            deposit.RetractUntilTick = tick + _balance.DrillRetractTicks;
         }
 
         private void MineDeposit(ref MineralDeposit deposit)

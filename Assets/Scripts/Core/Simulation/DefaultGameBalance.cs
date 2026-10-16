@@ -21,7 +21,7 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,
-        /// barren husk -0.20 ESI, core fracture 4x (speed 100% per GDD §2.1 B).
+        /// barren husk -0.20 ESI, core fracture 4x (speed 100% per GDD §2.1 B); drills take 180 ticks to retract (§2.1 B).
         /// PROVISIONAL: 10-tick cycle, 10 ore and 1 fuel + 1 coolant per rig per cycle.
         /// </summary>
         public static MiningBalance CreateMiningBalance() => new MiningBalance(
@@ -33,7 +33,8 @@ namespace Unruled.Core.Simulation
             deepCrust: new MiningDepth(speedPercent: 50, fuelCoolantMultiplier: 2),
             coreFracture: new MiningDepth(speedPercent: 100, fuelCoolantMultiplier: 4),
             deepCoreEsiDropMilli: 50,
-            barrenHuskEsiDropMilli: 200);
+            barrenHuskEsiDropMilli: 200,
+            drillRetractTicks: 180);
 
         /// <summary>
         /// GDD §2.4 B and data sheet tab 04: 2 batteries to start, RWR at 15 ticks, reveal after 60 ticks (120 under
