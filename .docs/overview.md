@@ -47,9 +47,10 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
    reports; `SetRof`, `SetFocus`, `VentCoolant`.
 10. `CapitalRelocationSystem`: teardown → capital convoy → bootstrap; `RelocateBase`.
 11. `FocusedRadarSystem`: scan timelines and the Tier-5 IAEA reveal; `ScanBelt`, `CancelScan`, `EcmJam`.
-12. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
-13. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
-14. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms) and WTO defence fleets.
+12. `ResearchSystem`: retooling ends, storm telemetry; `StressTest`.
+13. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
+14. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
+15. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
 
 `MiningSystem` also handles `RetractDrills` and `PlanetLifecycleSystem` handles `Terraform`.
 
@@ -100,6 +101,7 @@ methods, in this order (rule 4).
   - `PlayerStanding`, `LeaderboardBalance` (tab 05), `BracketRates`, `LeaderboardAuditSystem`.
   - `SystemAgency`, `SystemBulletin`, `SystemSanction`, `SystemAuthorityManager` + `SystemAuthorityBalance`,
     `NoaaForecast`.
+- **Research/**: `TechProgress` (on the HQ: tech tier 1..5, stage, telemetry, failed tests, retool end), `ResearchSystem` (telemetry in storms, `StressTest` command with calibration pity, retooling) + `ResearchBalance`; blasts go to `IResearchIncidentLog` (THE SYSTEM's bulletins).
 - **AI/**: `UtilityAiEngine` + `AiController` (on an AI-run HQ) + `AiBalance` / `AiPreset` (tab 06).
 
 ## Tests

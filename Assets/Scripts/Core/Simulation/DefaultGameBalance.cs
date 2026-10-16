@@ -2,6 +2,7 @@ using Unruled.Core.AI;
 using Unruled.Core.Board;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
+using Unruled.Core.Research;
 using Unruled.Core.SystemFactions;
 
 namespace Unruled.Core.Simulation
@@ -20,7 +21,31 @@ namespace Unruled.Core.Simulation
                 CreateCombatBalance(), CreateRelocationBalance(), CreateLedgerBalance(),
                 CreateStaBalance(), CreateLeaderboardBalance(), CreateWtoBalance(),
                 CreateWtoContractBalance(), CreateSystemAuthorityBalance(),
-                CreateSystemFactionBalance(), CreateAiBalance(), CreateNewGameBalance());
+                CreateSystemFactionBalance(), CreateAiBalance(), CreateNewGameBalance(),
+                CreateResearchBalance());
+
+        /// <summary>
+        /// GDD §2.3: P_base tier 2/3/4/5 = 60/45/30/20%, +18% per failed test; stress-test items follow tab 03's
+        /// Build_And_Repair_Items per tier. PROVISIONAL: 1,000 milli of telemetry at 1 milli per storm level per tick
+        /// (about 17 min in a level-1 storm), 5 microchips aboard to measure, 10 of each test item, retooling
+        /// 1/2/4/8 h for tiers 2..5.
+        /// </summary>
+        public static ResearchBalance CreateResearchBalance() => new ResearchBalance(
+            telemetryTargetMilli: 1_000,
+            telemetryMilliPerStormLevel: 1,
+            telemetryMinMicrochips: 5,
+            pityPermillePerFailure: 180,
+            tiers: new[]
+            {
+                new TierResearchRules(600, new[] { new ItemStack(ItemId.ItemSteel, 10), new ItemStack(ItemId.ItemBattery, 10) },
+                    SimTick.TicksPerHour),
+                new TierResearchRules(450, new[] { new ItemStack(ItemId.ItemAlloy, 10), new ItemStack(ItemId.ItemAmmo, 10) },
+                    2 * SimTick.TicksPerHour),
+                new TierResearchRules(300, new[] { new ItemStack(ItemId.ItemAlloy, 10), new ItemStack(ItemId.ItemMicrochip, 10) },
+                    4 * SimTick.TicksPerHour),
+                new TierResearchRules(200, new[] { new ItemStack(ItemId.ItemNuclearCore, 10), new ItemStack(ItemId.ItemAlloy, 10) },
+                    8 * SimTick.TicksPerHour)
+            });
 
         /// <summary>
         /// GDD §1 and §2.1 A: own home system with no tungsten or uranium, deposits by preferred ESI window.

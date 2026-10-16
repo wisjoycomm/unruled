@@ -15,7 +15,7 @@ namespace Unruled.Tests.Core.Board
         {
             var d = DefaultGameBalance.Create();
             return new GameBalanceConfig(d.Recipes, d.Universe, d.Starlanes, weather, d.Refinery, d.Mining, d.Lifecycle, d.Latency, d.Radar, d.Fleets, d.Combat, d.Relocation, d.Ledger, d.Sta, d.Leaderboard, d.Wto, d.Contracts, d.Authority,
-                d.SystemFactions, d.Ai, d.NewGame);
+                d.SystemFactions, d.Ai, d.NewGame, d.Research);
         }
 
         private static NoaaBalance NoSpawns() =>

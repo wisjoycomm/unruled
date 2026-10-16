@@ -18,7 +18,8 @@ namespace Unruled.Core.SystemFactions
     public enum BulletinKind : byte
     {
         NuclearStrike = 1,
-        CallToArms = 2
+        CallToArms = 2,
+        PrototypeBlast = 3
     }
 
     /// <summary>

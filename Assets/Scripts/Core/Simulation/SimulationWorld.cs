@@ -4,6 +4,7 @@ using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
+using Unruled.Core.Research;
 using Unruled.Core.SystemFactions;
 
 namespace Unruled.Core.Simulation
@@ -50,6 +51,7 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<SystemSanction> Sanctions;
         public readonly ComponentStore<SystemBulletin> Bulletins;
         public readonly ComponentStore<AiController> AiControllers;
+        public readonly ComponentStore<TechProgress> TechProgress;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly Ledger Ledger;
@@ -72,6 +74,7 @@ namespace Unruled.Core.Simulation
         public readonly CapitalRelocationSystem Relocation;
         public readonly SignalLatencySolver Latency;
         public readonly CommandIssuer Issuer;
+        public readonly ResearchSystem Research;
 
         public SimulationWorld(GameBalanceConfig balance, ulong worldSeed, long startTick = 0)
         {
@@ -110,6 +113,7 @@ namespace Unruled.Core.Simulation
             Sanctions = World.CreateStore<SystemSanction>();
             Bulletins = World.CreateStore<SystemBulletin>();
             AiControllers = World.CreateStore<AiController>();
+            TechProgress = World.CreateStore<TechProgress>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -197,6 +201,11 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.ScanBelt, radar);
             Commands.Register(CommandType.CancelScan, radar);
             Commands.Register(CommandType.EcmJam, radar);
+            Research = new ResearchSystem(
+                TechProgress, Players, Fleets, FleetMotions, Stockpiles, Sites, Weather, LaneWeather, Authority,
+                balance.Research, worldSeed);
+            Clock.Register(Research);
+            Commands.Register(CommandType.StressTest, Research);
             Clock.Register(ContractSystem);
             Audit = new LeaderboardAuditSystem(
                 Standings, Wallets, Sites, Fleets, Stockpiles, Ledger, WtoFeePool, StaTollPool, Market, balance.Leaderboard);
@@ -222,6 +231,7 @@ namespace Unruled.Core.Simulation
             Players.Add(hq, new PlayerHq { PlayerId = playerId, CoreBase = coreBase });
             Wallets.Add(hq, new Wallet { OwnerPlayerId = playerId });
             Standings.Add(hq, new PlayerStanding { Bracket = LeaderboardBalance.Unrated });
+            TechProgress.Add(hq, new TechProgress { TechTier = 1 });
             Ledger.Grant(hq, Balance.Ledger.StartingCents);
             return hq;
         }

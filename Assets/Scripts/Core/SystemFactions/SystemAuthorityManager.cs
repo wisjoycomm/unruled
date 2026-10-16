@@ -3,6 +3,7 @@ using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
+using Unruled.Core.Research;
 using Unruled.Core.Simulation;
 
 namespace Unruled.Core.SystemFactions
@@ -67,7 +68,7 @@ namespace Unruled.Core.SystemFactions
     /// </list>
     /// Defence fleets are THE SYSTEM's: nothing can be looted from them.
     /// </summary>
-    public sealed class SystemAuthorityManager : ISimSystem, IOffenceLog, IMarketAccess
+    public sealed class SystemAuthorityManager : ISimSystem, IOffenceLog, IMarketAccess, IResearchIncidentLog
     {
         private readonly World _world;
         private readonly ComponentStore<SystemSanction> _sanctions;
@@ -115,6 +116,14 @@ namespace Unruled.Core.SystemFactions
             if (s.Offences >= _balance.LayerTwoOffences && !_world.IsAlive(s.DefenceFleet))
                 s.DefencePending = true;
         }
+
+        /// <summary>NOAA publishes a failed stress test's blast at the player's site (GDD §2.3).</summary>
+        public void ReportPrototypeBlast(int playerId, EntityId site, long tick) =>
+            _bulletins.Add(_world.Create(), new SystemBulletin
+            {
+                Agency = SystemAgency.Noaa, Kind = BulletinKind.PrototypeBlast, PlayerId = playerId, Site = site,
+                Tick = tick, ExpiresTick = tick + _balance.BulletinTicks
+            });
 
         public bool MayTrade(int playerId, long tick) =>
             !_ledger.TryFindPlayerWallet(playerId, out var hq) || !_sanctions.Has(hq) ||
