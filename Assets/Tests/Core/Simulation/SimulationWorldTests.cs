@@ -87,17 +87,18 @@ namespace Unruled.Tests.Core.Simulation
         [Test]
         public void Router_SendsCommandToItsHandler_AndRejectsUnknownTypes()
         {
-            var sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 1);
+            var router = new CommandRouter();
+            var clock = new SimClock(router);
             var handler = new CountingHandler();
-            sim.Commands.Register(CommandType.Hold, handler);
-            Assert.Throws<InvalidOperationException>(() => sim.Commands.Register(CommandType.Hold, handler));
+            router.Register(CommandType.Hold, handler);
+            Assert.Throws<InvalidOperationException>(() => router.Register(CommandType.Hold, handler));
 
-            sim.Clock.Enqueue(new DelayedPlayerCommand { ExecuteAtTick = 5, CommandType = CommandType.Hold });
-            sim.Clock.Advance(5);
+            clock.Enqueue(new DelayedPlayerCommand { ExecuteAtTick = 5, CommandType = CommandType.Hold });
+            clock.Advance(5);
             Assert.AreEqual(1, handler.Count);
 
-            sim.Clock.Enqueue(new DelayedPlayerCommand { ExecuteAtTick = 6, CommandType = CommandType.Move });
-            Assert.Throws<InvalidOperationException>(() => sim.Clock.Advance(1));
+            clock.Enqueue(new DelayedPlayerCommand { ExecuteAtTick = 6, CommandType = CommandType.Move });
+            Assert.Throws<InvalidOperationException>(() => clock.Advance(1));
         }
 
         private sealed class CountingHandler : ICommandHandler

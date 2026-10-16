@@ -38,6 +38,7 @@ namespace Unruled.Core.Simulation
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly PlanetLifecycleSystem Lifecycle;
+        public readonly FleetMovementSystem Movement;
         public readonly SignalLatencySolver Latency;
         public readonly CommandIssuer Issuer;
 
@@ -80,9 +81,11 @@ namespace Unruled.Core.Simulation
             Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, balance.Recipes, balance.Refinery));
             Clock.Register(new WhoQuarantineSystem(Quarantines, Stockpiles, balance.SystemFactions));
 
-            var movement = new FleetMovementSystem(Fleets, FleetMotions);
-            Clock.Register(movement);
-            Commands.Register(CommandType.Reverse, movement);
+            Movement = new FleetMovementSystem(Fleets, FleetMotions, Starlanes, Stockpiles, balance.Starlanes, balance.Fleets);
+            Clock.Register(Movement);
+            Commands.Register(CommandType.Move, Movement);
+            Commands.Register(CommandType.Hold, Movement);
+            Commands.Register(CommandType.Reverse, Movement);
 
             var radar = new FocusedRadarSystem(
                 World, RadarScans, Fleets, FleetMotions, FleetSensors, Starlanes, Players, Stockpiles, balance.Radar,

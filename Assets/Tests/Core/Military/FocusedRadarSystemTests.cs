@@ -7,7 +7,10 @@ using Unruled.Core.Simulation;
 
 namespace Unruled.Tests.Core.Military
 {
-    /// <summary>Scanner (player 1) and hider (player 2) each own a base; the belt lane runs S0 - S1, a highway S1 - S2.</summary>
+    /// <summary>
+    /// Scanner (player 1) and hider (player 2) each own a base; the belt lane runs S0 - S1, a highway S1 - S2. Lanes are long
+    /// and fleets hold mid-lane, so only a reversing fleet moves during a test.
+    /// </summary>
     public class FocusedRadarSystemTests
     {
         private const int Scanner = 1;
@@ -48,7 +51,7 @@ namespace Unruled.Tests.Core.Military
         private EntityId Lane(EntityId a, EntityId b, StarlaneTier tier)
         {
             var lane = _sim.World.Create();
-            _sim.Starlanes.Add(lane, new StarlaneEdge { SiteA = a, SiteB = b, Tier = tier, Length = 200 });
+            _sim.Starlanes.Add(lane, new StarlaneEdge { SiteA = a, SiteB = b, Tier = tier, Length = 2000 });
             return lane;
         }
 
@@ -65,7 +68,10 @@ namespace Unruled.Tests.Core.Military
         private EntityId Fleet(int owner, EntityId lane, int ewShips)
         {
             var fleet = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = owner, TechTier = 1, EwShips = ewShips }, _scannerBase);
-            _sim.FleetMotions.Get(fleet) = new FleetMotion { Lane = lane, FromSite = _scannerBase };
+            _sim.FleetMotions.Get(fleet) = new FleetMotion
+            {
+                Lane = lane, FromSite = _sim.Starlanes.Get(lane).SiteA, TravelledMilli = 1_000_000, IsHolding = true
+            };
             return fleet;
         }
 

@@ -37,5 +37,16 @@ namespace Unruled.Core.Simulation
                 TargetGeneration = value.Generation;
             }
         }
+
+        /// <summary>A second entity carried in <see cref="ParamA"/> (index) and <see cref="ParamB"/> (generation), e.g. Move's lane.</summary>
+        public EntityId ParamEntity
+        {
+            get => new EntityId(ParamA, ParamB);
+            set
+            {
+                ParamA = value.Index;
+                ParamB = value.Generation;
+            }
+        }
     }
 }

@@ -18,6 +18,7 @@ namespace Unruled.Tests.Core.Military
         private SimulationWorld _sim;
         private EntityId[] _s;
         private EntityId _laneS1S2;
+        private EntityId _laneS2S3;
         private EntityId _hq;
         private LatencyBalance _b;
 
@@ -34,7 +35,7 @@ namespace Unruled.Tests.Core.Military
             }
             Lane(0, 1, StarlaneTier.StaHighway);
             _laneS1S2 = Lane(1, 2, StarlaneTier.StaHighway);
-            Lane(2, 3, StarlaneTier.StaHighway);
+            _laneS2S3 = Lane(2, 3, StarlaneTier.StaHighway);
             Lane(0, 4, StarlaneTier.OuterRimBypass);
             Lane(4, 5, StarlaneTier.OuterRimBypass);
             Lane(5, 2, StarlaneTier.OuterRimBypass);
@@ -154,30 +155,25 @@ namespace Unruled.Tests.Core.Military
         [Test]
         public void Issuer_QueuesOrderAtLatency_AndRefusesBlockedOrders()
         {
-            var handler = new Recorder();
-            _sim.Commands.Register(CommandType.Hold, handler);
-            var fleet = Fleet(_s[2], default, ewShips: 0);
+            var fleet = Fleet(_s[2], default, ewShips: 0); // no ships, so the move costs no fuel
 
-            var order = new DelayedPlayerCommand { PlayerId = Me, CommandType = CommandType.Hold, Target = fleet };
+            var order = new DelayedPlayerCommand
+            {
+                PlayerId = Me, CommandType = CommandType.Move, Target = fleet, ParamEntity = _laneS2S3
+            };
             Assert.AreEqual(IssueResult.Issued, _sim.Issuer.Issue(order, out long executeAt));
             Assert.AreEqual(_b.BaseTicks + 2 * _b.HopTicks, executeAt);
 
             _sim.Clock.Advance(executeAt - 1);
-            Assert.AreEqual(0, handler.Tick);
+            Assert.AreEqual(_s[2], _sim.FleetMotions.Get(fleet).Site, "not departed before the order arrives");
             _sim.Clock.Advance(1);
-            Assert.AreEqual(executeAt, handler.Tick);
+            Assert.AreEqual(_laneS2S3, _sim.FleetMotions.Get(fleet).Lane);
 
             order.Target = _s[6];
             Assert.AreEqual(IssueResult.Unreachable, _sim.Issuer.Issue(order, out _));
             order.Target = _hq;
             Assert.AreEqual(IssueResult.UnknownTarget, _sim.Issuer.Issue(order, out _));
             Assert.AreEqual(0, _sim.Clock.PendingCommandCount);
-        }
-
-        private sealed class Recorder : ICommandHandler
-        {
-            public long Tick;
-            public void Handle(in DelayedPlayerCommand command, long tick) => Tick = tick;
         }
     }
 }
