@@ -9,3 +9,4 @@
 - 2026-10-14 - Antigravity - Remove legacy Endless Winter docs (`.docs/overview.md`, `.docs/plan/roadmap.md`, `.docs/plan/backend-api.md`) and empty leftover directories (`tools/art/`, `tools/ldplayer/`, stale `__pycache__`).
 
 
+- 2026-10-16 - Claude - Restore Unruled rule files; adopt GDD v3.1 as `.docs/unruled_master_gdd.md` and export the v3.0 xlsx to `.docs/unruled_master_data_sheets.md`.
