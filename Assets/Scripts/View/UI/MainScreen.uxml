@@ -25,6 +25,7 @@
             <ui:VisualElement class="top-bar__group">
                 <ui:Label name="who-tag" class="u-tag u-tag--who" text="WHO · 1 LOCK" />
                 <ui:Label name="sta-tag" class="u-tag u-tag--sta" text="STA · TOLL 4%" />
+                <ui:Label name="citadel-tag" class="u-tag u-tag--citadel" text="CITADEL · 100% · T3" />
             </ui:VisualElement>
         </ui:VisualElement>
         <ui:VisualElement class="main__body" picking-mode="Ignore">

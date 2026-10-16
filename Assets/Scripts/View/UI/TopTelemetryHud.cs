@@ -7,11 +7,14 @@ namespace Unruled.View.UI
 {
     /// <summary>
     /// The 56 px top bar: sim clock, credits, signal latency to the selection, the worst NOAA R/S/G levels in sight
-    /// and THE SYSTEM's tags (WHO export locks on own sites, STA toll discount). Reads state; never writes it.
+    /// and THE SYSTEM's tags (WHO export locks on own sites, STA toll discount, the Citadel's shield and defence tier,
+    /// then The Directorate once it falls). Reads state; never writes it.
     /// </summary>
     public sealed class TopTelemetryHud
     {
         private const string NoaaLevelClassPrefix = "u-noaa--";
+        private const string DirectorateClass = "u-tag--directorate";
+        private const long DirectorateFormed = -1, DirectorateSeated = -2;
 
         private readonly Label _clock;
         private readonly Label _credits;
@@ -20,12 +23,14 @@ namespace Unruled.View.UI
         private readonly int[] _noaaShown = { -1, -1, -1 };
         private readonly Label _who;
         private readonly Label _sta;
+        private readonly Label _citadel;
 
         private SimulationWorld _sim;
         private int _playerId;
         private EntityId _wallet;
         private EntityId _selection;
-        private long _clockCache = -1, _creditsCache = -1, _latencyCache = long.MinValue, _whoCache = -1, _staCache = -1;
+        private long _clockCache = -1, _creditsCache = -1, _latencyCache = long.MinValue, _whoCache = -1, _staCache = -1,
+            _citadelCache = long.MinValue;
 
         public TopTelemetryHud(VisualElement root)
         {
@@ -37,6 +42,7 @@ namespace Unruled.View.UI
             _noaa[2] = Require<Label>(root, "noaa-g");
             _who = Require<Label>(root, "who-tag");
             _sta = Require<Label>(root, "sta-tag");
+            _citadel = Require<Label>(root, "citadel-tag");
         }
 
         public void Bind(SimulationWorld sim, int playerId)
@@ -74,6 +80,35 @@ namespace Unruled.View.UI
             if (discount != _staCache)
                 UiFormat.Set(_sta, ref _staCache, discount,
                     discount > 0 ? "STA · TOLL −" + UiFormat.Number(discount) + "%" : "STA · FULL TOLL");
+
+            RefreshCitadel();
+        }
+
+        // Shield percent and defence tier while the Citadel stands (cached as percent x 10 + tier); then The Directorate.
+        private void RefreshCitadel()
+        {
+            if (_sim.Citadels.Count == 0)
+            {
+                if (_citadelCache != long.MaxValue)
+                    UiFormat.Set(_citadel, ref _citadelCache, long.MaxValue, "CITADEL · —");
+                return;
+            }
+            if (_sim.Victory.IsDecided(out _))
+            {
+                bool seated = _sim.Victory.HasSeat(_playerId);
+                long state = seated ? DirectorateSeated : DirectorateFormed;
+                if (state == _citadelCache)
+                    return;
+                _citadel.EnableInClassList(DirectorateClass, seated);
+                UiFormat.Set(_citadel, ref _citadelCache, state, seated ? "DIRECTORATE · SEATED" : "DIRECTORATE · FORMED");
+                return;
+            }
+            ref var citadel = ref _sim.Citadels.At(0);
+            long percent = (long)citadel.Integrity * 100 / _sim.Balance.Citadel.MaxIntegrity;
+            long key = percent * 10 + citadel.DefenceTier;
+            if (key != _citadelCache)
+                UiFormat.Set(_citadel, ref _citadelCache, key,
+                    "CITADEL · " + UiFormat.Number(percent) + "% · T" + UiFormat.Number(citadel.DefenceTier));
         }
 
         private long SelectionLatency()

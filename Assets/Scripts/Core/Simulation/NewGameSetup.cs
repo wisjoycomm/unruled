@@ -27,7 +27,8 @@ namespace Unruled.Core.Simulation
     /// preferred ESI window holds its ESI; home systems hold no tungsten or uranium. The core base is the home's
     /// highest-ESI site: it is owned, rigged, given refineries and stock, and a fleet starts there. Rivals are AI-run.
     /// Then the neutral contested cluster (cluster = participant count) is generated with every raw item, and each home
-    /// gets a dormant jump gate from its outermost orbit to its own contested orbit (GDD §1.2).
+    /// gets a dormant jump gate from its outermost orbit to its own contested orbit (GDD §1.2). THE SYSTEM holds the
+    /// contested cluster's outermost orbit, which no gate lands on, as its Citadel.
     /// Runs once, before the clock starts.
     /// </summary>
     public static class NewGameSetup
@@ -77,6 +78,11 @@ namespace Unruled.Core.Simulation
                 var far = SiteAtOrbit(sim, contested, (int)((long)p * orbits / participants));
                 sim.JumpGates.Add(sim.World.Create(), new JumpGate { OwnerPlayerId = firstPlayerId + p, HomeSite = home, FarSite = far });
             }
+            var citadel = OuterOrbit(sim, contested);
+            for (int g = 0; g < sim.JumpGates.Count; g++)
+                if (sim.JumpGates.At(g).FarSite == citadel)
+                    throw new InvalidOperationException($"{participants} participants leave no free orbit for the Citadel.");
+            sim.Defense.CreateCitadel(citadel);
         }
 
         private static EntityId OuterOrbit(SimulationWorld sim, int clusterId)

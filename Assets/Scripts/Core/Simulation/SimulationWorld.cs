@@ -55,6 +55,10 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<ShipBuildOrder> ShipOrders;
         public readonly ComponentStore<JumpGate> JumpGates;
         public readonly ComponentStore<ConvoyRoute> ConvoyRoutes;
+        public readonly ComponentStore<SystemCitadel> Citadels;
+        public readonly ComponentStore<CitadelAssault> CitadelAssaults;
+        public readonly ComponentStore<VictoryRecord> VictoryRecords;
+        public readonly ComponentStore<DirectorateSeat> DirectorateSeats;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly Ledger Ledger;
@@ -79,6 +83,8 @@ namespace Unruled.Core.Simulation
         public readonly CommandIssuer Issuer;
         public readonly ResearchSystem Research;
         public readonly TechGates TechGates;
+        public readonly SystemDefenseEvaluator Defense;
+        public readonly VictoryEvaluator Victory;
 
         public SimulationWorld(GameBalanceConfig balance, ulong worldSeed, long startTick = 0)
         {
@@ -121,6 +127,10 @@ namespace Unruled.Core.Simulation
             ShipOrders = World.CreateStore<ShipBuildOrder>();
             JumpGates = World.CreateStore<JumpGate>();
             ConvoyRoutes = World.CreateStore<ConvoyRoute>();
+            Citadels = World.CreateStore<SystemCitadel>();
+            CitadelAssaults = World.CreateStore<CitadelAssault>();
+            VictoryRecords = World.CreateStore<VictoryRecord>();
+            DirectorateSeats = World.CreateStore<DirectorateSeat>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -243,6 +253,12 @@ namespace Unruled.Core.Simulation
             Clock.Register(Audit);
             Commands.Register(CommandType.AuditOptIn, Audit);
             Clock.Register(Authority);
+            Defense = new SystemDefenseEvaluator(
+                World, Citadels, CitadelAssaults, Sites, Fleets, FleetMotions, FleetReadiness, Stockpiles, Ledger, FleetFactory,
+                balance.Fleets, balance.Citadel);
+            Clock.Register(Defense);
+            Victory = new VictoryEvaluator(Citadels, CitadelAssaults, VictoryRecords, DirectorateSeats, Players, balance.Citadel);
+            Clock.Register(Victory);
 
             Ai = new UtilityAiEngine(
                 AiControllers, Players, Fleets, FleetMotions, FleetCombat, FleetReadiness, Stockpiles, Sites, Weather, Deposits,

@@ -23,7 +23,19 @@ namespace Unruled.Core.Simulation
                 CreateWtoContractBalance(), CreateSystemAuthorityBalance(),
                 CreateSystemFactionBalance(), CreateAiBalance(), CreateNewGameBalance(),
                 CreateResearchBalance(), CreateShipyardBalance(), CreateSiteControlBalance(),
-                CreateJumpGateBalance(), CreateConvoyBalance());
+                CreateJumpGateBalance(), CreateConvoyBalance(), CreateCitadelBalance());
+
+        /// <summary>
+        /// GDD §1: an alliance that brings down the System Citadel forms The Directorate; Tier-5 nuclear ships are the
+        /// weapon for it (tab 02). PROVISIONAL: a 100,000 shield checked every 60 ticks; a line ship bombards 1/2/4/8/40
+        /// by tier for 1 ammo; 50 regenerates per quiet check; the garrison (30 line + 10 EW) forms at Tier 3, Tier 4
+        /// below 75% and Tier 5 below 40%, and re-forms an hour after it is destroyed; bombarding within the last hour
+        /// before the fall earns a Directorate seat.
+        /// </summary>
+        public static CitadelBalance CreateCitadelBalance() => new CitadelBalance(
+            maxIntegrity: 100_000, checkIntervalTicks: 60, bombardPerLineShip: new[] { 1, 2, 4, 8, 40 }, ammoPerLineShip: 1,
+            regenPerCheck: 50, startTier: 3, tierStepPercents: new[] { 75, 40 }, garrisonLineShips: 30, garrisonEwShips: 10,
+            garrisonAmmo: 3_000, garrisonBatteries: 500, garrisonRespawnTicks: 3_600, directorateWindowTicks: 3_600);
 
         /// <summary>
         /// GDD §1: CargoConvoys feed remote mines. PROVISIONAL: 250 of each item per convoy ship, checked every 10 ticks;

@@ -264,6 +264,14 @@
 .u-tag--wto { border-color: var(--u-wto); color: var(--u-wto); }
 .u-tag--who { border-color: var(--u-who); color: var(--u-who); }
 .u-tag--noaa { border-color: var(--u-noaa); color: var(--u-noaa); }
+.u-tag--citadel { border-color: var(--u-danger); color: var(--u-danger); }
+
+.u-tag--directorate {
+    -unity-font-definition: url("Fonts/IBMPlexMono-SemiBold.asset");
+    border-color: var(--u-you);
+    background-color: var(--u-you);
+    color: var(--u-void);
+}
 
 .u-tag--iaea {
     -unity-font-definition: url("Fonts/IBMPlexMono-SemiBold.asset");

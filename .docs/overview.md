@@ -59,6 +59,8 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
 15. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
 16. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
 17. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
+18. `SystemDefenseEvaluator`: the System Citadel's garrison, shield bombardment, regeneration and fall.
+19. `VictoryEvaluator`: seats The Directorate when the Citadel falls.
 
 `MiningSystem` also handles `RetractDrills`, `PauseDrills` and `BuildRig`, `RefinerySystem` handles `BuildRefinery`
 and `SetRefineryCap`, and
@@ -123,6 +125,9 @@ methods, in this order (rule 4).
   - `PlayerStanding`, `LeaderboardBalance` (tab 05), `BracketRates`, `LeaderboardAuditSystem`.
   - `SystemAgency`, `SystemBulletin`, `SystemSanction`, `SystemAuthorityManager` + `SystemAuthorityBalance`,
     `NoaaForecast`.
+  - `SystemDefenseEvaluator` + `CitadelBalance`: owns `SystemCitadel` (on THE SYSTEM's Citadel site, the contested
+    cluster's outermost orbit) and `CitadelAssault` (on HQs); `VictoryEvaluator` owns `VictoryRecord` and
+    `DirectorateSeat`. The HUD's citadel tag shows the shield and defence tier, then The Directorate.
 - **Research/**: `TechProgress` (on the HQ: tech tier 1..5, stage, telemetry, failed tests, retool end), `ResearchSystem` (telemetry in storms, `StressTest` command with calibration pity, retooling) + `ResearchBalance`; blasts go to `IResearchIncidentLog` (THE SYSTEM's bulletins). `TechGates` (`ITechGates`, `sim.TechGates`) answers a player's tier and gates: laser comms (orders through R3+ blackouts) and core-fracture mining at Tier 4, terraforming at Tier 5.
 - **AI/**: `UtilityAiEngine` + `AiController` (on an AI-run HQ) + `AiBalance` / `AiPreset` (tab 06).
 
