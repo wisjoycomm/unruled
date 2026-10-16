@@ -22,7 +22,8 @@ namespace Unruled.Core.Military
     /// </list>
     /// Fleets left with no ships are destroyed. Their hold goes to the surviving hostile fleet with the lowest entity id
     /// at the same site or lane (PROVISIONAL loot rule); WTO contract cargo and goods already stolen become
-    /// <see cref="StolenGoods"/> of the taker. With no hostile fleet left there, the hold is lost. SetRof, SetFocus (ParamA) and VentCoolant target an own fleet.
+    /// <see cref="StolenGoods"/> of the taker, and taking contract cargo is reported as piracy. With no hostile player
+    /// fleet left there, or from a THE SYSTEM fleet, the hold is lost. SetRof, SetFocus (ParamA) and VentCoolant target an own fleet.
     /// </summary>
     public sealed class SalvoCombatEngine : ISimSystem, ICommandHandler
     {
@@ -38,6 +39,7 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<CapitalRelocation> _relocations;
         private readonly ComponentStore<ContractCargo> _cargo;
         private readonly ComponentStore<StolenGoods> _stolen;
+        private readonly IOffenceLog _offences;
         private readonly CombatBalance _balance;
         private readonly RelocationBalance _relocationBalance;
         private readonly FleetBalance _fleetBalance;
@@ -62,7 +64,8 @@ namespace Unruled.Core.Military
             ComponentStore<FleetReadiness> readiness, ComponentStore<FleetCombatState> combat,
             ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes, ComponentStore<Stockpile> stockpiles,
             ComponentStore<PlayerHq> players, ComponentStore<CapitalRelocation> relocations,
-            ComponentStore<ContractCargo> cargo, ComponentStore<StolenGoods> stolen, CombatBalance balance,
+            ComponentStore<ContractCargo> cargo, ComponentStore<StolenGoods> stolen, IOffenceLog offences,
+            CombatBalance balance,
             FleetBalance fleetBalance, RelocationBalance relocationBalance)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
@@ -77,6 +80,7 @@ namespace Unruled.Core.Military
             _relocations = relocations ?? throw new ArgumentNullException(nameof(relocations));
             _cargo = cargo ?? throw new ArgumentNullException(nameof(cargo));
             _stolen = stolen ?? throw new ArgumentNullException(nameof(stolen));
+            _offences = offences ?? throw new ArgumentNullException(nameof(offences));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
             _fleetBalance = fleetBalance ?? throw new ArgumentNullException(nameof(fleetBalance));
             _relocationBalance = relocationBalance ?? throw new ArgumentNullException(nameof(relocationBalance));
@@ -105,7 +109,7 @@ namespace Unruled.Core.Military
 
             for (int i = 0; i < _deadCount; i++)
             {
-                Loot(_dead[i]);
+                Loot(_dead[i], tick);
                 _world.Destroy(_dead[i]);
             }
             _deadCount = 0;
@@ -445,15 +449,17 @@ namespace Unruled.Core.Military
             }
         }
 
-        private void Loot(EntityId dead)
+        private void Loot(EntityId dead, long tick)
         {
             var at = _motions.Get(dead);
             int owner = _units.Get(dead).OwnerPlayerId;
+            if (owner <= 0)
+                return;
             EntityId taker = default;
             for (int i = 0; i < _units.Count; i++)
             {
                 ref var unit = ref _units.At(i);
-                if (unit.TotalShips == 0 || unit.OwnerPlayerId == owner)
+                if (unit.TotalShips == 0 || unit.OwnerPlayerId == owner || unit.OwnerPlayerId <= 0)
                     continue;
                 var fleet = _units.EntityAt(i);
                 ref var motion = ref _motions.Get(fleet);
@@ -463,6 +469,8 @@ namespace Unruled.Core.Military
             }
             if (taker.IsNull)
                 return;
+            if (_cargo.Has(dead))
+                _offences.ReportPiracy(_units.Get(taker).OwnerPlayerId, tick);
 
             if (!_stolen.Has(taker))
                 _stolen.Add(taker, default);

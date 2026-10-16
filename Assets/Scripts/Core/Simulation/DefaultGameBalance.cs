@@ -18,7 +18,7 @@ namespace Unruled.Core.Simulation
                 CreateLifecycleBalance(), CreateLatencyBalance(), CreateRadarBalance(), CreateFleetBalance(),
                 CreateCombatBalance(), CreateRelocationBalance(), CreateLedgerBalance(),
                 CreateStaBalance(), CreateLeaderboardBalance(), CreateWtoBalance(),
-                CreateWtoContractBalance(),
+                CreateWtoContractBalance(), CreateSystemAuthorityBalance(),
                 CreateSystemFactionBalance());
 
         /// <summary>
@@ -138,6 +138,14 @@ namespace Unruled.Core.Simulation
         /// <summary>PROVISIONAL: a contract convoy has twice its planned travel time plus 10 minutes to deliver.</summary>
         public static WtoContractBalance CreateWtoContractBalance() =>
             new WtoContractBalance(deadlineTravelPercent: 200, deadlineGraceTicks: 10 * 60);
+
+        /// <summary>
+        /// PROVISIONAL Call-to-Arms: offences count for a day; the first bars the WTO for an hour, the third brings a
+        /// WTO defence fleet of 20 Tier-1 line ships to the offender's core base for an hour. Bulletins last an hour.
+        /// </summary>
+        public static SystemAuthorityBalance CreateSystemAuthorityBalance() => new SystemAuthorityBalance(
+            offenceWindowTicks: 86_400, layerOneOffences: 1, wtoBarTicks: 3_600, layerTwoOffences: 3, defenceTier: 1,
+            defenceLineShips: 20, defenceAmmo: 500, defenceTicks: 3_600, bulletinTicks: 3_600);
 
         /// <summary>
         /// Data sheet tab 05, one row per bracket. "Current Storm Path" = no lead but sees storms now; the unrated

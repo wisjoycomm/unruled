@@ -9,7 +9,8 @@ namespace Unruled.Core.Board
     /// Each tick: expire fronts, roll new fronts per star system on roll ticks, then recompute weather.
     /// A site feels the strongest front of each scale covering it; an irradiated site is held at the irradiation S level.
     /// A lane feels the stronger of its two ends, capped by its tier's storm exposure.
-    /// Rolls use a fresh RNG keyed by (world seed, tick, cluster), so the engine keeps no RNG state.
+    /// Rolls use a fresh RNG keyed by (world seed, tick, cluster), so the engine keeps no RNG state and any future roll
+    /// can be read ahead with <see cref="TryRollFront"/> (the NOAA forecast).
     /// </summary>
     public sealed class NoaaWeatherEngine : ISimSystem
     {
@@ -74,37 +75,52 @@ namespace Unruled.Core.Board
 
         private void RollFronts(long tick)
         {
+            int maxCluster = MaxClusterId();
+            for (int cluster = 0; cluster <= maxCluster; cluster++)
+                if (TryRollFront(tick, cluster, out var front))
+                    _fronts.Add(_world.Create(), front);
+        }
+
+        public int RollIntervalTicks => _balance.RollIntervalTicks;
+
+        public int MaxClusterId()
+        {
             int maxCluster = -1;
             for (int i = 0; i < _sites.Count; i++)
                 maxCluster = Math.Max(maxCluster, _sites.At(i).ClusterId);
+            return maxCluster;
+        }
 
-            for (int cluster = 0; cluster <= maxCluster; cluster++)
+        /// <summary>The front a star system spawns on a roll tick, if any. Pure: the same map, seed and tick give the same front.</summary>
+        public bool TryRollFront(long tick, int cluster, out StormFront front)
+        {
+            front = default;
+            if (tick % _balance.RollIntervalTicks != 0)
+                return false;
+            int siteCount = 0;
+            for (int i = 0; i < _sites.Count; i++)
+                if (_sites.At(i).ClusterId == cluster)
+                    siteCount++;
+            if (siteCount == 0)
+                return false;
+
+            var rng = new SplitMix64(_worldSeed ^ ((ulong)tick * TickMix) ^ ((ulong)cluster * ClusterMix));
+            if (rng.NextInt(0, 99) >= _balance.SpawnChancePercent)
+                return false;
+
+            var scale = (StormScale)rng.NextInt((int)StormScale.Radio, (int)StormScale.Geomagnetic);
+            byte level = RollLevel(ref rng);
+            int centerOrdinal = rng.NextInt(0, siteCount - 1);
+            int radius = rng.NextInt(_balance.MinRadius, _balance.MaxRadius);
+            int duration = rng.NextInt(_balance.MinDurationTicks, _balance.MaxDurationTicks);
+
+            ref var center = ref SiteOfCluster(cluster, centerOrdinal);
+            front = new StormFront
             {
-                int siteCount = 0;
-                for (int i = 0; i < _sites.Count; i++)
-                    if (_sites.At(i).ClusterId == cluster)
-                        siteCount++;
-                if (siteCount == 0)
-                    continue;
-
-                var rng = new SplitMix64(_worldSeed ^ ((ulong)tick * TickMix) ^ ((ulong)cluster * ClusterMix));
-                if (rng.NextInt(0, 99) >= _balance.SpawnChancePercent)
-                    continue;
-
-                var scale = (StormScale)rng.NextInt((int)StormScale.Radio, (int)StormScale.Geomagnetic);
-                byte level = RollLevel(ref rng);
-                int centerOrdinal = rng.NextInt(0, siteCount - 1);
-                int radius = rng.NextInt(_balance.MinRadius, _balance.MaxRadius);
-                int duration = rng.NextInt(_balance.MinDurationTicks, _balance.MaxDurationTicks);
-
-                ref var center = ref SiteOfCluster(cluster, centerOrdinal);
-                var front = _world.Create();
-                _fronts.Add(front, new StormFront
-                {
-                    ClusterId = cluster, Scale = scale, Level = level, CenterX = center.PosX, CenterY = center.PosY,
-                    Radius = radius, EndTick = tick + duration
-                });
-            }
+                ClusterId = cluster, Scale = scale, Level = level, CenterX = center.PosX, CenterY = center.PosY,
+                Radius = radius, EndTick = tick + duration
+            };
+            return true;
         }
 
         private byte RollLevel(ref SplitMix64 rng)

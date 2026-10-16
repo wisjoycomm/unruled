@@ -12,7 +12,8 @@ namespace Unruled.Core.Economy
     /// <see cref="ItemMarket"/>). A sell order takes its goods from the site's stockpile (never units flagged as
     /// <see cref="StolenGoods"/>) and locks the seller's escrow deposit (bracket rate x quantity x price); a buy order
     /// pays quantity x price. Both go into the WTO escrow wallet. CancelOrder (target: the order's site; ParamEntity:
-    /// the order) returns what is left. Invalid or unaffordable orders change nothing.
+    /// the order) returns what is left. Invalid or unaffordable orders, and orders from players
+    /// <see cref="IMarketAccess"/> bars, change nothing.
     /// Each tick every item's book is matched: best buy against best sell while they cross, priority price, then
     /// placement tick, then entity id. A match trades at the earlier order's price: the buyer gets back the
     /// difference to their limit, and the goods, value and the matched share of the deposit go to
@@ -30,12 +31,14 @@ namespace Unruled.Core.Economy
         private readonly EntityId _escrow;
         private readonly IMarketRates _rates;
         private readonly ITradeSettlement _settlement;
+        private readonly IMarketAccess _access;
         private readonly WtoBalance _balance;
 
         public WtoMarketEngine(
             World world, ComponentStore<WtoOrder> orders, ComponentStore<ItemMarket> markets,
             ComponentStore<SiteInfo> sites, ComponentStore<Stockpile> stockpiles, ComponentStore<StolenGoods> stolen,
-            Ledger ledger, EntityId escrow, IMarketRates rates, ITradeSettlement settlement, WtoBalance balance)
+            Ledger ledger, EntityId escrow, IMarketRates rates, ITradeSettlement settlement, IMarketAccess access,
+            WtoBalance balance)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _orders = orders ?? throw new ArgumentNullException(nameof(orders));
@@ -48,6 +51,7 @@ namespace Unruled.Core.Economy
             _escrow = escrow;
             _rates = rates ?? throw new ArgumentNullException(nameof(rates));
             _settlement = settlement ?? throw new ArgumentNullException(nameof(settlement));
+            _access = access ?? throw new ArgumentNullException(nameof(access));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
         }
 
@@ -96,7 +100,7 @@ namespace Unruled.Core.Economy
             int quantity = command.ParamB;
             long price = command.ParamC;
             var site = command.Target;
-            if (!ItemIds.IsValid(item) || quantity <= 0 || price <= 0)
+            if (!ItemIds.IsValid(item) || quantity <= 0 || price <= 0 || !_access.MayTrade(command.PlayerId, tick))
                 return;
             if (!_sites.Has(site) || _sites.Get(site).OwnerPlayerId != command.PlayerId || !_stockpiles.Has(site))
                 return;

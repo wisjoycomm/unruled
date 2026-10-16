@@ -46,6 +46,8 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<WtoContract> Contracts;
         public readonly ComponentStore<ContractCargo> ContractCargo;
         public readonly ComponentStore<StolenGoods> StolenGoods;
+        public readonly ComponentStore<SystemSanction> Sanctions;
+        public readonly ComponentStore<SystemBulletin> Bulletins;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly Ledger Ledger;
@@ -56,6 +58,9 @@ namespace Unruled.Core.Simulation
         public readonly WtoMarketEngine Market;
         public readonly WtoContractSystem ContractSystem;
         public readonly LeaderboardAuditSystem Audit;
+        public readonly SystemAuthorityManager Authority;
+        public readonly NoaaForecast Forecast;
+        public readonly NoaaWeatherEngine WeatherEngine;
         public readonly PlanetLifecycleSystem Lifecycle;
         public readonly FleetFactory FleetFactory;
         public readonly RoutePlanner Routes;
@@ -99,6 +104,8 @@ namespace Unruled.Core.Simulation
             Contracts = World.CreateStore<WtoContract>();
             ContractCargo = World.CreateStore<ContractCargo>();
             StolenGoods = World.CreateStore<StolenGoods>();
+            Sanctions = World.CreateStore<SystemSanction>();
+            Bulletins = World.CreateStore<SystemBulletin>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -123,14 +130,18 @@ namespace Unruled.Core.Simulation
             FleetFactory = new FleetFactory(
                 World, Sites, Fleets, FleetMotions, FleetRoutes, FleetSensors, FleetReadiness, FleetCombat, Stockpiles, balance.Combat);
             Routes = new RoutePlanner(Graph, Starlanes, balance.Starlanes, balance.Fleets);
+            Authority = new SystemAuthorityManager(
+                World, Sanctions, Bulletins, Sites, Players, Stockpiles, Ledger, FleetFactory, balance.Fleets, balance.Authority);
             ContractSystem = new WtoContractSystem(
                 World, Contracts, ContractCargo, FleetMotions, Starlanes, Stockpiles, Ledger, WtoEscrow, WtoFeePool, Rates,
                 FleetFactory, Routes, Clock, balance.Fleets, balance.Contracts);
 
             // Fixed tick order: weather first, then producers before consumers, watchers last.
-            Clock.Register(new NoaaWeatherEngine(
+            WeatherEngine = new NoaaWeatherEngine(
                 World, StormFronts, Sites, Weather, Starlanes, LaneWeather, balance.Weather, balance.Starlanes,
-                balance.Lifecycle, worldSeed));
+                balance.Lifecycle, worldSeed);
+            Clock.Register(WeatherEngine);
+            Forecast = new NoaaForecast(WeatherEngine, Rates);
             var mining = new MiningSystem(Deposits, Sites, Stockpiles, balance.Mining);
             Clock.Register(mining);
             Commands.Register(CommandType.RetractDrills, mining);
@@ -140,7 +151,7 @@ namespace Unruled.Core.Simulation
             Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, Sites, Ledger, balance.Recipes, balance.Refinery));
             Market = new WtoMarketEngine(
                 World, WtoOrders, ItemMarkets, Sites, Stockpiles, StolenGoods, Ledger, WtoEscrow, Rates, ContractSystem,
-                balance.Wto);
+                Authority, balance.Wto);
             Clock.Register(Market);
             Commands.Register(CommandType.PlaceBuyOrder, Market);
             Commands.Register(CommandType.PlaceSellOrder, Market);
@@ -163,7 +174,7 @@ namespace Unruled.Core.Simulation
 
             var combat = new SalvoCombatEngine(
                 World, Fleets, FleetMotions, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, Players, Relocations,
-                ContractCargo, StolenGoods, balance.Combat, balance.Fleets, balance.Relocation);
+                ContractCargo, StolenGoods, Authority, balance.Combat, balance.Fleets, balance.Relocation);
             Clock.Register(combat);
             Commands.Register(CommandType.SetRof, combat);
             Commands.Register(CommandType.SetFocus, combat);
@@ -187,6 +198,7 @@ namespace Unruled.Core.Simulation
                 Standings, Wallets, Sites, Fleets, Stockpiles, Ledger, WtoFeePool, StaTollPool, Market, balance.Leaderboard);
             Clock.Register(Audit);
             Commands.Register(CommandType.AuditOptIn, Audit);
+            Clock.Register(Authority);
         }
 
         /// <summary>

@@ -140,6 +140,8 @@ namespace Unruled.Tests.Core.SystemFactions
             Assert.Greater(ammo, 1_000 - 100, "the cargo was taken");
             Assert.AreEqual(Qty, _sim.StolenGoods.Get(raider).Get(Ammo), "only the contract goods are stolen");
             Assert.AreEqual(ammo - Qty, _sim.StolenGoods.Get(raider).Clean(_sim.Stockpiles.Get(raider), Ammo));
+            Assert.IsFalse(_sim.Authority.MayTrade(Pirate, _sim.Clock.CurrentTick), "piracy bars the WTO");
+            Assert.IsTrue(_sim.Authority.MayTrade(Seller, _sim.Clock.CurrentTick));
         }
 
         [Test]
