@@ -156,7 +156,7 @@ namespace Unruled.Tests.Core.Board
         [Test]
         public void TerraformCommand_IsRoutedThroughSimulationWorld()
         {
-            var sim = new SimulationWorld(DefaultGameBalance.Create());
+            var sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 1);
             var site = sim.World.Create();
             sim.Sites.Add(site, new SiteInfo { OwnerPlayerId = Owner, LifecycleState = PlanetLifecycleState.PristineWorld });
             sim.Stockpiles.Add(site, default);

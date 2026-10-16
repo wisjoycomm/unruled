@@ -13,7 +13,7 @@ namespace Unruled.Tests.Core.Simulation
 
         private static SimulationWorld BuildWorld(ulong seed)
         {
-            var sim = new SimulationWorld(DefaultGameBalance.Create());
+            var sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 1);
             SystemSeedGenerator.GenerateSystem(sim.World, sim.Sites, sim.Balance.Universe, seed, clusterId: 0);
 
             var site = sim.Sites.EntityAt(0);
@@ -87,7 +87,7 @@ namespace Unruled.Tests.Core.Simulation
         [Test]
         public void Router_SendsCommandToItsHandler_AndRejectsUnknownTypes()
         {
-            var sim = new SimulationWorld(DefaultGameBalance.Create());
+            var sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 1);
             var handler = new CountingHandler();
             sim.Commands.Register(CommandType.Hold, handler);
             Assert.Throws<InvalidOperationException>(() => sim.Commands.Register(CommandType.Hold, handler));

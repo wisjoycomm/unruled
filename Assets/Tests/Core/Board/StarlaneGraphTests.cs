@@ -10,7 +10,7 @@ namespace Unruled.Tests.Core.Board
     {
         private static SimulationWorld Build(ulong seed)
         {
-            var sim = new SimulationWorld(DefaultGameBalance.Create());
+            var sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 1);
             sim.GenerateSystem(seed, clusterId: 0);
             return sim;
         }

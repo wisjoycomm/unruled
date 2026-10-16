@@ -12,7 +12,8 @@ namespace Unruled.Core.Simulation
     {
         public static GameBalanceConfig Create() =>
             new GameBalanceConfig(
-                CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateStarlaneBalance(), CreateRefineryBalance(), CreateMiningBalance(),
+                CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateStarlaneBalance(), CreateNoaaBalance(),
+                CreateRefineryBalance(), CreateMiningBalance(),
                 CreateLifecycleBalance(), CreateSystemFactionBalance());
 
         /// <summary>
@@ -30,6 +31,19 @@ namespace Unruled.Core.Simulation
             coreFracture: new MiningDepth(speedPercent: 100, fuelCoolantMultiplier: 4),
             deepCoreEsiDropMilli: 50,
             barrenHuskEsiDropMilli: 200);
+
+        /// <summary>
+        /// PROVISIONAL (not in the GDD or data sheet): each system rolls every 10 min with a 25% chance of a new front;
+        /// level odds 40/30/17/10/3% for 1..5, lasting 30 min – 3 h over a 150–500 unit disc.
+        /// </summary>
+        public static NoaaBalance CreateNoaaBalance() => new NoaaBalance(
+            rollIntervalTicks: 600,
+            spawnChancePercent: 25,
+            levelWeights: new[] { 40, 30, 17, 10, 3 },
+            minDurationTicks: 1_800,
+            maxDurationTicks: 10_800,
+            minRadius: 150,
+            maxRadius: 500);
 
         /// <summary>
         /// Data sheet tab 04: highway 100% speed / 1.0x fuel / sheltered / STA toll; bypass 60% / 4.5x / storms up to
