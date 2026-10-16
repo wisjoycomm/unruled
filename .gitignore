@@ -265,3 +265,8 @@ x86/
 # Local MCP tokens
 .mcp.json
 .cursor/mcp.json
+
+### Project
+/.temp/
+/.agents/mcp_config.json
+!/Packages/*

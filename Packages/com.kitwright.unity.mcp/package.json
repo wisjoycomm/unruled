@@ -1,0 +1,33 @@
+{
+  "name": "com.kitwright.unity.mcp",
+  "version": "1.0.1",
+  "displayName": "KitWright MCP for Unity",
+  "description": "MIT-licensed MCP server for Unity Editor with execute_code, prompts/resources, input simulation, screenshots, and play mode automation.",
+  "license": "MIT",
+  "unity": "2022.3",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1",
+    "com.unity.ugui": "1.0.0",
+    "com.unity.test-framework": "1.4.6",
+    "com.unity.modules.imageconversion": "1.0.0",
+    "com.unity.modules.uielements": "1.0.0",
+    "com.unity.modules.unitywebrequest": "1.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "ai",
+    "llm",
+    "editor",
+    "tools",
+    "model-context-protocol"
+  ],
+  "author": {
+    "name": "KitWright",
+    "email": "contact@kitwright.dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kitwright/unity-mcp.git"
+  },
+  "_fingerprint": "43ed9b3dafc4ad48f8c0ed2bd5d3fbf5a48e76db"
+}

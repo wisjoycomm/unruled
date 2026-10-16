@@ -10,3 +10,4 @@
 
 
 - 2026-10-16 - Claude - Restore Unruled rule files; adopt GDD v3.1 as `.docs/unruled_master_gdd.md` and export the v3.0 xlsx to `.docs/unruled_master_data_sheets.md`.
+- 2026-10-16 - Claude - Create Unity 6000.5.7f1 project, four asmdefs (Core/View/Editor/Tests.Core), embed KitWright MCP with a Unity 6000.5 compile fix.

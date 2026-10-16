@@ -1,0 +1,114 @@
+name: CodeQL
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+    schedule:
+        # Weekly, so a new query release finds old code without waiting for a push.
+        - cron: "0 3 * * 1"
+    workflow_dispatch:
+
+jobs:
+    analyze:
+        name: Analyze C#
+        runs-on: ubuntu-latest
+        permissions:
+            security-events: write
+            contents: read
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            # keepalive-broker.cs.txt is the broker's whole source: it owns the client-facing port,
+            # runs outside Unity's AppDomain and outlives the editor. The .txt extension keeps Unity
+            # from compiling it into the package, and it also keeps every C# extractor from reading
+            # it, so without this step CodeQL passes having never looked at the most exposed file in
+            # the repository.
+            - name: Stage the runtime-compiled broker for analysis
+              run: |
+                  src="Editor/MCP/Server/Broker/keepalive-broker.cs.txt"
+                  if [ ! -f "$src" ]; then
+                      echo "::error::$src not found. It moved or was renamed, and the broker would drop out of this scan without failing it. Update this step."
+                      exit 1
+                  fi
+                  mkdir -p codeql-staging
+                  cp "$src" codeql-staging/keepalive-broker.cs
+                  echo "Staged $(wc -l < codeql-staging/keepalive-broker.cs) lines of broker source."
+
+            # The buildless extractor resolves what it can find on disk, and what it cannot find here
+            # is every Unity type: 64% of calls had a known target on the first scan. Unity's managed
+            # assemblies are the missing half. Copying them out of the game-ci image needs no licence
+            # and never starts the editor - the container is created and removed without being run.
+            #
+            # Self-diagnosing on purpose: the tag and the install path are the two things that can
+            # drift, so a miss prints what the image actually holds instead of failing blind.
+            - name: Stage Unity reference assemblies
+              id: refs
+              run: |
+                  IMAGE=""
+                  for tag in \
+                      unityci/editor:ubuntu-6000.0.75f1-base-3 \
+                      unityci/editor:ubuntu-6000.0.75f1-base-2 \
+                      unityci/editor:6000.0.75f1-base-3; do
+                      if docker pull -q "$tag" >/dev/null 2>&1; then IMAGE="$tag"; break; fi
+                  done
+                  if [ -z "$IMAGE" ]; then
+                      echo "::error::None of the candidate unityci/editor tags could be pulled."
+                      exit 1
+                  fi
+                  echo "image: $IMAGE"
+
+                  CID=$(docker create "$IMAGE")
+                  trap 'docker rm -f "$CID" >/dev/null 2>&1 || true' EXIT
+
+                  mkdir -p unity-refs
+                  FOUND=""
+                  for dir in \
+                      /opt/unity/Editor/Data/Managed \
+                      /opt/Unity/Editor/Data/Managed \
+                      /usr/share/unity3d/Editor/Data/Managed; do
+                      if docker cp "$CID:$dir/." unity-refs/ 2>/dev/null; then FOUND="$dir"; break; fi
+                  done
+
+                  if [ -z "$FOUND" ]; then
+                      echo "::error::No Editor/Data/Managed in $IMAGE. Directories under /opt:"
+                      docker cp "$CID:/opt/." /tmp/probe 2>/dev/null || true
+                      find /tmp/probe -maxdepth 4 -type d 2>/dev/null | head -40
+                      exit 1
+                  fi
+
+                  COUNT=$(find unity-refs -name '*.dll' | wc -l)
+                  echo "Copied $COUNT reference assemblies from $FOUND ($(du -sh unity-refs | cut -f1))"
+                  test "$COUNT" -ge 50 || { echo "::error::Only $COUNT dlls; expected ~159."; exit 1; }
+
+            - name: Initialize CodeQL
+              uses: github/codeql-action/init@v3
+              with:
+                  languages: csharp
+                  # No Unity licence on this runner, so nothing here can be built and the extractor
+                  # reads the sources directly.
+                  #
+                  # Know what this does and does not buy. The first scan of 2b6571b, with nothing but
+                  # the sources, measured 64% of calls with a known target and 79% of expressions
+                  # with a known type against GitHub's 85% threshold, and reported "Low C# analysis
+                  # quality". Local patterns still get caught. Interprocedural taint does not: every
+                  # unresolved call is a broken edge, so a flow from a tool argument to File.Delete
+                  # can stop before it reaches the sink. Zero alerts under those numbers is NOT
+                  # evidence that the file-system calls all route through PathSafety.
+                  #
+                  # The step above now stages Unity's managed assemblies, which is the cheap half of
+                  # the fix: references without a build. Check the reported percentages after a run.
+                  # If they still sit under 85%, the remaining gap is the tracer - CodeQL reaches its
+                  # numbers by watching the compiler run, and no arrangement of loose dlls replaces
+                  # that. The next rung is build-mode: manual with the extraction and the compile in
+                  # the same container, which is a bigger change than this file.
+                  build-mode: none
+                  queries: security-extended
+
+            - name: Analyze
+              uses: github/codeql-action/analyze@v3
+              with:
+                  category: /language:csharp

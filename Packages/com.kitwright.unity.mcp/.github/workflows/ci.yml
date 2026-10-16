@@ -1,0 +1,342 @@
+name: CI
+
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+    workflow_dispatch:
+
+jobs:
+    validate:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.x"
+
+            - name: Validate repository
+              run: |
+                  python - <<'PY'
+                  import json
+                  import pathlib
+                  import sys
+
+                  root = pathlib.Path(".")
+                  errors = []
+
+                  package_path = root / "package.json"
+                  try:
+                      package = json.loads(package_path.read_text(encoding="utf-8"))
+                  except Exception as exc:
+                      errors.append(f"package.json is not valid JSON: {exc}")
+                  else:
+                      for key in ("name", "version", "displayName", "unity"):
+                          if key not in package or not package[key]:
+                              errors.append(f"package.json is missing required key: {key}")
+
+                  forbidden_paths = []
+                  for path in root.rglob("*"):
+                      if ".git" in path.parts:
+                          continue
+                      if path.name == ".DS_Store" or ".idea" in path.parts:
+                          forbidden_paths.append(str(path))
+
+                  if forbidden_paths:
+                      errors.append("Repository contains local junk files:\n- " + "\n- ".join(sorted(forbidden_paths)))
+
+                  if errors:
+                      print("Validation failed:\n")
+                      for error in errors:
+                          print(f"- {error}")
+                      sys.exit(1)
+
+                  print("Repository validation passed.")
+                  PY
+
+            - name: Check generated docs are in sync
+              run: python scripts~/generate_tools_doc.py --check
+
+    # ────────────────────────────────────────────────────────────────
+    # Unity EditMode Tests
+    # ────────────────────────────────────────────────────────────────
+    # REQUIRED SECRETS:
+    #   game-ci/unity-test-runner needs a Unity license to run.
+    #   Configure ONE of the following in repo Settings → Secrets:
+    #
+    #   Option 1 – License file (recommended for Personal):
+    #     UNITY_LICENSE  : contents of the .ulf (Unity License File)
+    #
+    #   Option 2 – Serial (Professional / Plus):
+    #     UNITY_EMAIL    : Unity account email
+    #     UNITY_PASSWORD : password
+    #     UNITY_SERIAL   : serial key (xxxx-xxxx-xxxx-xxxx-xxxx)
+    #
+    #   Details: https://game.ci/docs/github/activation
+    #
+    # The action is pinned to v4.3.2, not the floating v4 tag: v4.4.0 moved v4 onto a thin
+    # wrapper around game-ci/cli, which dropped the machine-ID randomisation a Personal .ulf
+    # needs ("Machine bindings don't match") and resolves its CLI over the unauthenticated
+    # GitHub API (403 on a busy runner). Unpin once both are fixed upstream.
+    # ────────────────────────────────────────────────────────────────
+    test:
+        name: Unity EditMode Tests (${{ matrix.unityVersion }})
+        runs-on: ubuntu-latest
+        needs: validate
+        permissions:
+            contents: read
+            checks: write
+        strategy:
+            # The minimum version package.json declares, plus the Unity 6 line we develop against, so a
+            # UNITY_6000_0_OR_NEWER branch cannot break unnoticed.
+            fail-fast: false
+            matrix:
+                unityVersion: [2022.3.0f1, 6000.0.75f1]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            # Create a temporary Unity project since this repo is a package, not a full project.
+            # The package is symlinked into the temp project's Packages/.
+            - name: Create temporary Unity project structure
+              run: |
+                  mkdir -p UnityProject/Assets
+                  mkdir -p UnityProject/Packages
+                  mkdir -p UnityProject/ProjectSettings
+
+                  # ProjectSettings/ProjectVersion.txt – game-ci uses this file to auto-detect the version.
+                  echo "m_EditorVersion: ${{ matrix.unityVersion }}" > UnityProject/ProjectSettings/ProjectVersion.txt
+
+                  # Copy the package into Packages/ (a symlink breaks inside the game-ci
+                  # docker container: the absolute host path does not exist there).
+                  PKG_NAME=$(python3 -c "import json; print(json.load(open('package.json'))['name'])")
+                  rsync -a --exclude UnityProject --exclude .git --exclude .github ./ "UnityProject/Packages/${PKG_NAME}/"
+                  echo "Package '${PKG_NAME}' copied into UnityProject/Packages/"
+
+                  # The optional engine modules are declared on purpose. An empty dependency
+                  # list still gives the editor its built-in modules, so BoxCollider compiles -
+                  # but the KITWRIGHT_* versionDefines key off a manifest entry, not off whether
+                  # the module is really there. Omitting them compiled the physics, particle and
+                  # 2D tools out and quietly tested a smaller tool surface than any real project
+                  # has. Stripping them is the separate optional-modules job's job.
+                  # testables makes the test runner pick up the package's tests.
+                  #
+                  # com.unity.inputsystem is here for the same reason as the modules above: the input
+                  # tools and their tests sit behind a versionDefine keyed to the package, so without
+                  # it this job tested a surface ~20 tools smaller than any project that has it.
+                  # Pinned, not floating: the version decides which controls exist. 1.18.0 is the
+                  # newest that still declares unity 2022.3 - and it goes in on the 6000 leg only:
+                  # with the package present, 2022.3.0f1 dies in batchmode before it writes a
+                  # results file (docker exit 133), while the very same commit runs 767 tests green
+                  # on 6000.0.75f1. The tools themselves are editor-version-agnostic, so one leg
+                  # gates them; the old leg keeps gating everything else. A 6000.6 leg would have to
+                  # move to 1.20.0 or newer: 1.18.0's own PlayerInputEditor casts EntityId to int,
+                  # which 6.6 promotes to an error, so the package stops compiling before anything
+                  # in this one is reached.
+                  # URP is deliberately absent. Since 2021.2 the SRP packages are editor-bundled -
+                  # packages-lock reports source "builtin" and packages.unity.com serves nothing above
+                  # 10.10.1 - so the version is whatever the editor image ships and any pinned one
+                  # fails to resolve. The Volume tools' tests only run where URP is installed.
+                  INPUT_SYSTEM='"com.unity.inputsystem": "1.18.0",'
+                  if [ "${{ matrix.unityVersion }}" = "2022.3.0f1" ]; then INPUT_SYSTEM=''; fi
+
+                  cat > UnityProject/Packages/manifest.json <<JSON
+                  {
+                      "dependencies": {
+                          ${INPUT_SYSTEM}
+                          "com.unity.modules.ai": "1.0.0",
+                          "com.unity.modules.animation": "1.0.0",
+                          "com.unity.modules.audio": "1.0.0",
+                          "com.unity.modules.imageconversion": "1.0.0",
+                          "com.unity.modules.jsonserialize": "1.0.0",
+                          "com.unity.modules.particlesystem": "1.0.0",
+                          "com.unity.modules.physics": "1.0.0",
+                          "com.unity.modules.physics2d": "1.0.0",
+                          "com.unity.modules.terrain": "1.0.0",
+                          "com.unity.modules.ui": "1.0.0",
+                          "com.unity.modules.uielements": "1.0.0",
+                          "com.unity.modules.unitywebrequest": "1.0.0"
+                      },
+                      "testables": ["${PKG_NAME}"]
+                  }
+                  JSON
+
+            - name: Run EditMode tests
+              uses: game-ci/unity-test-runner@fa6ced25861c16ef56187828c43f76d00df43a23 # v4.3.2
+              env:
+                  UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+                  UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+                  UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+                  UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+              with:
+                  unityVersion: auto
+                  testMode: EditMode
+                  customParameters: -nographics
+                  projectPath: UnityProject
+                  githubToken: ${{ secrets.GITHUB_TOKEN }}
+                  checkName: EditMode Test Results (${{ matrix.unityVersion }})
+
+            - name: Upload test results
+              uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: editmode-test-results-${{ matrix.unityVersion }}
+                  path: artifacts/
+
+            # A skipped test is green in the check run. This lists every skip of this leg, with its
+            # reason, in the job summary, and fails on a skip whose reason nobody declared.
+            - name: Report skipped tests
+              if: always()
+              run: python3 scripts~/report_test_skips.py "EditMode ${{ matrix.unityVersion }}" artifacts/
+
+    # ────────────────────────────────────────────────────────────────
+    # Optional engine modules stripped
+    # ────────────────────────────────────────────────────────────────
+    # OptionalModuleGuardTests only reads source; this job is the one that actually compiles the
+    # package on a project without the seven modules the KITWRIGHT_* versionDefines guard.
+    # Same license secrets as the test job above.
+    # ────────────────────────────────────────────────────────────────
+    optional-modules:
+        name: Compile Without Optional Modules (6000.0.75f1)
+        runs-on: ubuntu-latest
+        needs: validate
+        permissions:
+            contents: read
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            # Same throwaway project as the test job, with two differences: no "testables" (the test
+            # assembly still owes a few #ifs - see OptionalModuleGuardTests.Exempt - so only the
+            # package's own assemblies are compiled here), and the manifest lists only the modules
+            # the package needs, so physics, physics2d, ai, terrain, particlesystem, audio and
+            # animation are absent.
+            - name: Create temporary Unity project structure
+              run: |
+                  mkdir -p UnityProject/Assets
+                  mkdir -p UnityProject/Packages
+                  mkdir -p UnityProject/ProjectSettings
+
+                  echo "m_EditorVersion: 6000.0.75f1" > UnityProject/ProjectSettings/ProjectVersion.txt
+
+                  PKG_NAME=$(python3 -c "import json; print(json.load(open('package.json'))['name'])")
+                  rsync -a --exclude UnityProject --exclude .git --exclude .github ./ "UnityProject/Packages/${PKG_NAME}/"
+                  echo "Package '${PKG_NAME}' copied into UnityProject/Packages/"
+
+                  cat > UnityProject/Packages/manifest.json <<'JSON'
+                  {
+                      "dependencies": {
+                          "com.unity.modules.imageconversion": "1.0.0",
+                          "com.unity.modules.jsonserialize": "1.0.0",
+                          "com.unity.modules.ui": "1.0.0",
+                          "com.unity.modules.uielements": "1.0.0",
+                          "com.unity.modules.unitywebrequest": "1.0.0"
+                      }
+                  }
+                  JSON
+
+            # This step's exit code is NOT the gate, and neither is its log. It is a test runner on a
+            # project that declares no "testables", so what its exit code reports is its own business;
+            # from a9e1389 to 2b6571b it was red for three commits for a reason that was never a
+            # compile error, unnoticed because the job carried continue-on-error. It also appends its
+            # own -logFile, which overrides any passed here, so the editor log lands in this step's
+            # output and not in a file the next step could read. It runs only because it handles
+            # Unity licensing.
+            - name: Compile package with the modules absent
+              continue-on-error: true
+              uses: game-ci/unity-test-runner@fa6ced25861c16ef56187828c43f76d00df43a23 # v4.3.2
+              env:
+                  UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+                  UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+                  UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+                  UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+              with:
+                  unityVersion: auto
+                  testMode: EditMode
+                  customParameters: -nographics
+                  projectPath: UnityProject
+
+            # The gate is the compiler's own output on disk, which needs no log and no exit code: an
+            # assembly that failed to compile is simply not emitted. KitWright.Editor is the one that
+            # matters, because a single CS0234 there takes every tool with it.
+            - name: Fail unless the package assemblies were produced
+              if: always()
+              run: |
+                  ASM=UnityProject/Library/ScriptAssemblies
+                  # Captured first: in a pipeline the exit status is sed's, so grep finding nothing
+                  # would still look like success and print an empty list.
+                  FOUND=$(ls -1 "$ASM" 2>/dev/null | grep -i kitwright | sed 's/^/  /' || true)
+                  echo "Assemblies produced:"
+                  echo "${FOUND:-  (none)}"
+
+                  for dll in KitWright.Editor.dll KitWright.Editor.Bootstrap.dll; do
+                      if [ ! -f "$ASM/$dll" ]; then
+                          echo "::error::$dll was not emitted, so the package does not compile with the seven optional modules absent. The CS errors are in the editor log in the step above."
+                          exit 1
+                      fi
+                  done
+
+                  # a9e1389 moved this assembly onto a versionDefine keyed to com.unity.inputsystem,
+                  # which this project does not install. Emitting it here means that gate is back to
+                  # keying off a Unity built-in symbol, and the dangling reference is a matter of time.
+                  if [ -f "$ASM/KitWright.Editor.InputSystem.dll" ]; then
+                      echo "::error::KitWright.Editor.InputSystem.dll was emitted without com.unity.inputsystem installed; its defineConstraints no longer gate on the package."
+                      exit 1
+                  fi
+
+                  echo "KitWright.Editor compiled with the seven modules absent, and the InputSystem assembly stayed out."
+
+            # A clean compile above only proves the claim if the modules really stayed out.
+            - name: Verify the modules stayed out
+              if: always()
+              run: |
+                  LOCK=UnityProject/Packages/packages-lock.json
+                  test -f "$LOCK" || { echo "$LOCK missing: package resolution never ran."; exit 1; }
+                  for module in physics physics2d ai terrain particlesystem audio animation; do
+                      if grep -q "\"com.unity.modules.${module}\"" "$LOCK"; then
+                          echo "com.unity.modules.${module} was resolved anyway - this job proves nothing."
+                          exit 1
+                      fi
+                  done
+                  echo "All seven optional modules absent from the resolved project."
+
+    # ────────────────────────────────────────────────────────────────
+    # Secret scan
+    # ────────────────────────────────────────────────────────────────
+    # SECURITY.md promises no credentials in logs; this covers the other half, the repository
+    # itself. The broker writes its token to broker.pid and client configs carry server URLs, so
+    # a stray runtime file is the realistic way one lands in a commit.
+    #
+    # The docker image rather than gitleaks-action: the action wants a licence key for
+    # organisation-owned repos, and this needs neither a key nor a secret to run on forks.
+    # ────────────────────────────────────────────────────────────────
+    secrets:
+        name: Secret Scan
+        runs-on: ubuntu-latest
+        # Was advisory pending one green run; run 32947311680 on 2b6571b was green with no findings,
+        # so it gates now. A hit here means rotate the credential, then allowlist the commit.
+        permissions:
+            contents: read
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  # detect walks history, so a shallow clone would scan almost nothing.
+                  fetch-depth: 0
+
+            # --redact keeps a hit from printing the secret into a public build log, which would
+            # publish the thing the scan just found.
+            - name: Scan for committed secrets
+              run: |
+                  docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+                      detect --source=/repo --no-banner --redact --verbose

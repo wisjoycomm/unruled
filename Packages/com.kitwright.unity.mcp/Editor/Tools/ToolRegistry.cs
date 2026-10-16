@@ -1,0 +1,355 @@
+// Copyright (C) KitWright. Licensed under MIT.
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using KitWright.Editor.Api.Models;
+using KitWright.Editor.Settings;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using UnityEngine;
+
+namespace KitWright.Editor.Tools
+{
+    /// <summary>
+    /// Scans assemblies for classes marked with [ToolProvider]
+    /// and discovers all public static methods as tool functions.
+        /// Blocked tools (e.g. hidden evaluation helpers, input simulation) are filtered out.
+    /// Also supports manual tool registration for external plugins.
+    /// </summary>
+    internal static class ToolRegistry
+    {
+        private static readonly object _lock = new object();
+        private static volatile Dictionary<string, MethodInfo> _methodCache;
+        private static volatile HashSet<string> _customToolNames;
+
+        /// <summary>
+        /// Manually registered tools from external plugins.
+        /// Key = snake_case tool name.
+        /// </summary>
+        private static readonly Dictionary<string, ManualToolEntry> _manualTools =
+            new Dictionary<string, ManualToolEntry>(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly HashSet<string> BlockedTools = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "evaluate_expression",
+        };
+
+        /// <summary>
+        /// Represents a manually registered tool function.
+        /// </summary>
+        internal class ManualToolEntry
+        {
+            public ToolDefinition Definition;
+            public Func<Dictionary<string, string>, string> Handler;
+        }
+
+        public static IReadOnlyDictionary<string, MethodInfo> MethodCache
+        {
+            get
+            {
+                if (_methodCache == null)
+                    lock (_lock) { if (_methodCache == null) ScanAssemblies(); }
+                return _methodCache;
+            }
+        }
+
+        public static void ScanAssemblies()
+        {
+            ScanAssemblies(AppDomain.CurrentDomain.GetAssemblies().Where(a => !IsTestAssembly(a)));
+        }
+
+        // A [ToolProvider] inside a test assembly is a fixture, not a product tool, and scanning it
+        // would put it in every client's tools/list: the package's own tests compile in any project
+        // that embeds the package, and a project's test asmdef is scanned like any other assembly.
+        // The explicit-list overload does not filter, so a test can still scan its own fixture.
+        internal static bool IsTestAssembly(Assembly assembly)
+        {
+            if (assembly == null) return false;
+
+            try
+            {
+                return assembly.GetReferencedAssemblies()
+                    .Any(reference => string.Equals(reference.Name, "nunit.framework", StringComparison.Ordinal));
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        internal static void ScanAssemblies(IEnumerable<Assembly> assemblies)
+        {
+            var methodCache = new Dictionary<string, MethodInfo>(StringComparer.OrdinalIgnoreCase);
+            var customToolNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            try
+            {
+                foreach (var assembly in assemblies)
+                {
+                    if (assembly.IsDynamic) continue;
+
+                    try
+                    {
+                        foreach (var type in assembly.GetTypes())
+                        {
+                            try
+                            {
+                                if (type.GetCustomAttribute<ToolProviderAttribute>() == null)
+                                    continue;
+
+                                var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Static);
+                                foreach (var method in methods)
+                                {
+                                    var snakeName = ToSnakeCase(method.Name);
+
+                                    if (BlockedTools.Contains(snakeName))
+                                        continue;
+
+                                    if (!methodCache.ContainsKey(snakeName))
+                                    {
+                                        methodCache[snakeName] = method;
+                                        if (!IsPackageAssembly(assembly))
+                                            customToolNames.Add(snakeName);
+                                    }
+                                    else
+                                    {
+                                        Debug.LogWarning($"[KitWright] Duplicate tool function name: {snakeName}");
+                                    }
+                                }
+                            }
+                            catch (Exception)
+                            {
+                                // One unloadable type must not cost us the rest of the assembly
+                            }
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Skip assemblies that can't be loaded
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[KitWright] Error scanning assemblies for tool functions: {ex.Message}");
+            }
+
+            _methodCache = methodCache;
+            _customToolNames = customToolNames;
+        }
+
+        /// <summary>
+        /// True when the tool was declared outside this package — i.e. by project or
+        /// third-party code marked with [ToolProvider]. Those tools are exposed regardless of
+        /// the active profile, since the project author opted in by writing them.
+        /// </summary>
+        public static bool IsCustomTool(string snakeCaseName)
+        {
+            if (string.IsNullOrEmpty(snakeCaseName)) return false;
+            if (_customToolNames == null)
+                lock (_lock) { if (_customToolNames == null) ScanAssemblies(); }
+            return _customToolNames.Contains(snakeCaseName);
+        }
+
+        // Listed explicitly rather than matched on a "KitWright." prefix, so a project that happens
+        // to name an assembly KitWright.Something does not get its tools silently treated as built-in.
+        private static readonly HashSet<string> PackageAssemblyNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "KitWright.Editor",
+            "KitWright.Editor.Bootstrap",
+            "KitWright.Editor.InputSystem"
+        };
+
+        internal static bool IsPackageAssembly(Assembly assembly)
+        {
+            return IsPackageAssembly(assembly?.GetName().Name);
+        }
+
+        // Add-on assemblies are deliberately absent from PackageAssemblyNames. A name listed there is
+        // profile-filtered, and a tool that no default set names is then invisible under core - the
+        // profile most clients connect with. Staying out of the list puts add-on tools in the custom
+        // bucket, which CustomToolIsExposedUnderNonFullProfiles pins as always exposed.
+        internal static bool IsPackageAssembly(string assemblyName)
+        {
+            return assemblyName != null && PackageAssemblyNames.Contains(assemblyName);
+        }
+
+        public static MethodInfo GetMethod(string snakeCaseName)
+        {
+            if (_methodCache == null) ScanAssemblies();
+            _methodCache.TryGetValue(snakeCaseName, out var method);
+            return method;
+        }
+
+        public static bool IsReadOnly(MethodInfo method)
+        {
+            return method.GetCustomAttribute<ReadOnlyToolAttribute>() != null;
+        }
+
+        /// <summary>Default per-request budget, matching the plain HTTP transport's historical cap.</summary>
+        public const int DefaultToolTimeoutSeconds = 180;
+
+        /// <summary>
+        /// Seconds a transport should wait for a JSON-RPC request before calling it a timeout:
+        /// tools/call gets its tool's budget, everything else the fallback. A build or a bake keeps
+        /// running on the pinned editor thread after the transport gives up, so answering
+        /// "Request timeout" makes the agent retry and queue a second one behind the first.
+        /// </summary>
+        public static int TimeoutSecondsForRequest(
+            string rpcMethod, IDictionary<string, object> parameters, int fallback = DefaultToolTimeoutSeconds)
+        {
+            if (!string.Equals(rpcMethod, "tools/call", StringComparison.Ordinal))
+                return fallback;
+
+            object name = null;
+            parameters?.TryGetValue("name", out name);
+            if (string.IsNullOrEmpty(name as string))
+                return fallback;
+
+            if (string.Equals((string)name, BatchToolName, StringComparison.Ordinal))
+                return BatchBudgetSeconds(BatchCommandNames(parameters), fallback);
+
+            var budget = LongRunningSeconds((string)name);
+            return budget > fallback ? budget : fallback;
+        }
+
+        private const string BatchToolName = "batch_execute";
+
+        // A batch holding build_player was cut off at the ordinary ceiling while the build ran on.
+        // It gets the ordinary ceiling once, plus each long-running command's own budget, capped
+        // below the broker's hold deadline so the editor still answers before the broker gives up.
+        internal static int BatchBudgetSeconds(IEnumerable<string> commandNames, int fallback)
+        {
+            var budget = fallback;
+            foreach (var name in commandNames ?? Enumerable.Empty<string>())
+                budget += LongRunningSeconds(name);
+            return Math.Min(budget, MaxBatchBudgetSeconds);
+        }
+
+        private const int MaxBatchBudgetSeconds = 1800;
+
+        private static int LongRunningSeconds(string toolName) =>
+            string.IsNullOrEmpty(toolName)
+                ? 0
+                : GetMethod(toolName)?.GetCustomAttribute<LongRunningToolAttribute>()?.Seconds ?? 0;
+
+        // The commands argument is a JSON array in a string; a client that sends the array itself
+        // arrives here as the parsed list.
+        private static IEnumerable<string> BatchCommandNames(IDictionary<string, object> parameters)
+        {
+            if (!(parameters.TryGetValue("arguments", out var arguments) && arguments is IDictionary<string, object> args) ||
+                !args.TryGetValue("commands", out var commands))
+                return Enumerable.Empty<string>();
+
+            if (commands is string text)
+            {
+                try
+                {
+                    return JArray.Parse(text).Select(command => (command as JObject)?["name"]?.ToString()).ToList();
+                }
+                catch (JsonException)
+                {
+                    // The batch refuses it as INVALID_COMMANDS itself, well inside the ordinary ceiling.
+                    return Enumerable.Empty<string>();
+                }
+            }
+
+            return commands is IEnumerable<object> list
+                ? list.Select(command => command is IDictionary<string, object> c && c.TryGetValue("name", out var n) ? n as string : null).ToList()
+                : Enumerable.Empty<string>();
+        }
+
+        public static bool RunsOffEditorThread(string snakeCaseName)
+        {
+            if (string.IsNullOrEmpty(snakeCaseName))
+                return false;
+
+            var method = GetMethod(snakeCaseName);
+            return method != null && method.IsDefined(typeof(OffEditorThreadAttribute), false);
+        }
+
+        // --- Public Registration API ---
+
+        /// <summary>
+        /// Manually register a tool function. External plugins can use this
+        /// to add tools without using the [ToolProvider] attribute.
+        /// </summary>
+        /// <param name="name">Snake_case tool name (e.g. "my_custom_tool")</param>
+        /// <param name="definition">Tool definition with JSON schema</param>
+        /// <param name="handler">Function that receives parameters and returns a result string</param>
+        public static void Register(string name, ToolDefinition definition,
+            Func<Dictionary<string, string>, string> handler)
+        {
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentNullException(nameof(name));
+            if (definition == null)
+                throw new ArgumentNullException(nameof(definition));
+            if (handler == null)
+                throw new ArgumentNullException(nameof(handler));
+
+            if (BlockedTools.Contains(name))
+            {
+                Debug.LogWarning($"[KitWright] Cannot register blocked tool: {name}");
+                return;
+            }
+
+            lock (_lock)
+            {
+                _manualTools[name] = new ManualToolEntry
+                {
+                    Definition = definition,
+                    Handler = handler
+                };
+            }
+
+            PluginDebugLogger.Log($"[KitWright] Registered manual tool: {name}");
+        }
+
+        /// <summary>
+        /// Unregister a manually registered tool.
+        /// </summary>
+        public static void Unregister(string name)
+        {
+            lock (_lock)
+            {
+                _manualTools.Remove(name);
+            }
+        }
+
+        public static bool IsEnabled(string name)
+        {
+            return !BlockedTools.Contains(name);
+        }
+
+        /// <summary>
+        /// Get all registered manual tools (for use by ToolSchemaBuilder and FunctionInvoker).
+        /// </summary>
+        public static IReadOnlyDictionary<string, ManualToolEntry> ManualTools => _manualTools;
+
+        // --- Utility ---
+
+        public static string ToSnakeCase(string pascalCase)
+        {
+            if (string.IsNullOrEmpty(pascalCase)) return pascalCase;
+
+            var chars = new List<char>();
+            for (int i = 0; i < pascalCase.Length; i++)
+            {
+                var c = pascalCase[i];
+                if (char.IsUpper(c) && i > 0)
+                {
+                    // Add underscore before uppercase if previous char is lowercase
+                    // or if next char is lowercase (handles "XMLParser" -> "xml_parser")
+                    bool prevIsLower = char.IsLower(pascalCase[i - 1]);
+                    bool nextIsLower = i + 1 < pascalCase.Length && char.IsLower(pascalCase[i + 1]);
+                    if (prevIsLower || nextIsLower)
+                        chars.Add('_');
+                }
+                chars.Add(char.ToLowerInvariant(c));
+            }
+            return new string(chars.ToArray());
+        }
+
+    }
+}

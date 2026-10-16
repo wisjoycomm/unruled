@@ -1,0 +1,1208 @@
+// Copyright (C) KitWright. Licensed under MIT.
+//
+// Standalone keepalive broker for KitWright Unity MCP.
+// Compiled on demand with the Unity-bundled Mono C# compiler and run outside
+// Unity's reloadable AppDomain. The broker owns the client-facing HTTP port.
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+
+namespace KitWright.UnityMcp.Broker
+{
+    internal static class Program
+    {
+        // Passed in with --protocol so the editor's MCPBrokerProtocol.Version is the only place the
+        // number lives. Declaring it here too meant a one-sided bump left this broker answering the
+        // old number forever: it failed every health probe, was replaced, and the replacement failed
+        // the same way, while the transport quietly fell back to in-process HTTP.
+        private static int ProtocolVersion;
+        private const int PullTimeoutMs = 25000;
+        private const int RequestReadTimeoutMs = 30000;
+        // Must stay above the editor's largest per-tool budget ([LongRunningTool], currently 1800s
+        // for build_player) so the editor answers first instead of this 504 racing a running build.
+        private const long HoldDeadlineMs = 1920000;
+        private const long ReloadGraceMs = 45000;
+        private const long IdleExitMs = 600000;
+        private const int MaxHeaderBytes = 64 * 1024;
+        private const int MaxBodyBytes = 32 * 1024 * 1024;
+        private const int BackendUnavailableCode = -32001;
+        private const string BackendUnavailableMessage =
+            "Unity MCP backend is reloading or reconnecting. Retry shortly.";
+        private const string BackendReloadingNotice =
+            "Unity is recompiling scripts, so this tool did not run. This is not a failure: " +
+            "wait a few seconds and call it again.";
+        private const string TokenHeader = "X-KitWright-Broker-Token";
+        private const string SessionHeader = "X-KitWright-Broker-Session";
+        private const string ReqIdHeader = "X-KitWright-Broker-ReqId";
+        private const string RedeliveryHeader = "X-KitWright-Broker-Redelivery";
+        private const string BrokerHeader = "X-KitWright-Broker";
+        private const string AcceptSseHeader = "X-KitWright-Broker-Accept-SSE";
+        private const string ContentTypeHeader = "X-KitWright-Broker-Content-Type";
+        private const string StatusHeader = "X-KitWright-Broker-Status";
+        private const string ClientPortHeader = "X-KitWright-Broker-Client-Port";
+        private const string McpSessionHeader = "X-KitWright-Broker-Mcp-Session";
+        private const string ClientTokenHeader = "X-KitWright-Broker-Client-Token";
+        // Writes to a client happen under Gate, so one that stops reading would otherwise park the
+        // whole broker once the socket buffer fills.
+        private const int SendTimeoutMs = 5000;
+        private const string AttachPath = "/_kitwright/broker/attach";
+        private const string DetachPath = "/_kitwright/broker/detach";
+
+        private static readonly object Gate = new object();
+        private static readonly Dictionary<long, PendingRequest> Pending = new Dictionary<long, PendingRequest>();
+        private static readonly List<long> Queue = new List<long>();
+        private static readonly HashSet<string> AttachedSessions = new HashSet<string>();
+        private static Waiter WaitingPull;
+        private static TcpListener Listener;
+        private static string Token;
+
+        // Handed over by the editor on every pull and attach rather than on the command line, so a
+        // rotated token takes effect on the next pull. Until the first one there is no backend, and
+        // a client request gets the backend-unavailable answer without reaching anything.
+        private static volatile string ClientToken = string.Empty;
+        private static string ProjectPin;
+        private static long Sequence;
+        private static bool Stopping;
+        private static long LastActivityMs;
+        private static long LastAttachAtMs;
+
+        private sealed class PendingRequest
+        {
+            public TcpClient Client;
+            public NetworkStream Stream;
+            public string Body;
+            public long EnqueuedAt;
+            public int ClientPort;
+            public string ActiveSession;
+            public bool Redelivered;
+            public bool AcceptsSse;
+            public bool HeldForReload;
+
+            // The client's own Mcp-Session-Id, carried through so Unity keeps per-session state
+            // (negotiated protocol revision, logging level) per client instead of pooling every
+            // broker client into one sessionless slot.
+            public string McpSession;
+        }
+
+        private sealed class Waiter
+        {
+            public TcpClient Client;
+            public NetworkStream Stream;
+            public string Session;
+            public long StashedAt;
+        }
+
+        public static int Main(string[] args)
+        {
+            var port = 8765;
+            Token = string.Empty;
+            ProjectPin = string.Empty;
+
+            for (var i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "--port" && i + 1 < args.Length)
+                {
+                    int.TryParse(args[++i], out port);
+                    continue;
+                }
+
+                if (args[i] == "--token" && i + 1 < args.Length)
+                {
+                    Token = args[++i] ?? string.Empty;
+                    continue;
+                }
+
+                if (args[i] == "--pin" && i + 1 < args.Length)
+                {
+                    ProjectPin = args[++i] ?? string.Empty;
+                    continue;
+                }
+
+                if (args[i] == "--protocol" && i + 1 < args.Length)
+                {
+                    int.TryParse(args[++i], out ProtocolVersion);
+                    continue;
+                }
+            }
+
+            if (port <= 0)
+                port = 8765;
+
+            if (string.IsNullOrEmpty(Token))
+            {
+                Log("fatal: missing broker token");
+                return 2;
+            }
+
+            try
+            {
+                Listener = new TcpListener(IPAddress.Loopback, port);
+                Listener.Server.NoDelay = true;
+                Listener.Start();
+            }
+            catch (Exception ex)
+            {
+                Log("fatal: cannot bind port " + port + ": " + ex.Message);
+                return 1;
+            }
+
+            Log("listening on http://127.0.0.1:" + port + "/");
+
+            LastActivityMs = NowMs();
+
+            // A handler can sit in a read for up to RequestReadTimeoutMs, and the pool only grows
+            // slowly past its minimum, so a burst of parallel calls would otherwise queue for threads.
+            int workers, completion;
+            ThreadPool.GetMinThreads(out workers, out completion);
+            ThreadPool.SetMinThreads(Math.Max(workers, 32), completion);
+
+            var sweeper = new Thread(SweepLoop);
+            sweeper.IsBackground = true;
+            sweeper.Start();
+
+            while (!Stopping)
+            {
+                TcpClient client = null;
+                try
+                {
+                    client = Listener.AcceptTcpClient();
+                }
+                catch
+                {
+                    if (!Stopping)
+                        Thread.Sleep(50);
+                    continue;
+                }
+
+                // A thread per connection took up to ~190 ms to start running on a loaded machine
+                // (p99 ~130 ms on Unity's Mono), on every request; a pool thread starts in microseconds.
+                ThreadPool.QueueUserWorkItem(HandleConnectionThread, client);
+            }
+
+            return 0;
+        }
+
+        private static void HandleConnectionThread(object state)
+        {
+            var client = (TcpClient)state;
+            try
+            {
+                HandleConnection(client);
+            }
+            catch (Exception ex)
+            {
+                Log("handler error: " + ex.Message);
+                SafeClose(client);
+            }
+        }
+
+        private static void HandleConnection(TcpClient client)
+        {
+            client.NoDelay = true;
+            client.ReceiveTimeout = RequestReadTimeoutMs;
+            client.SendTimeout = SendTimeoutMs;
+            var stream = client.GetStream();
+
+            string method;
+            string path;
+            string body;
+            Dictionary<string, string> headers;
+            if (!ReadHttpRequest(stream, out method, out path, out headers, out body))
+            {
+                SafeClose(client);
+                return;
+            }
+
+            // Any web page the browser visits can POST to this loopback port, so a non-loopback
+            // Origin is a DNS-rebinding attempt, not a client -- refuse before dispatching anything.
+            string origin;
+            headers.TryGetValue("origin", out origin);
+            if (!IsValidOrigin(origin))
+            {
+                Log("refused request from origin " + origin);
+                WriteResponse(stream, 403, "Forbidden", "text/plain", BrokerHeaderLine(), "Origin not allowed");
+                SafeClose(client);
+                return;
+            }
+
+            // Same DNS-rebinding defense that does not depend on Origin: a rebound name resolves to
+            // this loopback port but arrives with a non-loopback Host. This is the client-facing port.
+            string host;
+            headers.TryGetValue("host", out host);
+            if (!IsValidHost(host))
+            {
+                Log("refused request with host " + host);
+                WriteResponse(stream, 403, "Forbidden", "text/plain", BrokerHeaderLine(), "Host not allowed");
+                SafeClose(client);
+                return;
+            }
+
+            LastActivityMs = NowMs();
+
+            if (method == "GET" && path.StartsWith("/_kitwright/broker/health", StringComparison.Ordinal))
+            {
+                if (!HasValidToken(headers))
+                {
+                    WriteResponse(stream, 403, "Forbidden", "application/json", BrokerHeaderLine(), "{\"ok\":false}");
+                    SafeClose(client);
+                    return;
+                }
+
+                var response = "{\"ok\":true,\"name\":\"kitwright-unity-mcp-broker\",\"protocol\":" +
+                               ProtocolVersion + ",\"pid\":" + Process.GetCurrentProcess().Id +
+                               ",\"pending\":" + GetPendingCount() + "}";
+                WriteResponse(stream, 200, "OK", "application/json", BrokerHeaderLine(), response);
+                SafeClose(client);
+                return;
+            }
+
+            if (method == "POST" && path.StartsWith("/_kitwright/broker/shutdown", StringComparison.Ordinal))
+            {
+                if (!HasValidToken(headers))
+                {
+                    WriteResponse(stream, 403, "Forbidden", "application/json", BrokerHeaderLine(), "{\"ok\":false}");
+                    SafeClose(client);
+                    return;
+                }
+
+                WriteResponse(stream, 200, "OK", "application/json", BrokerHeaderLine(), "{\"ok\":true}");
+                SafeClose(client);
+                BeginShutdown();
+                return;
+            }
+
+            if (method == "GET" && path.StartsWith("/_kitwright/broker/pull", StringComparison.Ordinal))
+            {
+                if (!HasValidToken(headers))
+                {
+                    WriteResponse(stream, 403, "Forbidden", "application/json", BrokerHeaderLine(), "{\"ok\":false}");
+                    SafeClose(client);
+                    return;
+                }
+
+                string session;
+                headers.TryGetValue(SessionHeader.ToLowerInvariant(), out session);
+                if (string.IsNullOrEmpty(session))
+                    session = "unknown";
+                ClientToken = HeaderOrEmpty(headers, ClientTokenHeader);
+                HandlePull(client, stream, session);
+                return;
+            }
+
+            if (method == "POST" && path.StartsWith("/_kitwright/broker/push", StringComparison.Ordinal))
+            {
+                if (!HasValidToken(headers))
+                {
+                    WriteResponse(stream, 403, "Forbidden", "application/json", BrokerHeaderLine(), "{\"ok\":false}");
+                    SafeClose(client);
+                    return;
+                }
+
+                long reqId = 0;
+                string reqIdText;
+                if (headers.TryGetValue(ReqIdHeader.ToLowerInvariant(), out reqIdText))
+                    long.TryParse(reqIdText, out reqId);
+
+                string session;
+                headers.TryGetValue(SessionHeader.ToLowerInvariant(), out session);
+                string pushContentType;
+                headers.TryGetValue(ContentTypeHeader.ToLowerInvariant(), out pushContentType);
+                string issuedMcpSession;
+                headers.TryGetValue(McpSessionHeader.ToLowerInvariant(), out issuedMcpSession);
+                string pushStatus;
+                headers.TryGetValue(StatusHeader.ToLowerInvariant(), out pushStatus);
+                var accepted = HandlePush(reqId, session, body, pushContentType, issuedMcpSession, pushStatus);
+                WriteResponse(stream, accepted ? 200 : 409, accepted ? "OK" : "Conflict", "application/json",
+                    BrokerHeaderLine(), accepted ? "{\"ok\":true}" : "{\"ok\":false}");
+                SafeClose(client);
+                return;
+            }
+
+            if (method == "POST" && path.StartsWith(AttachPath, StringComparison.Ordinal))
+            {
+                if (!HasValidToken(headers))
+                {
+                    WriteResponse(stream, 403, "Forbidden", "application/json", BrokerHeaderLine(), "{\"ok\":false}");
+                    SafeClose(client);
+                    return;
+                }
+
+                string session;
+                headers.TryGetValue(SessionHeader.ToLowerInvariant(), out session);
+                ClientToken = HeaderOrEmpty(headers, ClientTokenHeader);
+                HandleAttach(session);
+                WriteResponse(stream, 200, "OK", "application/json", BrokerHeaderLine(), "{\"ok\":true}");
+                SafeClose(client);
+                return;
+            }
+
+            if (method == "POST" && path.StartsWith(DetachPath, StringComparison.Ordinal))
+            {
+                if (!HasValidToken(headers))
+                {
+                    WriteResponse(stream, 403, "Forbidden", "application/json", BrokerHeaderLine(), "{\"ok\":false}");
+                    SafeClose(client);
+                    return;
+                }
+
+                string session;
+                headers.TryGetValue(SessionHeader.ToLowerInvariant(), out session);
+                HandleDetach(session);
+                WriteResponse(stream, 200, "OK", "application/json", BrokerHeaderLine(), "{\"ok\":true}");
+                SafeClose(client);
+                return;
+            }
+
+            if (method == "OPTIONS")
+            {
+                WriteResponse(stream, 204, "No Content", "text/plain",
+                    "Access-Control-Allow-Methods: POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n", "");
+                SafeClose(client);
+                return;
+            }
+
+            if (method != "POST")
+            {
+                WriteResponse(stream, 405, "Method Not Allowed", "text/plain", "Allow: POST, OPTIONS\r\n", "");
+                SafeClose(client);
+                return;
+            }
+
+            // The broker owns the port across restarts, so a client config left on a stale port
+            // stays connectable — and the editor attached here belongs to one project only. Without
+            // this the tool call would be executed against the wrong project, which is exactly what
+            // the pin in the URL exists to prevent. A pinless path is accepted: configs written
+            // before pinning are still in the wild.
+            var requestPin = ExtractPin(path);
+            if (ProjectPin.Length > 0 && requestPin.Length > 0 &&
+                !string.Equals(requestPin, ProjectPin, StringComparison.OrdinalIgnoreCase))
+            {
+                Log("refused request for project pin " + requestPin + "; this broker serves " + ProjectPin);
+                WriteResponse(stream, 404, "Not Found", "text/plain", BrokerHeaderLine(),
+                    "This KitWright MCP broker serves project pin " + ProjectPin + ", not " + requestPin + ".");
+                SafeClose(client);
+                return;
+            }
+
+            var tokenRefusal = ClientTokenRefusal(path);
+            if (tokenRefusal != null)
+            {
+                Log("refused a client request without this project's access token");
+                WriteResponse(stream, 401, "Unauthorized", "text/plain", BrokerHeaderLine(), tokenRefusal);
+                SafeClose(client);
+                return;
+            }
+
+            string acceptHeader;
+            headers.TryGetValue("accept", out acceptHeader);
+            var acceptsSse = !string.IsNullOrEmpty(acceptHeader) &&
+                             acceptHeader.IndexOf("text/event-stream", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            string mcpSession;
+            headers.TryGetValue("mcp-session-id", out mcpSession);
+            HandleClientRequest(client, stream, body, acceptsSse, mcpSession);
+        }
+
+        private static void HandlePull(TcpClient client, NetworkStream stream, string session)
+        {
+            lock (Gate)
+            {
+                AttachedSessions.Add(session);
+                LastAttachAtMs = NowMs();
+
+                if (WaitingPull != null)
+                {
+                    TryWriteNoContent(WaitingPull.Stream);
+                    SafeClose(WaitingPull.Client);
+                    WaitingPull = null;
+                }
+
+                RequeueRequestsOwnedByDeadSession(session);
+                WaitingPull = new Waiter { Client = client, Stream = stream, Session = session, StashedAt = NowMs() };
+                TryDispatch();
+            }
+        }
+
+        private static bool HandlePush(long reqId, string session, string body, string contentType,
+            string issuedMcpSession, string clientStatus)
+        {
+            lock (Gate)
+            {
+                PendingRequest pending;
+                if (reqId == 0 || !Pending.TryGetValue(reqId, out pending))
+                    return false;
+
+                if (!string.Equals(pending.ActiveSession, session ?? string.Empty, StringComparison.Ordinal))
+                    return false;
+
+                Pending.Remove(reqId);
+                Queue.Remove(reqId);
+                try
+                {
+                    var responseContentType = string.IsNullOrEmpty(contentType)
+                        ? "application/json; charset=utf-8"
+                        : contentType;
+                    // An initialize handled in Unity mints the session there, so the id only reaches
+                    // the client if the broker puts it back on the wire under the MCP header name.
+                    var extraHeaders = string.IsNullOrEmpty(issuedMcpSession)
+                        ? null
+                        : "Mcp-Session-Id: " + issuedMcpSession + "\r\n";
+                    // The editor decides the client-facing status for refusals it owns -- a dead
+                    // Mcp-Session-Id has to arrive as 404 or the client never re-initializes. Only
+                    // error codes are honoured, so a malformed header cannot rewrite a good response.
+                    var statusCode = 200;
+                    var statusReason = "OK";
+                    int requestedStatus;
+                    if (!string.IsNullOrEmpty(clientStatus)
+                        && int.TryParse(clientStatus, out requestedStatus)
+                        && requestedStatus >= 400 && requestedStatus <= 599)
+                    {
+                        statusCode = requestedStatus;
+                        statusReason = requestedStatus == 404 ? "Not Found" : "Error";
+                    }
+                    WriteResponse(pending.Stream, statusCode, statusReason, responseContentType, extraHeaders, body ?? string.Empty);
+                }
+                catch (Exception ex)
+                {
+                    Log("#" + reqId + " client disconnected before response: " + ex.Message);
+                }
+                SafeClose(pending.Client);
+                return true;
+            }
+        }
+
+        private static void HandleAttach(string session)
+        {
+            if (string.IsNullOrEmpty(session))
+                return;
+
+            lock (Gate)
+            {
+                AttachedSessions.Add(session);
+                LastAttachAtMs = NowMs();
+            }
+        }
+
+        private static void HandleDetach(string session)
+        {
+            if (string.IsNullOrEmpty(session))
+                return;
+
+            lock (Gate)
+            {
+                AttachedSessions.Remove(session);
+
+                if (WaitingPull != null && string.Equals(WaitingPull.Session, session, StringComparison.Ordinal))
+                {
+                    TryWriteNoContent(WaitingPull.Stream);
+                    SafeClose(WaitingPull.Client);
+                    WaitingPull = null;
+                }
+
+                foreach (var item in Pending)
+                {
+                    var pending = item.Value;
+                    if (!string.Equals(pending.ActiveSession, session, StringComparison.Ordinal))
+                        continue;
+
+                    pending.ActiveSession = null;
+                    pending.Redelivered = true;
+                    if (!Queue.Contains(item.Key))
+                        Queue.Insert(0, item.Key);
+                }
+
+                var unavailable = new List<long>();
+                foreach (var item in Pending)
+                {
+                    if (string.IsNullOrEmpty(item.Value.ActiveSession) &&
+                        !item.Value.Redelivered &&
+                        Queue.Contains(item.Key))
+                        unavailable.Add(item.Key);
+                }
+
+                foreach (var reqId in unavailable)
+                {
+                    PendingRequest pending;
+                    if (!Pending.TryGetValue(reqId, out pending))
+                        continue;
+
+                    Pending.Remove(reqId);
+                    Queue.Remove(reqId);
+                    try
+                    {
+                        WriteBackendUnavailableResponse(pending.Stream, pending.Body);
+                    }
+                    catch
+                    {
+                    }
+                    SafeClose(pending.Client);
+                }
+            }
+        }
+
+        private static void HandleClientRequest(TcpClient client, NetworkStream stream, string body, bool acceptsSse,
+            string mcpSession)
+        {
+            lock (Gate)
+            {
+                var heldForReload = false;
+                if (WaitingPull == null && !HasActiveRequestLocked() && AttachedSessions.Count == 0)
+                {
+                    // A session that attached and then vanished is a domain reload, not a dead
+                    // backend: hold protocol calls (initialize, tools/list) until Unity reattaches,
+                    // because a -32001 there makes the client mark the whole server dead. A
+                    // tools/call still answers immediately -- it already gets benign retry text.
+                    heldForReload = ExtractTopLevelLiteral(body, "method") != "\"tools/call\"" &&
+                                    LastAttachAtMs != 0 &&
+                                    NowMs() - LastAttachAtMs <= ReloadGraceMs;
+                    if (!heldForReload)
+                    {
+                        WriteBackendUnavailableResponse(stream, body);
+                        SafeClose(client);
+                        return;
+                    }
+                }
+
+                var reqId = ++Sequence;
+                Pending[reqId] = new PendingRequest
+                {
+                    Client = client,
+                    Stream = stream,
+                    Body = body ?? string.Empty,
+                    EnqueuedAt = NowMs(),
+                    // Unity resolves the owning process from this port for its client approval
+                    // gate; this process cannot reference the package assembly to do it here.
+                    ClientPort = ClientPortOf(client),
+                    AcceptsSse = acceptsSse,
+                    HeldForReload = heldForReload,
+                    McpSession = mcpSession ?? string.Empty
+                };
+                Queue.Add(reqId);
+                TryDispatch();
+            }
+        }
+
+        private static int ClientPortOf(TcpClient client)
+        {
+            try
+            {
+                return ((IPEndPoint)client.Client.RemoteEndPoint).Port;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static bool HasActiveRequestLocked()
+        {
+            foreach (var item in Pending)
+            {
+                if (!string.IsNullOrEmpty(item.Value.ActiveSession))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void RequeueRequestsOwnedByDeadSession(string session)
+        {
+            foreach (var item in Pending)
+            {
+                var pending = item.Value;
+                if (string.IsNullOrEmpty(pending.ActiveSession))
+                    continue;
+
+                if (string.Equals(pending.ActiveSession, session, StringComparison.Ordinal))
+                    continue;
+
+                if (!Queue.Contains(item.Key))
+                {
+                    pending.ActiveSession = null;
+                    pending.Redelivered = true;
+                    Queue.Insert(0, item.Key);
+                    Log("#" + item.Key + " requeued for new Unity session");
+                }
+            }
+        }
+
+        private static void TryDispatch()
+        {
+            if (WaitingPull == null || Queue.Count == 0)
+                return;
+
+            var waiter = WaitingPull;
+            WaitingPull = null;
+
+            while (Queue.Count > 0)
+            {
+                var reqId = Queue[0];
+                Queue.RemoveAt(0);
+
+                PendingRequest pending;
+                if (!Pending.TryGetValue(reqId, out pending))
+                    continue;
+
+                if (!string.IsNullOrEmpty(pending.ActiveSession))
+                    continue;
+
+                var headers = BrokerHeaderLine() +
+                              ReqIdHeader + ": " + reqId + "\r\n" +
+                              RedeliveryHeader + ": " + (pending.Redelivered ? "1" : "0") + "\r\n" +
+                              AcceptSseHeader + ": " + (pending.AcceptsSse ? "1" : "0") + "\r\n" +
+                              ClientPortHeader + ": " + pending.ClientPort + "\r\n" +
+                              McpSessionHeader + ": " + (pending.McpSession ?? string.Empty) + "\r\n";
+                try
+                {
+                    WriteResponse(waiter.Stream, 200, "OK", "application/json; charset=utf-8", headers, pending.Body);
+                    pending.ActiveSession = waiter.Session;
+                }
+                catch (Exception ex)
+                {
+                    Log("dispatch failed for #" + reqId + ": " + ex.Message);
+                    pending.ActiveSession = null;
+                    Pending.Remove(reqId);
+                    try
+                    {
+                        WriteBackendUnavailableResponse(pending.Stream, pending.Body);
+                    }
+                    catch
+                    {
+                    }
+                    SafeClose(pending.Client);
+                }
+                finally
+                {
+                    SafeClose(waiter.Client);
+                }
+                return;
+            }
+
+            WaitingPull = waiter;
+        }
+
+        private static void SweepLoop()
+        {
+            while (!Stopping)
+            {
+                Thread.Sleep(1000);
+                lock (Gate)
+                {
+                    var now = NowMs();
+
+                    // A live Unity long-polls every ~25s, so total HTTP silence for this long
+                    // means Unity crashed or is gone -- self-terminate instead of orphaning.
+                    // (Crash leaves ghost sessions in AttachedSessions, so don't check that.)
+                    // A held request is the exception: Unity went quiet because it is busy with
+                    // the work we handed it, and exiting there throws away the answer the caller
+                    // is still waiting for. Pending always drains -- the two sweeps below expire
+                    // every entry -- so this cannot keep a broker alive forever.
+                    if (Pending.Count == 0 && now - LastActivityMs > IdleExitMs)
+                    {
+                        Log("no HTTP activity for " + (IdleExitMs / 60000) + " min, exiting");
+                        BeginShutdown();
+                        return;
+                    }
+
+                    if (WaitingPull != null && now - WaitingPull.StashedAt > PullTimeoutMs)
+                    {
+                        TryWriteNoContent(WaitingPull.Stream);
+                        SafeClose(WaitingPull.Client);
+                        WaitingPull = null;
+                    }
+
+                    // Requests held across a reload wait for the reattach, not for the full hold
+                    // deadline: if Unity never comes back they get the unavailable answer instead
+                    // of sitting on the socket for five minutes.
+                    var abandoned = new List<long>();
+                    foreach (var item in Pending)
+                    {
+                        if (item.Value.HeldForReload && string.IsNullOrEmpty(item.Value.ActiveSession) &&
+                            now - LastAttachAtMs > ReloadGraceMs)
+                            abandoned.Add(item.Key);
+                    }
+
+                    foreach (var reqId in abandoned)
+                    {
+                        var pending = Pending[reqId];
+                        Pending.Remove(reqId);
+                        Queue.Remove(reqId);
+                        try
+                        {
+                            WriteBackendUnavailableResponse(pending.Stream, pending.Body);
+                        }
+                        catch
+                        {
+                        }
+                        SafeClose(pending.Client);
+                    }
+
+                    var expired = new List<long>();
+                    foreach (var item in Pending)
+                    {
+                        if (now - item.Value.EnqueuedAt > HoldDeadlineMs)
+                            expired.Add(item.Key);
+                    }
+
+                    foreach (var reqId in expired)
+                    {
+                        var pending = Pending[reqId];
+                        Pending.Remove(reqId);
+                        Queue.Remove(reqId);
+                        try
+                        {
+                            WriteResponse(pending.Stream, 504, "Gateway Timeout", "application/json",
+                                null, "{\"error\":\"broker_hold_deadline_exceeded\"}");
+                        }
+                        catch
+                        {
+                        }
+                        SafeClose(pending.Client);
+                    }
+                }
+            }
+        }
+
+        private static bool ReadHttpRequest(NetworkStream stream, out string method, out string path,
+            out Dictionary<string, string> headers, out string body)
+        {
+            method = null;
+            path = null;
+            body = null;
+            headers = new Dictionary<string, string>();
+
+            var raw = new MemoryStream();
+            var buffer = new byte[8192];
+            var headerEnd = -1;
+            while (headerEnd < 0)
+            {
+                int read;
+                try { read = stream.Read(buffer, 0, buffer.Length); }
+                catch { return false; }
+                if (read == 0)
+                    return false;
+
+                raw.Write(buffer, 0, read);
+                if (raw.Length > MaxHeaderBytes)
+                    return false;
+
+                headerEnd = FindHeaderEnd(raw.GetBuffer(), (int)raw.Length);
+            }
+
+            var bytes = raw.ToArray();
+            var headerText = Encoding.ASCII.GetString(bytes, 0, headerEnd);
+            var lines = headerText.Split(new[] { "\r\n" }, StringSplitOptions.None);
+            if (lines.Length == 0)
+                return false;
+
+            var requestLine = lines[0].Split(' ');
+            if (requestLine.Length < 2)
+                return false;
+
+            method = requestLine[0].ToUpperInvariant();
+            path = requestLine[1];
+
+            var contentLength = 0;
+            for (var i = 1; i < lines.Length; i++)
+            {
+                var separator = lines[i].IndexOf(':');
+                if (separator <= 0)
+                    continue;
+
+                var name = lines[i].Substring(0, separator).Trim().ToLowerInvariant();
+                var value = lines[i].Substring(separator + 1).Trim();
+                headers[name] = value;
+                if (name == "content-length")
+                    int.TryParse(value, out contentLength);
+            }
+
+            if (contentLength < 0 || contentLength > MaxBodyBytes)
+                return false;
+
+            var bodyStart = headerEnd + 4;
+            var bodyBytes = new byte[contentLength];
+            var copied = Math.Min(contentLength, bytes.Length - bodyStart);
+            if (copied > 0)
+                Buffer.BlockCopy(bytes, bodyStart, bodyBytes, 0, copied);
+
+            while (copied < contentLength)
+            {
+                int read;
+                try { read = stream.Read(bodyBytes, copied, contentLength - copied); }
+                catch { break; }
+                if (read == 0)
+                    break;
+                copied += read;
+            }
+
+            body = Encoding.UTF8.GetString(bodyBytes, 0, copied);
+            return true;
+        }
+
+        private static int FindHeaderEnd(byte[] buffer, int length)
+        {
+            for (var i = 3; i < length; i++)
+            {
+                if (buffer[i - 3] == '\r' && buffer[i - 2] == '\n' && buffer[i - 1] == '\r' && buffer[i] == '\n')
+                    return i - 3;
+            }
+
+            return -1;
+        }
+
+        private static void WriteResponse(NetworkStream stream, int status, string reason, string contentType,
+            string extraHeaders, string body)
+        {
+            var bodyBytes = Encoding.UTF8.GetBytes(body ?? string.Empty);
+            var header = "HTTP/1.1 " + status + " " + reason + "\r\n" +
+                         "Content-Type: " + contentType + "\r\n" +
+                         "Content-Length: " + bodyBytes.Length + "\r\n" +
+                         "Connection: close\r\n" +
+                         // No CORS header: the broker fronts the same editor endpoint, and letting a
+                         // browser page read its answers was the reachable half of that hole.
+                         (extraHeaders ?? string.Empty) +
+                         "\r\n";
+            var headerBytes = Encoding.ASCII.GetBytes(header);
+            stream.Write(headerBytes, 0, headerBytes.Length);
+            if (bodyBytes.Length > 0)
+                stream.Write(bodyBytes, 0, bodyBytes.Length);
+            stream.Flush();
+        }
+
+        private static void WriteBackendUnavailableResponse(NetworkStream stream, string requestBody)
+        {
+            var idLiteral = ExtractTopLevelLiteral(requestBody, "id");
+
+            // A tool call that lands mid-reload is a wait, not a failure, so it comes back as
+            // ordinary tool output telling the agent to retry. Protocol calls (initialize,
+            // tools/list) still error: a fake result for those would corrupt the handshake.
+            var body = ExtractTopLevelLiteral(requestBody, "method") == "\"tools/call\""
+                ? "{\"jsonrpc\":\"2.0\",\"id\":" + idLiteral +
+                  ",\"result\":{\"isError\":false,\"content\":[{\"type\":\"text\",\"text\":\"" +
+                  EscapeJson(BackendReloadingNotice) + "\"}]}}"
+                : "{\"jsonrpc\":\"2.0\",\"id\":" + idLiteral +
+                  ",\"error\":{\"code\":" + BackendUnavailableCode +
+                  ",\"message\":\"" + EscapeJson(BackendUnavailableMessage) +
+                  "\",\"data\":{\"retryable\":true,\"reason\":\"unity_backend_reloading\"}}}";
+            WriteResponse(stream, 200, "OK", "application/json; charset=utf-8", BrokerHeaderLine(), body);
+        }
+
+        private static string ExtractTopLevelLiteral(string json, string property)
+        {
+            if (string.IsNullOrEmpty(json))
+                return "null";
+
+            var inString = false;
+            var escaped = false;
+            var depth = 0;
+            for (var i = 0; i < json.Length; i++)
+            {
+                var ch = json[i];
+                if (inString)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                        continue;
+                    }
+
+                    if (ch == '\\')
+                    {
+                        escaped = true;
+                        continue;
+                    }
+
+                    if (ch == '"')
+                        inString = false;
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    if (depth == 1 && IsPropertyNameAt(json, i, property, out var valueStart))
+                        return ReadJsonValueLiteral(json, valueStart);
+
+                    inString = true;
+                    continue;
+                }
+
+                if (ch == '{' || ch == '[')
+                    depth++;
+                else if (ch == '}' || ch == ']')
+                    depth--;
+            }
+
+            return "null";
+        }
+
+        private static bool IsPropertyNameAt(string json, int quoteIndex, string propertyName, out int valueStart)
+        {
+            valueStart = -1;
+            var endQuote = quoteIndex + propertyName.Length + 1;
+            if (endQuote >= json.Length || json[endQuote] != '"')
+                return false;
+
+            for (var i = 0; i < propertyName.Length; i++)
+            {
+                if (json[quoteIndex + 1 + i] != propertyName[i])
+                    return false;
+            }
+
+            var cursor = endQuote + 1;
+            while (cursor < json.Length && char.IsWhiteSpace(json[cursor]))
+                cursor++;
+
+            if (cursor >= json.Length || json[cursor] != ':')
+                return false;
+
+            cursor++;
+            while (cursor < json.Length && char.IsWhiteSpace(json[cursor]))
+                cursor++;
+
+            if (cursor >= json.Length)
+                return false;
+
+            valueStart = cursor;
+            return true;
+        }
+
+        private static string ReadJsonValueLiteral(string json, int start)
+        {
+            if (start < 0 || start >= json.Length)
+                return "null";
+
+            if (json[start] == '"')
+            {
+                var escaped = false;
+                for (var i = start + 1; i < json.Length; i++)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                        continue;
+                    }
+
+                    if (json[i] == '\\')
+                    {
+                        escaped = true;
+                        continue;
+                    }
+
+                    if (json[i] == '"')
+                        return json.Substring(start, i - start + 1);
+                }
+
+                return "null";
+            }
+
+            var end = start;
+            while (end < json.Length && json[end] != ',' && json[end] != '}' && json[end] != ']')
+                end++;
+
+            var literal = json.Substring(start, end - start).Trim();
+            if (literal == "null" || literal == "true" || literal == "false")
+                return literal;
+
+            double number;
+            return double.TryParse(literal, out number) ? literal : "null";
+        }
+
+        private static string EscapeJson(string value)
+        {
+            return (value ?? string.Empty)
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\r", "\\r")
+                .Replace("\n", "\\n");
+        }
+
+        private static bool HasValidToken(Dictionary<string, string> headers)
+        {
+            string value;
+            return headers.TryGetValue(TokenHeader.ToLowerInvariant(), out value) &&
+                   FixedTimeEquals(value, Token);
+        }
+
+        // string.Equals returns on the first differing char, so its timing tells a caller how much
+        // of the token it already guessed. Mono's 4.5 profile compiles this broker and has no
+        // CryptographicOperations.FixedTimeEquals, hence the loop.
+        private static bool FixedTimeEquals(string candidate, string expected)
+        {
+            if (candidate == null || expected == null || candidate.Length != expected.Length)
+                return false;
+
+            var difference = 0;
+            for (int i = 0; i < candidate.Length; i++)
+                difference |= candidate[i] ^ expected[i];
+
+            return difference == 0;
+        }
+
+        private static string BrokerHeaderLine()
+        {
+            return BrokerHeader + ": " + ProtocolVersion + "\r\n";
+        }
+
+        // Mirrors HttpMCPTransport.IsValidOrigin: this process cannot reference the package assembly.
+        // Only a browser sends Origin and no MCP client is one, so any Origin at all is refused --
+        // loopback included, because a page the user has open on localhost is still a web page.
+        private static bool IsValidOrigin(string origin)
+        {
+            return string.IsNullOrEmpty(origin);
+        }
+
+        private static bool IsValidHost(string host)
+        {
+            if (string.IsNullOrEmpty(host))
+                return true; // Absent Host (HTTP/1.0 / native client); the loopback bind already limits reach.
+
+            host = host.Trim();
+            if (host.StartsWith("["))
+            {
+                var end = host.IndexOf(']');
+                host = end > 0 ? host.Substring(1, end - 1) : host;
+            }
+            else
+            {
+                var colon = host.IndexOf(':');
+                if (colon >= 0)
+                    host = host.Substring(0, colon);
+            }
+
+            return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Mirrors HttpMCPTransport.ExtractPin and ServerToken.ExtractToken: this process cannot
+        // reference the package assembly.
+        private static string ExtractPin(string path)
+        {
+            return ExtractSegmentAfter(path, "p");
+        }
+
+        private static string ExtractSegmentAfter(string path, string marker)
+        {
+            if (string.IsNullOrEmpty(path))
+                return string.Empty;
+
+            var query = path.IndexOf('?');
+            if (query >= 0)
+                path = path.Substring(0, query);
+
+            var segments = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            for (var i = 0; i < segments.Length - 1; i++)
+            {
+                if (string.Equals(segments[i], marker, StringComparison.OrdinalIgnoreCase))
+                    return segments[i + 1];
+            }
+
+            return string.Empty;
+        }
+
+        // Mirrors ServerToken.Check and RefusalMessage. Null when the request may pass.
+        private static string ClientTokenRefusal(string path)
+        {
+            var expected = ClientToken;
+            if (expected.Length == 0)
+                return null;
+
+            var presented = ExtractSegmentAfter(path, "t");
+            if (presented.Length == 0)
+                return "This editor only answers a URL that carries its access token. Press Configure in the KitWright " +
+                       "window, or restart the editor, to write the current URL into the client's config, then restart the client.";
+
+            return FixedTimeEquals(presented, expected)
+                ? null
+                : "That access token is not this project's. Press Configure in the KitWright window " +
+                  "to rewrite the client's config with the current URL.";
+        }
+
+        private static string HeaderOrEmpty(Dictionary<string, string> headers, string name)
+        {
+            string value;
+            return headers.TryGetValue(name.ToLowerInvariant(), out value) && value != null ? value : string.Empty;
+        }
+
+        private static int GetPendingCount()
+        {
+            lock (Gate)
+                return Pending.Count;
+        }
+
+        private static long NowMs()
+        {
+            return (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
+        }
+
+        private static void TryWriteNoContent(NetworkStream stream)
+        {
+            try { WriteResponse(stream, 204, "No Content", "text/plain", BrokerHeaderLine(), string.Empty); }
+            catch { }
+        }
+
+        private static void SafeClose(TcpClient client)
+        {
+            try
+            {
+                if (client != null)
+                    client.Close();
+            }
+            catch
+            {
+            }
+        }
+
+        private static void BeginShutdown()
+        {
+            Stopping = true;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                Thread.Sleep(50);
+                try
+                {
+                    if (Listener != null)
+                        Listener.Stop();
+                }
+                catch
+                {
+                }
+                Environment.Exit(0);
+            });
+        }
+
+        // Own file, not stderr: this process inherits Unity's handles, so stderr was Editor.log.
+        // Redirecting the pipes instead would block the broker once the editor that read them exits.
+        private static readonly object LogLock = new object();
+        private static string LogPath;
+
+        private static void Log(string message)
+        {
+            var line = "[kitwright-broker " + DateTime.Now.ToString("HH:mm:ss.fff") + "] " + message;
+            lock (LogLock)
+            {
+                try
+                {
+                    if (LogPath == null)
+                    {
+                        var name = ProjectPin.Length > 0 ? "broker-" + ProjectPin + ".log" : "broker.log";
+                        LogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, name);
+                        if (File.Exists(LogPath) && new FileInfo(LogPath).Length > 1024 * 1024)
+                            File.Delete(LogPath);
+                    }
+
+                    File.AppendAllText(LogPath, line + Environment.NewLine);
+                }
+                catch
+                {
+                }
+            }
+        }
+    }
+}

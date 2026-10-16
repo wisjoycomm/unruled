@@ -1,0 +1,171 @@
+// Copyright (C) KitWright. Licensed under MIT.
+
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Reflection;
+using UnityEditor;
+using UnityEngine;
+using UnityObject = UnityEngine.Object;
+
+namespace KitWright.Editor.Tools.Helpers
+{
+    /// <summary>
+    /// Bridges Unity's legacy InstanceID API and Unity 6 EntityId API behind one MCP-facing id.
+    /// IDs handed to clients are always strings — long InstanceIDs are formatted with invariant culture
+    /// so the JSON shape stays identical across Unity versions.
+    /// </summary>
+    internal static class ObjectIdCodec
+    {
+#if UNITY_6000_3_OR_NEWER
+        private const int CacheCompactThreshold = 1024;
+
+        private static readonly Dictionary<string, WeakReference<UnityObject>> EntityIdCache =
+            new Dictionary<string, WeakReference<UnityObject>>();
+
+        // EntityId.Parse may or may not be public depending on Unity build — prefer public, fall back
+        // to internal so the cache miss path keeps working until the API stabilises.
+        private static readonly MethodInfo EntityIdParseMethod = ResolveEntityIdParseMethod();
+
+        private static MethodInfo ResolveEntityIdParseMethod()
+        {
+            var publicParse = typeof(EntityId).GetMethod(
+                "Parse",
+                BindingFlags.Public | BindingFlags.Static,
+                null,
+                new[] { typeof(string) },
+                null);
+            if (publicParse != null) return publicParse;
+
+            return typeof(EntityId).GetMethod(
+                "Parse",
+                BindingFlags.NonPublic | BindingFlags.Static,
+                null,
+                new[] { typeof(string) },
+                null);
+        }
+#endif
+
+        public static string GetSerializableId(UnityObject obj)
+        {
+            if (obj == null)
+                return "0";
+
+#if UNITY_6000_3_OR_NEWER
+            var id = obj.GetEntityId().ToString();
+            CacheEntityId(id, obj);
+            return id;
+#else
+            return obj.GetInstanceID().ToString(CultureInfo.InvariantCulture);
+#endif
+        }
+
+        public static bool HasSerializedObjectReferenceId(SerializedProperty property)
+        {
+            if (property == null)
+                return false;
+
+#if UNITY_6000_5_OR_NEWER
+            return property.objectReferenceEntityIdValue.IsValid();
+#else
+            return property.objectReferenceInstanceIDValue != 0;
+#endif
+        }
+
+        public static UnityObject ToObject(string objectId)
+        {
+            if (string.IsNullOrWhiteSpace(objectId) || objectId == "0")
+                return null;
+
+            objectId = objectId.Trim();
+
+#if UNITY_6000_3_OR_NEWER
+            if (EntityIdCache.TryGetValue(objectId, out var cached) &&
+                cached.TryGetTarget(out var cachedObject) &&
+                cachedObject != null)
+            {
+                return cachedObject;
+            }
+
+            if (EntityIdParseMethod != null && TryParseEntityId(objectId, out var entityId))
+            {
+                var resolved = EditorUtility.EntityIdToObject(entityId);
+                if (resolved != null)
+                    CacheEntityId(objectId, resolved);
+                return resolved;
+            }
+
+            // No global scan fallback: rely on cached round-trips + the official Parse API.
+            // Callers should fall back to assetPath when this returns null.
+            return null;
+#else
+            // A 64-bit value (a YAML fileID, or an id cached from another Unity version) truncates
+            // into a live int instance id and would resolve to an unrelated object. Refuse it.
+            return long.TryParse(objectId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)
+                   && id >= int.MinValue && id <= int.MaxValue
+                ? EditorUtility.InstanceIDToObject((int)id)
+                : null;
+#endif
+        }
+
+#if UNITY_6000_3_OR_NEWER
+        // A fixed threshold compacted on every new id once more than 1024 were alive, so listing a
+        // 20k-object scene walked the whole cache 19k times. Doubling past what survives keeps the
+        // walk amortised O(1) per id.
+        private static int s_compactAt = CacheCompactThreshold;
+
+        internal static int CompactionCount { get; private set; }
+
+        private static void CacheEntityId(string id, UnityObject obj)
+        {
+            if (EntityIdCache.TryGetValue(id, out var existing))
+            {
+                existing.SetTarget(obj);
+                return;
+            }
+
+            EntityIdCache[id] = new WeakReference<UnityObject>(obj);
+            if (EntityIdCache.Count > s_compactAt)
+            {
+                CompactCache();
+                s_compactAt = Math.Max(CacheCompactThreshold, EntityIdCache.Count * 2);
+            }
+        }
+
+        private static void CompactCache()
+        {
+            CompactionCount++;
+            List<string> dead = null;
+            foreach (var kv in EntityIdCache)
+            {
+                if (!kv.Value.TryGetTarget(out var target) || target == null)
+                {
+                    dead ??= new List<string>();
+                    dead.Add(kv.Key);
+                }
+            }
+            if (dead == null) return;
+            foreach (var k in dead)
+                EntityIdCache.Remove(k);
+        }
+
+        private static bool TryParseEntityId(string objectId, out EntityId entityId)
+        {
+            entityId = EntityId.None;
+            if (EntityIdParseMethod == null)
+                return false;
+
+            try
+            {
+                entityId = (EntityId)EntityIdParseMethod.Invoke(null, new object[] { objectId });
+                return entityId.IsValid();
+            }
+            catch (Exception)
+            {
+                entityId = EntityId.None;
+                return false;
+            }
+        }
+#endif
+    }
+}
