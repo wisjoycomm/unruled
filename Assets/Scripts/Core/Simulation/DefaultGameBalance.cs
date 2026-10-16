@@ -13,7 +13,7 @@ namespace Unruled.Core.Simulation
         public static GameBalanceConfig Create() =>
             new GameBalanceConfig(
                 CreateRecipeDatabase(), CreateUniverseGenBalance(), CreateRefineryBalance(), CreateMiningBalance(),
-                CreateSystemFactionBalance());
+                CreateLifecycleBalance(), CreateSystemFactionBalance());
 
         /// <summary>
         /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,
@@ -30,6 +30,22 @@ namespace Unruled.Core.Simulation
             coreFracture: new MiningDepth(speedPercent: 100, fuelCoolantMultiplier: 4),
             deepCoreEsiDropMilli: 50,
             barrenHuskEsiDropMilli: 200);
+
+        /// <summary>
+        /// Data sheet tab 02: irradiated world = S4 radiation for 24–72h and ESI 0.00; terraforming lifts ESI to 0.60.
+        /// PROVISIONAL: terraform cost of 100 water + 100 nitrogen + 100 biomass + 1 nuclear core (the sheet names
+        /// the items but not the amounts).
+        /// </summary>
+        public static LifecycleBalance CreateLifecycleBalance() => new LifecycleBalance(
+            irradiationMinTicks: 86_400,
+            irradiationMaxTicks: 259_200,
+            irradiationSolarLevel: 4,
+            irradiatedEsiMilli: 0,
+            terraformedEsiMilli: 600,
+            terraformWater: 100,
+            terraformNitrogen: 100,
+            terraformBiomass: 100,
+            terraformNuclearCores: 1);
 
         /// <summary>
         /// GDD §2.2 A: 10-tick cycle, idle at 20% upkeep, brownout from G2.

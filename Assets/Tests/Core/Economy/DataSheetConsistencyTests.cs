@@ -76,6 +76,18 @@ namespace Unruled.Tests.Core.Economy
 
             var irradiated = FindRow(rows, "IRRADIATED_DEAD_WORLD");
             Assert.AreEqual(mining.CoreFracture.FuelCoolantMultiplier, LeadingNumber(irradiated[4]), "core cost");
+
+            var lifecycle = DefaultGameBalance.CreateLifecycleBalance();
+            Assert.AreEqual("ESI = 0.00 (Xóa sổ 100% Biomass)", irradiated[5], "irradiated ESI cell changed");
+            Assert.AreEqual(0, lifecycle.IrradiatedEsiMilli, "irradiated ESI");
+            Assert.AreEqual("Phát xạ = Bão S4 (24h-72h)", irradiated[6], "radiation cell changed");
+            Assert.AreEqual(4, lifecycle.IrradiationSolarLevel, "radiation S level");
+            Assert.AreEqual(24 * 3600, lifecycle.IrradiationMinTicks, "radiation min");
+            Assert.AreEqual(72 * 3600, lifecycle.IrradiationMaxTicks, "radiation max");
+
+            var terraformed = FindRow(rows, "TERRAFORMED_RECOVERY");
+            var esiCell = terraformed[5].Split(' ');
+            Assert.AreEqual(lifecycle.TerraformedEsiMilli, ToMilli(esiCell[esiCell.Length - 1]), "terraformed ESI");
         }
 
         private static string[] FindRow(List<string[]> rows, string stateCode)

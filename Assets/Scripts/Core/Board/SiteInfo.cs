@@ -25,5 +25,8 @@ namespace Unruled.Core.Board
         public int CurrentEsiMilli;
         public PlanetLifecycleState LifecycleState;
         public int OwnerPlayerId; // 0 = neutral, -1..-5 = THE SYSTEM, > 0 = player/bot
+        public long IrradiatedUntilTick; // S4 background radiation after a nuclear strike; 0 = never irradiated
+
+        public bool IsIrradiated(long tick) => tick < IrradiatedUntilTick;
     }
 }

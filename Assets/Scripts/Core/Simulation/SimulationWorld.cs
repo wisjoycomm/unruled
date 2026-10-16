@@ -25,6 +25,8 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<Refinery> Refineries;
         public readonly ComponentStore<SiteQuarantine> Quarantines;
 
+        public readonly PlanetLifecycleSystem Lifecycle;
+
         public SimulationWorld(GameBalanceConfig balance, long startTick = 0)
         {
             Balance = balance ?? throw new ArgumentNullException(nameof(balance));
@@ -40,7 +42,10 @@ namespace Unruled.Core.Simulation
             Quarantines = World.CreateStore<SiteQuarantine>();
 
             // Fixed tick order: producers before consumers, watchers last.
-            Clock.Register(new MiningSystem(Deposits, Stockpiles, Sites, balance.Mining));
+            Clock.Register(new MiningSystem(Deposits, Stockpiles, balance.Mining));
+            Lifecycle = new PlanetLifecycleSystem(Sites, Deposits, Stockpiles, balance.Mining, balance.Lifecycle);
+            Clock.Register(Lifecycle);
+            Commands.Register(CommandType.Terraform, Lifecycle);
             Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, balance.Recipes, balance.Refinery));
             Clock.Register(new WhoQuarantineSystem(Quarantines, Stockpiles, balance.SystemFactions));
         }

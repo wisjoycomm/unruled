@@ -14,6 +14,7 @@ namespace Unruled.Tests.Core.Economy
         private ComponentStore<MineralDeposit> _deposits;
         private MiningBalance _balance;
         private MiningSystem _system;
+        private PlanetLifecycleSystem _lifecycle;
         private EntityId _site;
         private long _tick;
 
@@ -27,7 +28,9 @@ namespace Unruled.Tests.Core.Economy
             _stockpiles = _world.CreateStore<Stockpile>();
             _deposits = _world.CreateStore<MineralDeposit>();
             _balance = DefaultGameBalance.CreateMiningBalance();
-            _system = new MiningSystem(_deposits, _stockpiles, _sites, _balance);
+            _system = new MiningSystem(_deposits, _stockpiles, _balance);
+            _lifecycle = new PlanetLifecycleSystem(
+                _sites, _deposits, _stockpiles, _balance, DefaultGameBalance.CreateLifecycleBalance());
             _tick = 0;
 
             _site = _world.Create();
@@ -60,7 +63,10 @@ namespace Unruled.Tests.Core.Economy
             for (int c = 0; c < cycles; c++)
             {
                 for (int t = 0; t < _balance.CycleTicks; t++)
+                {
                     _system.OnTick(++_tick);
+                    _lifecycle.OnTick(_tick);
+                }
             }
         }
 

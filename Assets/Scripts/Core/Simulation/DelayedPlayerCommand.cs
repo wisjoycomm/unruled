@@ -1,3 +1,5 @@
+using Unruled.Core.Ecs;
+
 namespace Unruled.Core.Simulation
 {
     public enum CommandType : byte
@@ -7,7 +9,8 @@ namespace Unruled.Core.Simulation
         Reverse = 3,
         ScanBelt = 4,
         SetRof = 5,
-        RelocateBase = 6
+        RelocateBase = 6,
+        Terraform = 7
     }
 
     /// <summary>A player or AI command that takes effect after signal latency. Shared by players and the Server 2 AI.</summary>
@@ -18,7 +21,19 @@ namespace Unruled.Core.Simulation
         public int PlayerId;
         public CommandType CommandType;
         public int TargetEntityId;
+        public int TargetGeneration;
         public int ParamA;
         public int ParamB;
+
+        /// <summary>Target as an entity id; the generation makes commands aimed at a destroyed entity miss.</summary>
+        public EntityId Target
+        {
+            get => new EntityId(TargetEntityId, TargetGeneration);
+            set
+            {
+                TargetEntityId = value.Index;
+                TargetGeneration = value.Generation;
+            }
+        }
     }
 }
