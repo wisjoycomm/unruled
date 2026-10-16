@@ -14,3 +14,4 @@
 - 2026-10-16 - Claude - Add SimTick, SimClock deterministic tick loop and delayed command queue with EditMode tests.
 - 2026-10-16 - Claude - Add architecture rule 12 (pure C# ECS, fixed-point, no DOTS in Core) and start the roadmap.
 - 2026-10-16 - Claude - Add hand-rolled ECS core (EntityId, World, sorted sparse-set ComponentStore) with EditMode tests.
+- 2026-10-16 - Claude - Add ItemId (20 items) and fixed-buffer Stockpile ECS component; enable unsafe code in Unruled.Core.
