@@ -41,11 +41,16 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<RadarScan> RadarScans;
         public readonly ComponentStore<Wallet> Wallets;
         public readonly ComponentStore<PlayerStanding> Standings;
+        public readonly ComponentStore<WtoOrder> WtoOrders;
+        public readonly ComponentStore<ItemMarket> ItemMarkets;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly Ledger Ledger;
         public readonly EntityId WtoFeePool;
         public readonly EntityId StaTollPool;
+        public readonly EntityId WtoEscrow;
+        public readonly BracketRates Rates;
+        public readonly WtoMarketEngine Market;
         public readonly PlanetLifecycleSystem Lifecycle;
         public readonly FleetFactory FleetFactory;
         public readonly RoutePlanner Routes;
@@ -84,12 +89,25 @@ namespace Unruled.Core.Simulation
             RadarScans = World.CreateStore<RadarScan>();
             Wallets = World.CreateStore<Wallet>();
             Standings = World.CreateStore<PlayerStanding>();
+            WtoOrders = World.CreateStore<WtoOrder>();
+            ItemMarkets = World.CreateStore<ItemMarket>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
             Wallets.Add(WtoFeePool, new Wallet { Pool = TaxPoolKind.WtoMarketFees });
             StaTollPool = World.Create();
             Wallets.Add(StaTollPool, new Wallet { Pool = TaxPoolKind.StaTollGates });
+            WtoEscrow = World.Create();
+            Wallets.Add(WtoEscrow, new Wallet { Pool = TaxPoolKind.WtoEscrow });
+            Rates = new BracketRates(Ledger, Standings, balance.Leaderboard);
+            for (int slot = 0; slot < ItemIds.Count; slot++)
+            {
+                var item = ItemIds.FromSlot(slot);
+                ItemMarkets.Add(World.Create(), new ItemMarket
+                {
+                    Item = item, LastVwapCents = balance.Recipes.GetItem(item).BaseWtoPrice * Wallet.CentsPerCredit
+                });
+            }
 
             Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, FleetMotions,
                 balance.Latency);
@@ -108,6 +126,12 @@ namespace Unruled.Core.Simulation
             Clock.Register(Lifecycle);
             Commands.Register(CommandType.Terraform, Lifecycle);
             Clock.Register(new RefinerySystem(Refineries, Stockpiles, Weather, Sites, Ledger, balance.Recipes, balance.Refinery));
+            Market = new WtoMarketEngine(
+                World, WtoOrders, ItemMarkets, Sites, Stockpiles, Ledger, WtoEscrow, WtoFeePool, Rates, balance.Wto);
+            Clock.Register(Market);
+            Commands.Register(CommandType.PlaceBuyOrder, Market);
+            Commands.Register(CommandType.PlaceSellOrder, Market);
+            Commands.Register(CommandType.CancelOrder, Market);
             Clock.Register(new WhoQuarantineSystem(Quarantines, Stockpiles, balance.SystemFactions));
 
             var upkeep = new FleetUpkeepSystem(Fleets, FleetReadiness, FleetMotions, Stockpiles, balance.Fleets);

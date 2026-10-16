@@ -1,11 +1,15 @@
 namespace Unruled.Core.Economy
 {
-    /// <summary>Which tax pool a wallet is (GDD §4.4: rewards are paid only from these).</summary>
+    /// <summary>
+    /// Which system account a wallet is. Rewards are paid only from the two tax pools (GDD §4.4); the WTO escrow only
+    /// holds money owed on open orders and contracts.
+    /// </summary>
     public enum TaxPoolKind : byte
     {
         None = 0,
         WtoMarketFees = 1,
-        StaTollGates = 2
+        StaTollGates = 2,
+        WtoEscrow = 3
     }
 
     /// <summary>

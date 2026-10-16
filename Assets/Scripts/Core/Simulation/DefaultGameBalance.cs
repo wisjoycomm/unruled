@@ -17,7 +17,7 @@ namespace Unruled.Core.Simulation
                 CreateRefineryBalance(), CreateMiningBalance(),
                 CreateLifecycleBalance(), CreateLatencyBalance(), CreateRadarBalance(), CreateFleetBalance(),
                 CreateCombatBalance(), CreateRelocationBalance(), CreateLedgerBalance(),
-                CreateStaBalance(), CreateLeaderboardBalance(),
+                CreateStaBalance(), CreateLeaderboardBalance(), CreateWtoBalance(),
                 CreateSystemFactionBalance());
 
         /// <summary>
@@ -130,6 +130,9 @@ namespace Unruled.Core.Simulation
 
         /// <summary>PROVISIONAL: the STA toll is 2 credits per ship per 100 units of highway (tab 04 names no amount).</summary>
         public static StaBalance CreateStaBalance() => new StaBalance(tollCentsPerShipPer100Units: 200);
+
+        /// <summary>GDD §2.2 B: VWAP over the last 100 ticks, price band 0.8x-1.2x.</summary>
+        public static WtoBalance CreateWtoBalance() => new WtoBalance(vwapWindowTicks: 100, priceBandPercent: 20);
 
         /// <summary>
         /// Data sheet tab 05, one row per bracket. "Current Storm Path" = no lead but sees storms now; the unrated

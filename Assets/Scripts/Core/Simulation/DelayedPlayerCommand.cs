@@ -17,7 +17,10 @@ namespace Unruled.Core.Simulation
         Activate = 11,
         SetFocus = 12,
         VentCoolant = 13,
-        RetractDrills = 14
+        RetractDrills = 14,
+        PlaceBuyOrder = 15,
+        PlaceSellOrder = 16,
+        CancelOrder = 17
     }
 
     /// <summary>A player or AI command that takes effect after signal latency. Shared by players and the Server 2 AI.</summary>
@@ -31,6 +34,7 @@ namespace Unruled.Core.Simulation
         public int TargetGeneration;
         public int ParamA;
         public int ParamB;
+        public int ParamC;
 
         /// <summary>Target as an entity id; the generation makes commands aimed at a destroyed entity miss.</summary>
         public EntityId Target
