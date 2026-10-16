@@ -48,9 +48,10 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
 10. `CapitalRelocationSystem`: teardown → capital convoy → bootstrap; `RelocateBase`.
 11. `FocusedRadarSystem`: scan timelines and the Tier-5 IAEA reveal; `ScanBelt`, `CancelScan`, `EcmJam`.
 12. `ResearchSystem`: retooling ends, storm telemetry; `StressTest`.
-13. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
-14. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
-15. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
+13. `ShipyardSystem`: delivers finished `ShipBuildOrder`s; `BuildShips`, `Retrofit`.
+14. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
+15. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
+16. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
 
 `MiningSystem` also handles `RetractDrills` and `PlanetLifecycleSystem` handles `Terraform`.
 
@@ -81,6 +82,8 @@ methods, in this order (rule 4).
 - **Military/**:
   - `PlayerHq` (core base, capital convoy flag), `RelayStation`, `CapitalRelocation` (phase, convoy, cooldown,
     paralysis).
+  - `ShipyardSystem` + `ShipyardBalance`: `ShipBuildOrder` queue at the core base and retrofits; it adds ships
+    (`FleetUnit.Gain`) and raises fleet tiers.
   - Fleet components (`FleetComponents.cs`), one owner each: `FleetUnit` (ship counts by class; combat),
     `FleetMotion` (site or lane progress; movement), `FleetReadiness` (mothball, warm-up, unsupplied; upkeep),
     `FleetCombatState` (ROF, focus, temperature, damage carry; combat), `FleetSensors` (reveal, RWR; radar). A

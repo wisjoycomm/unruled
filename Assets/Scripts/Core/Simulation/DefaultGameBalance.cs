@@ -22,7 +22,25 @@ namespace Unruled.Core.Simulation
                 CreateStaBalance(), CreateLeaderboardBalance(), CreateWtoBalance(),
                 CreateWtoContractBalance(), CreateSystemAuthorityBalance(),
                 CreateSystemFactionBalance(), CreateAiBalance(), CreateNewGameBalance(),
-                CreateResearchBalance());
+                CreateResearchBalance(), CreateShipyardBalance());
+
+        /// <summary>
+        /// Tab 03 Build_And_Repair_Items: tier 1 steel; 2 steel + battery; 3 alloy + ammo; 4 alloy + microchip; 5 nuclear
+        /// core + alloy. PROVISIONAL: the quantities per ship, 30/45/60/90/120 ticks per ship, retrofit at 50% of the
+        /// new tier's cost, at most 50 ships per order.
+        /// </summary>
+        public static ShipyardBalance CreateShipyardBalance() => new ShipyardBalance(
+            maxShipsPerOrder: 50,
+            retrofitCostPercent: 50,
+            costPerShip: new[]
+            {
+                new[] { new ItemStack(ItemId.ItemSteel, 5) },
+                new[] { new ItemStack(ItemId.ItemSteel, 6), new ItemStack(ItemId.ItemBattery, 2) },
+                new[] { new ItemStack(ItemId.ItemAlloy, 4), new ItemStack(ItemId.ItemAmmo, 4) },
+                new[] { new ItemStack(ItemId.ItemAlloy, 5), new ItemStack(ItemId.ItemMicrochip, 3) },
+                new[] { new ItemStack(ItemId.ItemNuclearCore, 2), new ItemStack(ItemId.ItemAlloy, 6) }
+            },
+            buildTicksPerShip: new[] { 30, 45, 60, 90, 120 });
 
         /// <summary>
         /// GDD §2.3: P_base tier 2/3/4/5 = 60/45/30/20%, +18% per failed test; gates from GDD §1.2 / §2.1 B / tab 02:

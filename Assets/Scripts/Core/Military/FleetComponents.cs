@@ -46,6 +46,19 @@ namespace Unruled.Core.Military
         }
 
         /// <summary>Removes lost ships of one class (combat only).</summary>
+        /// <summary>New ships join the fleet (shipyard deliveries).</summary>
+        public void Gain(TargetFocusClass shipClass, int ships)
+        {
+            if (ships < 0 || ships > int.MaxValue - Count(shipClass)) throw new System.ArgumentOutOfRangeException(nameof(ships));
+            switch (shipClass)
+            {
+                case TargetFocusClass.LineShips: LineShips += ships; break;
+                case TargetFocusClass.EwShips: EwShips += ships; break;
+                case TargetFocusClass.SupplyTenders: SupplyTenders += ships; break;
+                default: CargoConvoys += ships; break;
+            }
+        }
+
         public void Lose(TargetFocusClass shipClass, int ships)
         {
             if (ships < 0 || ships > Count(shipClass)) throw new System.ArgumentOutOfRangeException(nameof(ships));
