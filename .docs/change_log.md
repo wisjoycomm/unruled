@@ -57,3 +57,4 @@
 - 2026-10-16 - Claude - Site development: ClaimSite (docked fleet unloads the claim cost; neutral or undefended rival sites, never a core base), BuildRig on owned deposits, BuildRefinery on owned sites, with costs and caps in balance; tests.
 - 2026-10-16 - Claude - Jump gates: contested cluster generated after the homes (tungsten/uranium only there), a dormant JumpGate per participant, OpenJumpGate at Tier 2 for an energy charge adds the gate lane; tests.
 - 2026-10-16 - Claude - Galaxy tab: board shows every system (contested in the middle, gate links open/dormant, own fleet counts), click opens a system; gate rings on the system board. Compile-checked against Unity DLLs; Play Mode not yet checked (editor closed).
+- 2026-10-16 - Claude - Cargo transfer: TransferCargo loads/unloads a docked fleet at an own site (stolen units first, tags follow; no contract convoys); StolenGoods.Remove; tests.

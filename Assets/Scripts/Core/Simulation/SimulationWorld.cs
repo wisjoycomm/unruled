@@ -224,6 +224,8 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Retrofit, shipyard);
             Commands.Register(CommandType.ClaimSite, new SiteControlSystem(
                 Sites, Players, Fleets, FleetMotions, FleetReadiness, FleetCombat, Stockpiles, balance.SiteControl));
+            Commands.Register(CommandType.TransferCargo, new CargoTransferSystem(
+                Fleets, FleetMotions, FleetCombat, Sites, Stockpiles, ContractCargo, StolenGoods));
             Commands.Register(CommandType.OpenJumpGate, new JumpGateSystem(
                 World, JumpGates, Starlanes, LaneWeather, Players, Sites, Stockpiles, Graph, TechGates, balance.JumpGates));
             Clock.Register(ContractSystem);

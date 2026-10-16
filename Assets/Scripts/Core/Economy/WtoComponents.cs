@@ -73,6 +73,13 @@ namespace Unruled.Core.Economy
             _quantities[slot] = checked(_quantities[slot] + quantity);
         }
 
+        public void Remove(ItemId id, int quantity)
+        {
+            int slot = ItemIds.ToSlot(id);
+            if (quantity < 0 || quantity > _quantities[slot]) throw new ArgumentOutOfRangeException(nameof(quantity));
+            _quantities[slot] -= quantity;
+        }
+
         /// <summary>Units of <paramref name="id"/> in <paramref name="stock"/> that may be sold on the WTO.</summary>
         public int Clean(in Stockpile stock, ItemId id) => Math.Max(0, stock.Get(id) - Get(id));
     }
