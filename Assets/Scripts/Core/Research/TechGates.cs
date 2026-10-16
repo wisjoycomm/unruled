@@ -9,7 +9,8 @@ namespace Unruled.Core.Research
     {
         LaserComms = 1, // orders get through R-scale radio blackouts
         CoreFractureMining = 2, // rigs may mine an unlocked core fracture
-        Terraform = 3 // an irradiated world may be terraformed
+        Terraform = 3, // an irradiated world may be terraformed
+        JumpGate = 4 // the home system's dormant jump gate may be opened
     }
 
     /// <summary>Read-only tech tier queries for the systems a tier gates.</summary>

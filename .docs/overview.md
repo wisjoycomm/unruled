@@ -54,7 +54,8 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
 16. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
 
 `MiningSystem` also handles `RetractDrills` and `BuildRig`, `RefinerySystem` handles `BuildRefinery`, and
-`PlanetLifecycleSystem` handles `Terraform`. `SiteControlSystem` is not on the clock: it only handles `ClaimSite`.
+`PlanetLifecycleSystem` handles `Terraform`. `SiteControlSystem` (`ClaimSite`) and `JumpGateSystem` (`OpenJumpGate`)
+are not on the clock: they only handle commands.
 
 In each tick, due commands run before the systems. Shared components (`Stockpile`) change only through their own
 methods, in this order (rule 4).
@@ -87,6 +88,8 @@ methods, in this order (rule 4).
     (`FleetUnit.Gain`) and raises fleet tiers.
   - `SiteControlSystem` + `SiteControlBalance`: the only writer of `SiteInfo.OwnerPlayerId` during play; a docked
     fleet unloads the claim cost to take a neutral site or an undefended rival site (never a core base).
+  - `JumpGateSystem`: owns `JumpGate` (Board) and the lanes it opens; at the jump-gate tech tier it charges the core
+    base, adds the gate lane into the contested cluster and rebuilds `StarlaneGraph`. Dormant gates keep homes sealed.
   - Fleet components (`FleetComponents.cs`), one owner each: `FleetUnit` (ship counts by class; combat),
     `FleetMotion` (site or lane progress; movement), `FleetReadiness` (mothball, warm-up, unsupplied; upkeep),
     `FleetCombatState` (ROF, focus, temperature, damage carry; combat), `FleetSensors` (reveal, RWR; radar). A

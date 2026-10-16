@@ -53,6 +53,7 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<AiController> AiControllers;
         public readonly ComponentStore<TechProgress> TechProgress;
         public readonly ComponentStore<ShipBuildOrder> ShipOrders;
+        public readonly ComponentStore<JumpGate> JumpGates;
 
         public readonly StarlaneGraph Graph = new StarlaneGraph();
         public readonly Ledger Ledger;
@@ -117,6 +118,7 @@ namespace Unruled.Core.Simulation
             AiControllers = World.CreateStore<AiController>();
             TechProgress = World.CreateStore<TechProgress>();
             ShipOrders = World.CreateStore<ShipBuildOrder>();
+            JumpGates = World.CreateStore<JumpGate>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -222,6 +224,8 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Retrofit, shipyard);
             Commands.Register(CommandType.ClaimSite, new SiteControlSystem(
                 Sites, Players, Fleets, FleetMotions, FleetReadiness, FleetCombat, Stockpiles, balance.SiteControl));
+            Commands.Register(CommandType.OpenJumpGate, new JumpGateSystem(
+                World, JumpGates, Starlanes, LaneWeather, Players, Sites, Stockpiles, Graph, TechGates, balance.JumpGates));
             Clock.Register(ContractSystem);
             Audit = new LeaderboardAuditSystem(
                 Standings, Wallets, Sites, Fleets, Stockpiles, Ledger, WtoFeePool, StaTollPool, Market, balance.Leaderboard);

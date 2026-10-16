@@ -27,7 +27,8 @@ namespace Unruled.Core.Simulation
         Retrofit = 21,
         ClaimSite = 22,
         BuildRig = 23,
-        BuildRefinery = 24
+        BuildRefinery = 24,
+        OpenJumpGate = 25
     }
 
     /// <summary>A player or AI command that takes effect after signal latency. Shared by players and the Server 2 AI.</summary>

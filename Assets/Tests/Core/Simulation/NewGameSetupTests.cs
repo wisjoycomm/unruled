@@ -18,7 +18,7 @@ namespace Unruled.Tests.Core.Simulation
 
             Assert.AreEqual(1 + rules.RivalCount, sim.Players.Count);
             Assert.AreEqual(rules.RivalCount, sim.AiControllers.Count);
-            Assert.AreEqual((1 + rules.RivalCount) * sim.Balance.Universe.SitesPerSystem, sim.Sites.Count);
+            Assert.AreEqual((2 + rules.RivalCount) * sim.Balance.Universe.SitesPerSystem, sim.Sites.Count, "homes + contested");
             for (int i = 0; i < sim.Sites.Count; i++)
                 Assert.IsTrue(sim.Stockpiles.Has(sim.Sites.EntityAt(i)), "every site has a stockpile");
         }
@@ -48,8 +48,11 @@ namespace Unruled.Tests.Core.Simulation
             for (int i = 0; i < sim.Deposits.Count; i++)
             {
                 ref var deposit = ref sim.Deposits.At(i);
-                Assert.AreNotEqual(ItemId.RawTungsten, deposit.RawItem);
-                Assert.AreNotEqual(ItemId.RawUranium, deposit.RawItem);
+                if (sim.Sites.Get(deposit.Site).ClusterId <= sim.Balance.NewGame.RivalCount)
+                {
+                    Assert.AreNotEqual(ItemId.RawTungsten, deposit.RawItem);
+                    Assert.AreNotEqual(ItemId.RawUranium, deposit.RawItem);
+                }
                 Assert.IsTrue(ItemIds.IsRaw(deposit.RawItem));
                 Assert.AreEqual(sim.Balance.NewGame.SurfaceReserve, deposit.SurfaceReserve);
             }

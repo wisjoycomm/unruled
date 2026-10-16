@@ -33,12 +33,13 @@ namespace Unruled.Core.Research
         public readonly byte LaserCommsTier;
         public readonly byte CoreFractureMiningTier;
         public readonly byte TerraformTier;
+        public readonly byte JumpGateTier;
         private readonly TierResearchRules[] _tiers; // index 0 = tier 2
 
         public ResearchBalance(
             int telemetryTargetMilli, int telemetryMilliPerStormLevel, int telemetryMinMicrochips,
             int pityPermillePerFailure, byte laserCommsTier, byte coreFractureMiningTier, byte terraformTier,
-            TierResearchRules[] tiers)
+            byte jumpGateTier, TierResearchRules[] tiers)
         {
             if (telemetryTargetMilli < 1) throw new ArgumentOutOfRangeException(nameof(telemetryTargetMilli));
             if (telemetryMilliPerStormLevel < 1) throw new ArgumentOutOfRangeException(nameof(telemetryMilliPerStormLevel));
@@ -52,9 +53,11 @@ namespace Unruled.Core.Research
             if (coreFractureMiningTier < 1 || coreFractureMiningTier > TopTier)
                 throw new ArgumentOutOfRangeException(nameof(coreFractureMiningTier));
             if (terraformTier < 1 || terraformTier > TopTier) throw new ArgumentOutOfRangeException(nameof(terraformTier));
+            if (jumpGateTier < 1 || jumpGateTier > TopTier) throw new ArgumentOutOfRangeException(nameof(jumpGateTier));
             LaserCommsTier = laserCommsTier;
             CoreFractureMiningTier = coreFractureMiningTier;
             TerraformTier = terraformTier;
+            JumpGateTier = jumpGateTier;
             TelemetryTargetMilli = telemetryTargetMilli;
             TelemetryMilliPerStormLevel = telemetryMilliPerStormLevel;
             TelemetryMinMicrochips = telemetryMinMicrochips;
@@ -70,6 +73,7 @@ namespace Unruled.Core.Research
                 case TechGate.LaserComms: return LaserCommsTier;
                 case TechGate.CoreFractureMining: return CoreFractureMiningTier;
                 case TechGate.Terraform: return TerraformTier;
+                case TechGate.JumpGate: return JumpGateTier;
                 default: throw new ArgumentOutOfRangeException(nameof(gate));
             }
         }

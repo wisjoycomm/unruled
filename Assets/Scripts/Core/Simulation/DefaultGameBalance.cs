@@ -22,7 +22,16 @@ namespace Unruled.Core.Simulation
                 CreateStaBalance(), CreateLeaderboardBalance(), CreateWtoBalance(),
                 CreateWtoContractBalance(), CreateSystemAuthorityBalance(),
                 CreateSystemFactionBalance(), CreateAiBalance(), CreateNewGameBalance(),
-                CreateResearchBalance(), CreateShipyardBalance(), CreateSiteControlBalance());
+                CreateResearchBalance(), CreateShipyardBalance(), CreateSiteControlBalance(),
+                CreateJumpGateBalance());
+
+        /// <summary>
+        /// GDD §1.2: Tier 2 plus an energy charge opens the home gate. PROVISIONAL: 50 batteries + 50 fuel from the core
+        /// base; the gate lane is 400 map units long.
+        /// </summary>
+        public static JumpGateBalance CreateJumpGateBalance() => new JumpGateBalance(
+            laneLength: 400,
+            openCost: new[] { new ItemStack(ItemId.ItemBattery, 50), new ItemStack(ItemId.ItemFuel, 50) });
 
         /// <summary>PROVISIONAL: an outpost takes 10 steel + 5 batteries from the claiming fleet's hold.</summary>
         public static SiteControlBalance CreateSiteControlBalance() => new SiteControlBalance(
@@ -48,7 +57,7 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §2.3: P_base tier 2/3/4/5 = 60/45/30/20%, +18% per failed test; gates from GDD §1.2 / §2.1 B / tab 02:
-        /// laser comms and core-fracture mining at Tier 4, terraforming at Tier 5; stress-test items follow tab 03's
+        /// laser comms and core-fracture mining at Tier 4, terraforming at Tier 5, the home jump gate at Tier 2 (§1.2); stress-test items follow tab 03's
         /// Build_And_Repair_Items per tier. PROVISIONAL: 1,000 milli of telemetry at 1 milli per storm level per tick
         /// (about 17 min in a level-1 storm), 5 microchips aboard to measure, 10 of each test item, retooling
         /// 1/2/4/8 h for tiers 2..5.
@@ -61,6 +70,7 @@ namespace Unruled.Core.Simulation
             laserCommsTier: 4,
             coreFractureMiningTier: 4,
             terraformTier: 5,
+            jumpGateTier: 2,
             tiers: new[]
             {
                 new TierResearchRules(600, new[] { new ItemStack(ItemId.ItemSteel, 10), new ItemStack(ItemId.ItemBattery, 10) },
