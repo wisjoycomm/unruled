@@ -116,6 +116,24 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void ASiegeWithEwShips_SetsOutOnlyWithTheirBatteries_OnTopOfTheClaimCost()
+        {
+            Ore(_target, ItemId.RawIron);
+            var fleet = Fleet(Me, _home, 4, loaded: true);
+            _sim.Fleets.Get(fleet).EwShips = 2;
+            Assert.IsFalse(Find(Warlord, AiAction.Siege).HasValue, "a fight on the way would burn the claim's batteries");
+
+            _sim.Stockpiles.Get(_home).Add(ItemId.ItemBattery, 100);
+            _sim.Clock.Advance(_sim.Balance.Ai.ThinkIntervalTicks);
+            Assert.IsTrue(Find(Warlord, AiAction.LoadCargo).HasValue);
+            RunPendingOrders();
+            Assert.GreaterOrEqual(_sim.Stockpiles.Get(fleet).Get(ItemId.ItemBattery), 5 + 2 * _sim.Balance.Ai.LoadBatteryPerEwShip);
+
+            _sim.Clock.Advance(_sim.Balance.Ai.ThinkIntervalTicks);
+            Assert.IsTrue(Find(Warlord, AiAction.Siege).HasValue);
+        }
+
+        [Test]
         public void NobodyBesiegesANeutralSite_WithNoNewOre()
         {
             Fleet(Me, _home, 4, loaded: true);

@@ -341,7 +341,7 @@ namespace Unruled.Core.AI
                     if (preset.StealthRaidWeight > 0 &&
                         FindTarget(player, in unit, fuel, raid: true, homeOnly: false, out raidTarget, out int raidEdge))
                         Consider(AiAction.StealthRaid, Score(preset.StealthRaidWeight, raidEdge), ref best, ref bestScore);
-                    if (SettleWeight(preset) > 0 && CarriesClaimCost(ref hold) &&
+                    if (SettleWeight(preset) > 0 && CarriesClaimCost(ref hold, EwBatteries(in unit)) &&
                         FindTarget(player, in unit, fuel, raid: false, homeOnly: IsHomeSettler(preset), out siegeTarget,
                             out int siegeEdge))
                         Consider(AiAction.Siege, Score(SettleWeight(preset), siegeEdge), ref best, ref bestScore);
@@ -353,7 +353,7 @@ namespace Unruled.Core.AI
             else if (ready && IsAway(motion.Site, player.PlayerId) && Power(motion.Site, player.PlayerId, mine: false) == 0 &&
                      !IsStandingCitadel(motion.Site))
             {
-                if (SettleWeight(preset) > 0 && IsClaimable(motion.Site, player.PlayerId) && CarriesClaimCost(ref hold) &&
+                if (SettleWeight(preset) > 0 && IsClaimable(motion.Site, player.PlayerId) && CarriesClaimCost(ref hold, 0) &&
                     (!IsHomeSettler(preset) || IsNeutralAtHome(motion.Site, player.CoreBase)))
                     Consider(AiAction.ClaimSite, Score(SettleWeight(preset), Full), ref best, ref bestScore);
                 else
@@ -459,6 +459,9 @@ namespace Unruled.Core.AI
             }
             if (TryLoad(ref stock, hq, ref hold, ItemId.ItemAmmo, (long)unit.LineShips * _balance.LoadAmmoPerLineShip,
                     ref item, ref quantity, ref shortage) ||
+                (unit.EwShips > 0 && TryLoad(ref stock, hq, ref hold, ItemId.ItemBattery,
+                    EwBatteries(in unit) + (SettleWeight(preset) > 0 ? ExpansionLoad(ItemId.ItemBattery) : 0), ref item,
+                    ref quantity, ref shortage)) ||
                 TryLoad(ref stock, hq, ref hold, ItemId.ItemFuel, FuelToLoad(in player, preset, in unit), ref item, ref quantity,
                     ref shortage) ||
                 (telemetry && TryLoad(ref stock, hq, ref hold, ItemId.ItemMicrochip, _researchBalance.TelemetryMinMicrochips,
@@ -1216,13 +1219,20 @@ namespace Unruled.Core.AI
             return false;
         }
 
-        private bool CarriesClaimCost(ref Stockpile hold)
+        // The claim cost, plus extra batteries a siege sets out with for its EW ships' point defence: a fight on the way
+        // must not burn the claim's batteries.
+        private bool CarriesClaimCost(ref Stockpile hold, int extraBatteries)
         {
             for (int i = 0; i < _claimBalance.ClaimCostCount; i++)
-                if (!hold.Has(_claimBalance.ClaimCost(i).Item, _claimBalance.ClaimCost(i).Quantity))
+            {
+                var cost = _claimBalance.ClaimCost(i);
+                if (!hold.Has(cost.Item, cost.Quantity + (cost.Item == ItemId.ItemBattery ? extraBatteries : 0)))
                     return false;
+            }
             return true;
         }
+
+        private int EwBatteries(in FleetUnit unit) => unit.EwShips * _balance.LoadBatteryPerEwShip;
 
         private bool IsAway(EntityId site, int playerId) => _sites.Has(site) && _sites.Get(site).OwnerPlayerId != playerId;
 
