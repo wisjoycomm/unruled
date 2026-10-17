@@ -89,3 +89,4 @@
 - 2026-10-17 - Claude - Piracy only on purpose: contract convoys are fought only by fleets set to RaidConvoys (new command, FleetCombatState key 12, save schema 3, Raid convoys toggle on the fleet card); tests.
 - 2026-10-17 - Claude - AI keeps 1,000 travel credits for tolls: WTO orders never lock it and it borrows only below it; tests. Soak: WTO deposits had maxed the 10,000 credit line in a day, leaving no cash for gate tolls.
 - 2026-10-17 - Claude - Combat: players are hostile only when one side has line ships, so unarmed convoys no longer pin each other on a lane forever; tests. Soak: p4 built an ammo refinery but its tungsten convoys were stuck against a rival convoy from day 12.
+- 2026-10-17 - Claude - Convoy routes unload at the hub even when no route out is affordable; test. Soak: p4's tungsten convoy sat at its core 10 days with 500 tungsten aboard.

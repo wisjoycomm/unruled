@@ -144,6 +144,20 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
+        public void AtTheHub_ItUnloads_EvenWithNoRouteOutItCanPay()
+        {
+            SetRoute(_fleet, _outpost, Batch);
+            _sim.Ledger.TryFindPlayerWallet(Player, out var wallet);
+            _sim.Ledger.Burn(wallet, _sim.Ledger.Balance(wallet));
+            _sim.Stockpiles.Get(_fleet).Add(ItemId.RawTungsten, 500);
+
+            Run(_sim.Balance.Convoys.CheckIntervalTicks);
+
+            Assert.AreEqual(500, Hub.Get(ItemId.RawTungsten), "the haul comes off though the highway toll is unpaid");
+            Assert.AreEqual(_hub, _sim.FleetMotions.Get(_fleet).Site);
+        }
+
+        [Test]
         public void Route_CutShortAtAnotherSite_HeadsBackToTheHub()
         {
             var middle = AddBypass();

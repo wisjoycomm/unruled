@@ -19,7 +19,7 @@ namespace Unruled.Core.Military
     /// (target: own fleet with cargo convoys, docked at an own site, which becomes the hub;
     /// <see cref="DelayedPlayerCommand.ParamEntity"/>: another own site, the outpost; ParamC: the batch, at most cargo
     /// convoys x capacity; 0 or less ends the route). Every check interval a docked fleet out of combat works its route
-    /// without signal latency. Supplies are fuel, coolant, oxygen and rations (GDD §1); the fleet keeps a reserve of
+    /// without signal latency; at the hub it unloads even when no route out is open. Supplies are fuel, coolant, oxygen and rations (GDD §1); the fleet keeps a reserve of
     /// its own: the fuel for the trip ahead, and its oxygen and rations upkeep for the reserve intervals. At the hub it
     /// unloads everything else, takes on each supply up to the batch plus its reserve (even while grounded for unpaid
     /// upkeep) from what the hub holds above its supply reserve, and leaves, once it can act, when it can top up an outpost below half a batch of a supply, or the
@@ -133,10 +133,6 @@ namespace Unruled.Core.Military
 
         private void AtHub(EntityId fleet, in ConvoyRoute route, long tick)
         {
-            long oneWay = OneWayFuel(fleet, route.Hub, route.Outpost, out bool tollFree);
-            if (oneWay < 0)
-                return;
-            long roundTrip = 2 * oneWay;
             ref var hold = ref _stockpiles.Get(fleet);
             for (int slot = 0; slot < ItemIds.Count; slot++)
             {
@@ -144,6 +140,10 @@ namespace Unruled.Core.Military
                 if (!IsSupply(item) && hold.Get(item) > 0)
                     CargoMover.Move(_stockpiles, _stolen, fleet, route.Hub, item, hold.Get(item));
             }
+            long oneWay = OneWayFuel(fleet, route.Hub, route.Outpost, out bool tollFree);
+            if (oneWay < 0)
+                return;
+            long roundTrip = 2 * oneWay;
             for (int s = 0; s < Supplies.Length; s++)
                 Fill(fleet, route.Hub, Supplies[s], (int)Math.Min(route.Batch + Reserve(fleet, Supplies[s], roundTrip), int.MaxValue),
                     _balance.HubSupplyReserve);
