@@ -105,6 +105,55 @@ namespace Unruled.Tests.Core.Military
             Assert.GreaterOrEqual(Hub.Get(ItemId.ItemOxygen), hubReserve, "the hub keeps its reserve");
         }
 
+        // A second way to the outpost: hub - bypass - M - bypass - outpost (toll-free, slower).
+        private EntityId AddBypass()
+        {
+            var middle = Site(100);
+            foreach (var end in new[] { _hub, _outpost })
+            {
+                var lane = _sim.World.Create();
+                _sim.Starlanes.Add(lane, new StarlaneEdge { SiteA = end, SiteB = middle, Tier = StarlaneTier.OuterRimBypass, Length = 150 });
+                _sim.LaneWeather.Add(lane, default);
+            }
+            _sim.Graph.Rebuild(_sim.Starlanes);
+            return middle;
+        }
+
+        [Test]
+        public void Route_OfAnOwnerWhoCannotPayTheTolls_TakesTheBypass()
+        {
+            AddBypass();
+            _sim.Ledger.TryFindPlayerWallet(Player, out var wallet);
+            _sim.Ledger.Burn(wallet, _sim.Ledger.Balance(wallet));
+            Outpost.Add(ItemId.RawIron, Batch);
+            SetRoute(_fleet, _outpost, Batch);
+
+            bool bypass = false, highway = false;
+            for (int i = 0; i < 3_000 && Hub.Get(ItemId.RawIron) == 0; i++)
+            {
+                Run(1);
+                var lane = _sim.FleetMotions.Get(_fleet).Lane;
+                if (lane.IsNull)
+                    continue;
+                bypass |= _sim.Starlanes.Get(lane).Tier == StarlaneTier.OuterRimBypass;
+                highway |= _sim.Starlanes.Get(lane).Tier == StarlaneTier.StaHighway;
+            }
+            Assert.IsTrue(bypass && !highway, "around the highway");
+            Assert.AreEqual(Batch, Hub.Get(ItemId.RawIron), "the goods still came home");
+        }
+
+        [Test]
+        public void Route_CutShortAtAnotherSite_HeadsBackToTheHub()
+        {
+            var middle = AddBypass();
+            SetRoute(_fleet, _outpost, Batch);
+            _sim.FleetMotions.Get(_fleet).Site = middle;
+            _sim.Stockpiles.Get(_fleet).Add(ItemId.ItemFuel, 100);
+
+            Run(1_000);
+            Assert.AreEqual(_hub, _sim.FleetMotions.Get(_fleet).Site);
+        }
+
         [Test]
         public void Refused_WithoutCargoConvoys_OverCapacity_OrToASiteNotOwned()
         {

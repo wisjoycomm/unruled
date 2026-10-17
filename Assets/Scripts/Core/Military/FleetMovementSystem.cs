@@ -9,7 +9,8 @@ namespace Unruled.Core.Military
     /// <summary>
     /// Owns <see cref="FleetMotion"/> and <see cref="FleetRoute"/>.
     /// Move (target: own fleet at a site; <see cref="DelayedPlayerCommand.ParamEntity"/>: a lane from that site, or a
-    /// destination site) departs at once. A destination is routed by <see cref="RoutePlanner"/> once, at the order;
+    /// destination site; ParamC 1 = route around STA toll lanes) departs at once. A destination is routed by
+    /// <see cref="RoutePlanner"/> once, at the order;
     /// on each arrival the fleet departs on the next lane of its route the same tick.
     /// Every departure pays fuel from the fleet's hold (ships x fuel per 100 units x length x tier fuel multiplier,
     /// rounded up) and whatever the <see cref="ITollGate"/> charges for the lane; if either can't be paid the fleet
@@ -91,7 +92,7 @@ namespace Unruled.Core.Military
             switch (command.CommandType)
             {
                 case CommandType.Move:
-                    Move(command.PlayerId, command.Target, command.ParamEntity, tick);
+                    Move(command.PlayerId, command.Target, command.ParamEntity, command.ParamC != 0, tick);
                     break;
                 case CommandType.Hold:
                     Hold(command.PlayerId, command.Target, command.ParamA != 0);
@@ -110,7 +111,7 @@ namespace Unruled.Core.Military
         private long SpeedMilli(StarlaneTier tier) =>
             (long)_balance.BaseSpeedMilliPerTick * _laneBalance.Get(tier).SpeedPercent / 100;
 
-        private void Move(int playerId, EntityId fleet, EntityId lane, long tick)
+        private void Move(int playerId, EntityId fleet, EntityId lane, bool tollFree, long tick)
         {
             if (!IsOwnFleet(playerId, fleet) || !_readiness.Get(fleet).CanAct(tick))
                 return;
@@ -125,14 +126,15 @@ namespace Unruled.Core.Military
                 TryDepart(fleet, ref motion, lane);
                 return;
             }
-            TryMoveTo(fleet, lane, tick);
+            TryMoveTo(fleet, lane, tick, tollFree);
         }
 
         /// <summary>
         /// Sends a docked fleet that can act to a site along a planned route, as a Move order to a destination does.
-        /// For standing orders run by other systems (convoy routes); false if it could not leave.
+        /// For standing orders run by other systems (convoy routes); false if it could not leave. tollFree routes around
+        /// STA toll lanes.
         /// </summary>
-        public bool TryMoveTo(EntityId fleet, EntityId site, long tick)
+        public bool TryMoveTo(EntityId fleet, EntityId site, long tick, bool tollFree = false)
         {
             if (!_units.Has(fleet) || !_readiness.Get(fleet).CanAct(tick) || !_sites.Has(site))
                 return false;
@@ -140,7 +142,7 @@ namespace Unruled.Core.Military
             if (motion.Site.IsNull)
                 return false;
             ref var route = ref _routes.Get(fleet);
-            if (!_planner.TryPlan(motion.Site, site, _units.Get(fleet).TechTier, ref route))
+            if (!_planner.TryPlan(motion.Site, site, _units.Get(fleet).TechTier, tollFree, ref route))
                 return false;
             if (TryDepart(fleet, ref motion, route.LaneAt(route.Next++)))
                 return true;

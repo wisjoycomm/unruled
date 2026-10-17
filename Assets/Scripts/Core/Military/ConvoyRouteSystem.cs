@@ -24,8 +24,10 @@ namespace Unruled.Core.Military
     /// unloads everything else, takes on each supply up to the batch plus its reserve (even while grounded for unpaid
     /// upkeep) from what the hub holds above its supply reserve, and leaves, once it can act, when it can top up an outpost below half a batch of a supply, or the
     /// outpost holds a batch of goods. At the outpost it tops each supply up to the batch from what it carries above
-    /// its reserve, loads up to a batch of every other item there and heads home. Elsewhere, moving or engaged, the
-    /// route waits; it ends when either site is lost. Contract convoys can't run a route. Stolen units keep their tags.
+    /// its reserve, loads up to a batch of every other item there and heads home. Docked anywhere else (its route was cut
+    /// short) it heads back to the hub; moving or engaged, the route waits; it ends when either site is lost. Each run takes the fastest route whose STA tolls the owner's wallet
+    /// covers there and back, else the toll-free one (bypass lanes: 0 credits, more fuel); the fuel reserve follows the
+    /// route taken. Contract convoys can't run a route. Stolen units keep their tags.
     /// </summary>
     public sealed class ConvoyRouteSystem : ISimSystem, ICommandHandler
     {
@@ -41,6 +43,8 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<StolenGoods> _stolen;
         private readonly RoutePlanner _planner;
         private readonly FleetMovementSystem _movement;
+        private readonly ITollGate _tolls;
+        private readonly Ledger _ledger;
         private readonly ConvoyBalance _balance;
         private readonly FleetBalance _fleetBalance;
         private FleetRoute _scratch;
@@ -50,7 +54,7 @@ namespace Unruled.Core.Military
             ComponentStore<FleetReadiness> readiness, ComponentStore<FleetCombatState> combat,
             ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes, ComponentStore<Stockpile> stockpiles,
             ComponentStore<ContractCargo> contracts, ComponentStore<StolenGoods> stolen, RoutePlanner planner,
-            FleetMovementSystem movement, ConvoyBalance balance, FleetBalance fleetBalance)
+            FleetMovementSystem movement, ITollGate tolls, Ledger ledger, ConvoyBalance balance, FleetBalance fleetBalance)
         {
             _routes = routes ?? throw new ArgumentNullException(nameof(routes));
             _units = units ?? throw new ArgumentNullException(nameof(units));
@@ -64,6 +68,8 @@ namespace Unruled.Core.Military
             _stolen = stolen ?? throw new ArgumentNullException(nameof(stolen));
             _planner = planner ?? throw new ArgumentNullException(nameof(planner));
             _movement = movement ?? throw new ArgumentNullException(nameof(movement));
+            _tolls = tolls ?? throw new ArgumentNullException(nameof(tolls));
+            _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
             _fleetBalance = fleetBalance ?? throw new ArgumentNullException(nameof(fleetBalance));
         }
@@ -120,14 +126,17 @@ namespace Unruled.Core.Military
                     AtHub(fleet, in route, tick);
                 else if (motion.Site == route.Outpost)
                     AtOutpost(fleet, in route, tick);
+                else if (OneWayFuel(fleet, motion.Site, route.Hub, out bool tollFree) >= 0)
+                    _movement.TryMoveTo(fleet, route.Hub, tick, tollFree);
             }
         }
 
         private void AtHub(EntityId fleet, in ConvoyRoute route, long tick)
         {
-            long roundTrip = 2 * OneWayFuel(fleet, route.Hub, route.Outpost);
-            if (roundTrip < 0)
+            long oneWay = OneWayFuel(fleet, route.Hub, route.Outpost, out bool tollFree);
+            if (oneWay < 0)
                 return;
+            long roundTrip = 2 * oneWay;
             ref var hold = ref _stockpiles.Get(fleet);
             for (int slot = 0; slot < ItemIds.Count; slot++)
             {
@@ -146,12 +155,12 @@ namespace Unruled.Core.Military
             for (int s = 0; s < Supplies.Length && !run; s++)
                 run = outpost.Get(Supplies[s]) < route.Batch / 2 && hold.Get(Supplies[s]) > Reserve(fleet, Supplies[s], roundTrip);
             if (run)
-                _movement.TryMoveTo(fleet, route.Outpost, tick);
+                _movement.TryMoveTo(fleet, route.Outpost, tick, tollFree);
         }
 
         private void AtOutpost(EntityId fleet, in ConvoyRoute route, long tick)
         {
-            long home = OneWayFuel(fleet, route.Outpost, route.Hub);
+            long home = OneWayFuel(fleet, route.Outpost, route.Hub, out bool tollFree);
             if (home < 0)
                 return;
             ref var hold = ref _stockpiles.Get(fleet);
@@ -169,7 +178,7 @@ namespace Unruled.Core.Military
                 if (!IsSupply(item))
                     Fill(fleet, route.Outpost, item, route.Batch, 0);
             }
-            _movement.TryMoveTo(fleet, route.Hub, tick);
+            _movement.TryMoveTo(fleet, route.Hub, tick, tollFree);
         }
 
         // Tops the hold up to target from what the site holds above its reserve.
@@ -180,11 +189,23 @@ namespace Unruled.Core.Military
                 CargoMover.Move(_stockpiles, _stolen, site, fleet, item, quantity);
         }
 
-        private long OneWayFuel(EntityId fleet, EntityId from, EntityId to)
+        // Fuel for one leg on the route the run takes (see the class summary); -1 if there is none.
+        private long OneWayFuel(EntityId fleet, EntityId from, EntityId to, out bool tollFree)
         {
             ref var unit = ref _units.Get(fleet);
+            tollFree = false;
             if (!_planner.TryPlan(from, to, unit.TechTier, ref _scratch))
                 return -1;
+            long tolls = 0;
+            for (int i = 0; i < _scratch.Count; i++)
+                tolls += _tolls.QuoteCents(unit, _lanes.Get(_scratch.LaneAt(i)));
+            if (tolls > 0 && (!_ledger.TryFindPlayerWallet(unit.OwnerPlayerId, out var wallet) ||
+                              2 * tolls > _ledger.Balance(wallet)))
+            {
+                tollFree = true;
+                if (!_planner.TryPlan(from, to, unit.TechTier, tollFree: true, ref _scratch))
+                    return -1;
+            }
             long fuel = 0;
             for (int i = 0; i < _scratch.Count; i++)
                 fuel += _planner.FuelFor(unit, _lanes.Get(_scratch.LaneAt(i)));

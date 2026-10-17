@@ -75,3 +75,4 @@
 - 2026-10-17 - Claude - World gen keeps every contested raw item outside the Citadel; refinery cap 10 per site; soak: first rival reaches Tier 5.
 - 2026-10-17 - Claude - AI shipyard: refits and builds a Tier-3+ battle fleet (60 line), which never settles, fuels for the Citadel and waits mothballed; tests. Known gap: AI can't supply its upkeep yet.
 - 2026-10-17 - Claude - AI battle fleet: one fleet per player (no new-tier builds before refit), sets out only with ammo and the tolls in hand, keeps the Citadel toll out of trade; ITollGate.QuoteCents; tests. Soak: 60-ship T4 lines form; no assault yet (cash, tungsten).
+- 2026-10-17 - Claude - Toll-free routing (bypass lanes, Move ParamC 1) for players, convoy runs and AI trips when tolls can't be paid; stranded convoys head home; tests. Soak: the money supply only shrinks, so broke AIs still can't cross gates for tungsten.

@@ -94,6 +94,30 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
+        public void Planner_TollFree_SkipsTheStaHighways()
+        {
+            var route = default(FleetRoute);
+            Assert.IsTrue(_sim.Routes.TryPlan(_a, _c, 1, tollFree: true, ref route));
+            Assert.AreEqual(2, route.Count);
+            Assert.AreEqual(_ad, route.LaneAt(0), "the bypass charges no toll");
+            Assert.AreEqual(_dc, route.LaneAt(1));
+            Assert.IsFalse(_sim.Routes.TryPlan(_a, _b, 1, tollFree: true, ref route), "B is only on highways");
+        }
+
+        [Test]
+        public void MoveToSite_TollFree_TakesTheBypass()
+        {
+            var fleet = Fleet(fuel: 1_000);
+            _sim.Clock.Enqueue(new DelayedPlayerCommand
+            {
+                IssuedAtTick = _sim.Clock.CurrentTick, ExecuteAtTick = Start, PlayerId = Me, CommandType = CommandType.Move,
+                Target = fleet, ParamEntity = _c, ParamC = 1
+            });
+            RunTo(Start);
+            Assert.AreEqual(_ad, M(fleet).Lane);
+        }
+
+        [Test]
         public void MoveToSite_DepartsEachLaneOnArrival_PayingFuelPerLane()
         {
             var fleet = Fleet();

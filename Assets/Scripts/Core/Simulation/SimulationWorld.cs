@@ -205,7 +205,7 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Reverse, Movement);
             var convoys = new ConvoyRouteSystem(
                 ConvoyRoutes, Fleets, FleetMotions, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, ContractCargo,
-                StolenGoods, Routes, Movement, balance.Convoys, balance.Fleets);
+                StolenGoods, Routes, Movement, Tolls, Ledger, balance.Convoys, balance.Fleets);
             Clock.Register(convoys);
             Commands.Register(CommandType.SetConvoyRoute, convoys);
 

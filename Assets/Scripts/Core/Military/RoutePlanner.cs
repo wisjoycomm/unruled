@@ -52,7 +52,11 @@ namespace Unruled.Core.Military
         /// False (route cleared) if they are the same site, unreachable at this tech tier, or more than
         /// <see cref="FleetRoute.MaxLanes"/> lanes apart.
         /// </summary>
-        public bool TryPlan(EntityId from, EntityId to, byte techTier, ref FleetRoute route)
+        public bool TryPlan(EntityId from, EntityId to, byte techTier, ref FleetRoute route) =>
+            TryPlan(from, to, techTier, tollFree: false, ref route);
+
+        /// <summary>As <see cref="TryPlan(EntityId, EntityId, byte, ref FleetRoute)"/>; tollFree skips lanes that charge the STA toll.</summary>
+        public bool TryPlan(EntityId from, EntityId to, byte techTier, bool tollFree, ref FleetRoute route)
         {
             route.Clear();
             int n = _graph.SiteCapacity;
@@ -83,7 +87,8 @@ namespace Unruled.Core.Military
                 {
                     var lane = _graph.EdgeAt(slot);
                     ref var edge = ref _lanes.Get(lane);
-                    if (techTier < _laneBalance.Get(edge.Tier).MinTechTier)
+                    var rules = _laneBalance.Get(edge.Tier);
+                    if (techTier < rules.MinTechTier || (tollFree && rules.ChargesStaToll))
                         continue;
                     int next = _graph.NeighborAt(slot).Index;
                     long cost = _cost[current] + TravelTicks(edge);

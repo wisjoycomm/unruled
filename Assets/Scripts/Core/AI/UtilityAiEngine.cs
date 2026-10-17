@@ -394,18 +394,22 @@ namespace Unruled.Core.AI
                 case AiAction.StealthRaid:
                     command.CommandType = CommandType.Move;
                     command.ParamEntity = raidTarget;
+                    command.ParamC = TollFreeFlag(motion.Site, raidTarget, in unit, trips: 2);
                     break;
                 case AiAction.Siege:
                     command.CommandType = CommandType.Move;
                     command.ParamEntity = siegeTarget;
+                    command.ParamC = TollFreeFlag(motion.Site, siegeTarget, in unit, trips: 2);
                     break;
                 case AiAction.AssaultCitadel:
                     command.CommandType = CommandType.Move;
                     command.ParamEntity = citadelTarget;
+                    command.ParamC = TollFreeFlag(motion.Site, citadelTarget, in unit, trips: 1);
                     break;
                 case AiAction.DevelopOutpost:
                     command.CommandType = CommandType.Move;
                     command.ParamEntity = developTarget;
+                    command.ParamC = TollFreeFlag(motion.Site, developTarget, in unit, trips: 2);
                     break;
                 case AiAction.ClaimSite:
                     command.CommandType = CommandType.ClaimSite;
@@ -487,12 +491,12 @@ namespace Unruled.Core.AI
                 if (preset.SiegeConquestWeight > 0)
                     for (int c = 0; c < _citadels.Count; c++)
                         if (_citadels.At(c).FallenTick == 0 &&
-                            _routes.TryPlan(player.CoreBase, _citadels.EntityAt(c), unit.TechTier, ref _route))
+                            PlanTrip(player.CoreBase, _citadels.EntityAt(c), in unit, trips: 1))
                             fuel = Math.Max(fuel, 2L * RouteFuel(in unit));
             }
             else if (SettleWeight(preset) > 0 &&
                      FindTarget(player, in unit, int.MaxValue, raid: false, homeOnly: IsHomeSettler(preset), out var target, out _) &&
-                     _routes.TryPlan(player.CoreBase, target, unit.TechTier, ref _route))
+                     PlanTrip(player.CoreBase, target, in unit, trips: 2))
                 fuel = Math.Max(fuel, 2L * RouteFuel(in unit));
             return fuel;
         }
@@ -709,7 +713,7 @@ namespace Unruled.Core.AI
             }
 
             ref var stock = ref _stockpiles.Get(player.CoreBase);
-            long cash = Math.Max(0, _ledger.Balance(wallet) - AssaultTollReserve(in player, preset));
+            long cash = _ledger.Balance(wallet);
             if (!_issuer.IsInFlight(player.PlayerId, CommandType.PlaceSellOrder, player.CoreBase) &&
                 (FindBidToFill(player, hq, ref stock, out var sellItem, out long ask, out long wanted) ||
                  FindSurplusToList(player.PlayerId, hq, ref stock, tick, out sellItem, out ask, out wanted)))
@@ -956,8 +960,7 @@ namespace Unruled.Core.AI
                 if (!raid && site.OwnerPlayerId == 0 && ores == 0)
                     continue; // a neutral site with no new ore isn't worth the claim cost
                 if (ores < bestOres || (ores == bestOres && advantage < edge) ||
-                    !_routes.TryPlan(player.CoreBase, entity, unit.TechTier, ref _route) || 2L * RouteFuel(in unit) > fuel ||
-                    !CanPayRouteTolls(in unit, trips: 2))
+                    !PlanTrip(player.CoreBase, entity, in unit, trips: 2) || 2L * RouteFuel(in unit) > fuel)
                     continue;
                 if (ores == bestOres && advantage == edge && _route.Count >= bestLanes)
                     continue;
@@ -993,8 +996,8 @@ namespace Unruled.Core.AI
                     var cost = _miningBalance.RigCost(i);
                     paid = hold.Get(cost.Item) + _stockpiles.Get(site).Get(cost.Item) >= (long)cost.Quantity * rigs;
                 }
-                if (!paid || !_routes.TryPlan(player.CoreBase, site, unit.TechTier, ref _route) ||
-                    2L * RouteFuel(in unit) > fuel || _route.Count >= bestLanes || !CanPayRouteTolls(in unit, trips: 2))
+                if (!paid || !PlanTrip(player.CoreBase, site, in unit, trips: 2) ||
+                    2L * RouteFuel(in unit) > fuel || _route.Count >= bestLanes)
                     continue;
                 target = site;
                 bestLanes = _route.Count;
@@ -1016,8 +1019,8 @@ namespace Unruled.Core.AI
                 if (_citadels.At(c).FallenTick > 0)
                     continue;
                 long hostile = Power(site, player.PlayerId, mine: false);
-                if (hostile >= power || !_routes.TryPlan(player.CoreBase, site, unit.TechTier, ref _route) ||
-                    2L * RouteFuel(in unit) > fuel || !CanPayRouteTolls(in unit, trips: 1))
+                if (hostile >= power || !PlanTrip(player.CoreBase, site, in unit, trips: 1) ||
+                    2L * RouteFuel(in unit) > fuel)
                     continue;
                 int advantage = Severity(power - hostile, power);
                 if (advantage <= edge)
@@ -1115,50 +1118,30 @@ namespace Unruled.Core.AI
             return fuel;
         }
 
-        // The wallet covers the planned route's tolls for the trips (there, or there and back); a fleet can't depart onto a
-        // toll lane it can't pay for. A Citadel assault is one way: a fallen Citadel is the fleet's to hold.
-        private bool CanPayRouteTolls(in FleetUnit unit, int trips)
+        // Plans the trip into _route: the fastest route if the wallet covers its STA tolls for the trips (there, or there
+        // and back; a Citadel assault is one way, a fallen Citadel is the fleet's to hold), else the toll-free one
+        // (bypass lanes: 0 credits, more fuel). False if neither exists.
+        private bool PlanTrip(EntityId from, EntityId to, in FleetUnit unit, int trips, out bool tollFree)
         {
-            long tolls = RouteTolls(in unit);
-            if (tolls == 0)
-                return true;
-            return _ledger.TryFindPlayerWallet(unit.OwnerPlayerId, out var wallet) && trips * tolls <= _ledger.Balance(wallet);
-        }
-
-        private long RouteTolls(in FleetUnit unit)
-        {
+            tollFree = false;
+            if (!_routes.TryPlan(from, to, unit.TechTier, ref _route))
+                return false;
             long tolls = 0;
             for (int i = 0; i < _route.Count; i++)
                 tolls += _tolls.QuoteCents(unit, _lanes.Get(_route.LaneAt(i)));
-            return tolls;
+            if (tolls == 0 ||
+                (_ledger.TryFindPlayerWallet(unit.OwnerPlayerId, out var wallet) && trips * tolls <= _ledger.Balance(wallet)))
+                return true;
+            tollFree = true;
+            return _routes.TryPlan(from, to, unit.TechTier, tollFree: true, ref _route);
         }
 
-        // Cash kept out of trade for battle fleets: a full line waiting at the core, or one on its way, keeps the cheapest
-        // toll from where it is to a standing Citadel.
-        private long AssaultTollReserve(in PlayerHq player, AiPreset preset)
-        {
-            if (preset.SiegeConquestWeight == 0)
-                return 0;
-            long reserve = 0;
-            for (int f = 0; f < _units.Count; f++)
-            {
-                ref var unit = ref _units.At(f);
-                if (unit.OwnerPlayerId != player.PlayerId || unit.IsConvoyOnly || !IsBattleFleet(in unit))
-                    continue;
-                ref var motion = ref _motions.Get(_units.EntityAt(f));
-                var from = motion.Lane.IsNull ? motion.Site : _lanes.Get(motion.Lane).OtherEnd(motion.FromSite);
-                if (from.IsNull || IsStandingCitadel(from) ||
-                    (from == player.CoreBase && unit.LineShips < _balance.BattleLineShips))
-                    continue;
-                long cheapest = long.MaxValue;
-                for (int c = 0; c < _citadels.Count; c++)
-                    if (_citadels.At(c).FallenTick == 0 && _routes.TryPlan(from, _citadels.EntityAt(c), unit.TechTier, ref _route))
-                        cheapest = Math.Min(cheapest, RouteTolls(in unit));
-                if (cheapest != long.MaxValue)
-                    reserve += cheapest;
-            }
-            return reserve;
-        }
+        private bool PlanTrip(EntityId from, EntityId to, in FleetUnit unit, int trips) =>
+            PlanTrip(from, to, in unit, trips, out _);
+
+        // Move's ParamC for the trip PlanTrip picks: 1 = toll-free.
+        private int TollFreeFlag(EntityId from, EntityId to, in FleetUnit unit, int trips) =>
+            PlanTrip(from, to, in unit, trips, out bool tollFree) && tollFree ? 1 : 0;
 
         private void ThinkProgress(in PlayerHq player, AiPreset preset, EntityId hq)
         {

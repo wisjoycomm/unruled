@@ -34,7 +34,7 @@ deposits; convoy fleets get routes to unserved outposts. Per deposit it pauses d
 cap, retracts them when outgunned and rebuilds bare ones; per player it joins the audit, builds convoys and refineries,
 scans, stress-tests, opens its jump gate and trades on the WTO, keeping back the next stress test's cost; from the
 Citadel assault tier its shipyard refits and builds one battle fleet that only waits at home (mothballed once full) or
-assaults the Citadel with ammo aboard and the STA tolls in hand (route tolls are checked for every trip), while lower-tier fleets settle and raid. An order still in signal
+assaults the Citadel with ammo aboard (every trip takes the toll-free route when the wallet can't cover the tolls), while lower-tier fleets settle and raid. An order still in signal
 latency is not sent again (`CommandIssuer.IsInFlight`). `NoaaForecast` (`Forecast`) is a read-only query for the views.
 `NewGameSetup.Create(sim, playerId)` lays out a new game from `NewGameBalance`: a home system per participant,
 stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a starting fleet and AI rivals.
@@ -49,7 +49,8 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
    `WtoContractSystem` through `ITradeSettlement`.
 6. `WhoQuarantineSystem`: export lock when water or oxygen runs out.
 7. `FleetUpkeepSystem`: hourly per-ship upkeep from the cargo hold; `Mothball` / `Activate` and warm-up.
-8. `FleetMovementSystem`: routed travel with fuel and STA tolls paid at each departure; `Move`, `Hold`, `Reverse`.
+8. `FleetMovementSystem`: routed travel with fuel and STA tolls paid at each departure (`Move` ParamC 1 routes around
+   toll lanes); `Move`, `Hold`, `Reverse`.
 9. `ConvoyRouteSystem`: standing supply runs between a hub and an outpost (fuel, coolant, oxygen and rations out,
    goods home; the fleet keeps its own trip fuel and upkeep, the hub keeps a supply reserve); `SetConvoyRoute`.
 10. `SalvoCombatEngine`: a salvo every 5 ticks between hostile fleets at one site or lane; loot and piracy
@@ -104,7 +105,8 @@ methods, in this order (rule 4).
   - `CargoTransferSystem`: loads or unloads a docked fleet's hold at an own site (or fills it up to a total);
     stolen tags travel with the stolen units (moved first, `CargoMover`); WTO contract convoys can't transfer.
   - `ConvoyRouteSystem` + `ConvoyBalance`: owns `ConvoyRoute`; a fleet with cargo convoys works a hub ↔ outpost run on
-    its own, sending departures through `FleetMovementSystem.TryMoveTo`.
+    its own, sending departures through `FleetMovementSystem.TryMoveTo`; a run the owner can't pay tolls for goes
+    toll-free, and a convoy docked off its route heads back to the hub.
   - `JumpGateSystem`: owns `JumpGate` (Board) and the lanes it opens; at the jump-gate tech tier it charges the core
     base, adds the gate lane into the contested cluster and rebuilds `StarlaneGraph`. Dormant gates keep homes sealed.
   - Fleet components (`FleetComponents.cs`), one owner each: `FleetUnit` (ship counts by class; combat),
