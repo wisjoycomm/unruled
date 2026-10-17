@@ -91,3 +91,4 @@
 - 2026-10-17 - Claude - Combat: players are hostile only when one side has line ships, so unarmed convoys no longer pin each other on a lane forever; tests. Soak: p4 built an ammo refinery but its tungsten convoys were stuck against a rival convoy from day 12.
 - 2026-10-17 - Claude - Convoy routes unload at the hub even when no route out is affordable; test. Soak: p4's tungsten convoy sat at its core 10 days with 500 tungsten aboard.
 - 2026-10-17 - Claude - THE SYSTEM's standing bid: SellToSystem sells clean goods at 70% of the reference price, paid from the WTO fee and STA toll pools; an AI under its travel cash sells surplus there instead of listing it; tests.
+- 2026-10-17 - Claude - Leaderboard net worth subtracts loan debt, so borrowed cash no longer ranks a player up; test.

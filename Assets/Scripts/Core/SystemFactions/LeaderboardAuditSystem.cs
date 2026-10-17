@@ -12,8 +12,8 @@ namespace Unruled.Core.SystemFactions
     /// Owns <see cref="PlayerStanding"/>: the Top-10K leaderboard audit (tab 05, GDD §4.4).
     /// AuditOptIn (target: any site, for latency; ParamA 1 = join, 0 = leave) enters or leaves the audit. Leaving while
     /// in a bracket makes the player evading (see <see cref="BracketRates"/>) until they join again.
-    /// Every audit interval the audited players are ranked by net worth (PROVISIONAL: credits plus the stock of their
-    /// sites and fleets at the WTO reference price; ties go to the lower player id) and given the bracket of their
+    /// Every audit interval the audited players are ranked by net worth (PROVISIONAL: credits less debt plus the stock of
+    /// their sites and fleets at the WTO reference price; ties go to the lower player id) and given the bracket of their
     /// rank. Each bracket then gets its dividend share of the WTO fee pool and its grant share of the STA toll pool,
     /// as they stood at the audit, split equally among its members; what doesn't divide evenly, and the shares of
     /// empty brackets, stay in the pools. Nothing is paid that the pools don't hold. PROVISIONAL: grants are paid in
@@ -40,6 +40,7 @@ namespace Unruled.Core.SystemFactions
         private readonly ComponentStore<SiteInfo> _sites;
         private readonly ComponentStore<FleetUnit> _fleets;
         private readonly ComponentStore<Stockpile> _stockpiles;
+        private readonly ComponentStore<Loan> _loans;
         private readonly Ledger _ledger;
         private readonly EntityId _wtoPool;
         private readonly EntityId _staPool;
@@ -54,14 +55,15 @@ namespace Unruled.Core.SystemFactions
 
         public LeaderboardAuditSystem(
             ComponentStore<PlayerStanding> standings, ComponentStore<Wallet> wallets, ComponentStore<SiteInfo> sites,
-            ComponentStore<FleetUnit> fleets, ComponentStore<Stockpile> stockpiles, Ledger ledger, EntityId wtoPool,
-            EntityId staPool, WtoMarketEngine market, LeaderboardBalance balance)
+            ComponentStore<FleetUnit> fleets, ComponentStore<Stockpile> stockpiles, ComponentStore<Loan> loans,
+            Ledger ledger, EntityId wtoPool, EntityId staPool, WtoMarketEngine market, LeaderboardBalance balance)
         {
             _standings = standings ?? throw new ArgumentNullException(nameof(standings));
             _wallets = wallets ?? throw new ArgumentNullException(nameof(wallets));
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _fleets = fleets ?? throw new ArgumentNullException(nameof(fleets));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
+            _loans = loans ?? throw new ArgumentNullException(nameof(loans));
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             if (wtoPool.IsNull) throw new ArgumentException("WTO fee pool required.", nameof(wtoPool));
             if (staPool.IsNull) throw new ArgumentException("STA toll pool required.", nameof(staPool));
@@ -145,7 +147,8 @@ namespace Unruled.Core.SystemFactions
                 ref var wallet = ref _wallets.Get(hq);
                 if (count == _entries.Length)
                     Array.Resize(ref _entries, count * 2);
-                _entries[count] = new Entry { Worth = wallet.Cents, PlayerId = wallet.OwnerPlayerId, Hq = hq };
+                long debt = _loans.Has(hq) ? _loans.Get(hq).DebtCents : 0;
+                _entries[count] = new Entry { Worth = wallet.Cents - debt, PlayerId = wallet.OwnerPlayerId, Hq = hq };
                 _entryOf[wallet.OwnerPlayerId] = count;
                 count++;
             }

@@ -254,7 +254,8 @@ namespace Unruled.Core.Simulation
                 World, JumpGates, Starlanes, LaneWeather, Players, Sites, Stockpiles, Graph, TechGates, balance.JumpGates));
             Clock.Register(ContractSystem);
             Audit = new LeaderboardAuditSystem(
-                Standings, Wallets, Sites, Fleets, Stockpiles, Ledger, WtoFeePool, StaTollPool, Market, balance.Leaderboard);
+                Standings, Wallets, Sites, Fleets, Stockpiles, Loans, Ledger, WtoFeePool, StaTollPool, Market,
+                balance.Leaderboard);
             Clock.Register(Audit);
             Commands.Register(CommandType.AuditOptIn, Audit);
             Lending = new LoanSystem(Loans, Players, Stockpiles, Ledger, WtoFeePool, Market, balance.Ledger);

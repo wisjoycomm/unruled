@@ -95,6 +95,20 @@ namespace Unruled.Tests.Core.SystemFactions
         }
 
         [Test]
+        public void Audit_CountsDebt_AgainstNetWorth()
+        {
+            _sim.Lending.Handle(new DelayedPlayerCommand { PlayerId = 1, CommandType = CommandType.Borrow, ParamA = 1_000 }, 0);
+            _sim.Stockpiles.Get(_site[2]).Add(ItemId.ItemSteel, 1); // +50 credits
+            OptIn(1, true);
+            OptIn(2, true);
+
+            RunToAudit();
+
+            Assert.AreEqual(1, Standing(2).Rank, "borrowed cash is not worth");
+            Assert.AreEqual(2, Standing(1).Rank);
+        }
+
+        [Test]
         public void LeavingTheAudit_InABracket_IsEvading_UntilRejoining()
         {
             OptIn(1, true);
