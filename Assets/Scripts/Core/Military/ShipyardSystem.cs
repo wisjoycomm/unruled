@@ -33,6 +33,10 @@ namespace Unruled.Core.Military
     /// the target takes in its ships and its hold, and the other is left empty, as a fleet whose ships were all lost.
     /// PROVISIONAL (the GDD has no merge): ships built while a battle fleet is away or mothballed form a second fleet,
     /// and only a whole battle line outguns the Citadel garrison.</item>
+    /// <item><see cref="CommandType.SplitFleet"/> (target: an own fleet, docked, active, out of combat and without cargo
+    /// convoys; ParamA / ParamB / ParamC = line / EW / supply ships to detach, the fleet keeping at least one ship): the
+    /// detached ships form a new fleet at the same site and tier, which takes their share of every item in the hold
+    /// (rounded down), stolen tags included. PROVISIONAL (GDD §2.5 has fleets split for multi-lane flanking, no rule).</item>
     /// </list>
     /// Invalid or unaffordable orders change nothing.
     /// </summary>
@@ -107,6 +111,9 @@ namespace Unruled.Core.Military
                 case CommandType.MergeFleets:
                     Merge(in command, tick);
                     break;
+                case CommandType.SplitFleet:
+                    Split(in command, tick);
+                    break;
                 default:
                     throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
             }
@@ -171,6 +178,39 @@ namespace Unruled.Core.Military
                 var item = ItemIds.FromSlot(slot);
                 if (hold.Get(item) > 0)
                     CargoMover.Move(_stockpiles, _stolen, from, into, item, hold.Get(item));
+            }
+        }
+
+        private void Split(in DelayedPlayerCommand command, long tick)
+        {
+            var from = command.Target;
+            if (!IsMergeable(command.PlayerId, from, tick))
+                return;
+            var source = _units.Get(from);
+            int line = command.ParamA, ew = command.ParamB, supply = command.ParamC;
+            if (line < 0 || ew < 0 || supply < 0 || line > source.LineShips || ew > source.EwShips ||
+                supply > source.SupplyTenders)
+                return;
+            long moved = (long)line + ew + supply;
+            if (moved == 0 || moved >= source.TotalShips)
+                return;
+            int total = source.TotalShips;
+            var detached = new FleetUnit
+            {
+                OwnerPlayerId = source.OwnerPlayerId, TechTier = source.TechTier, LineShips = line, EwShips = ew,
+                SupplyTenders = supply
+            };
+            var into = _factory.Create(in detached, _motions.Get(from).Site);
+            ref var unit = ref _units.Get(from);
+            unit.LineShips -= line;
+            unit.EwShips -= ew;
+            unit.SupplyTenders -= supply;
+            for (int slot = 0; slot < ItemIds.Count; slot++)
+            {
+                var item = ItemIds.FromSlot(slot);
+                int share = (int)((long)_stockpiles.Get(from).Get(item) * moved / total);
+                if (share > 0)
+                    CargoMover.Move(_stockpiles, _stolen, from, into, item, share);
             }
         }
 

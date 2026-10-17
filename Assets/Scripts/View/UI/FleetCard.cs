@@ -9,7 +9,8 @@ namespace Unruled.View.UI
     /// <summary>
     /// The selected fleet's card: ship classes, gun temperature against the release/lock thresholds, the hold's
     /// burnables, firepower (Ψ) and point defence (Ω), and its orders (Raid convoys toggles WTO piracy; Merge takes in
-    /// another own warship fleet of its tier docked at the same site). Buttons only forward commands through
+    /// another own warship fleet of its tier docked at the same site; Split detaches half of each ship class, rounded down,
+    /// into a new fleet there). Buttons only forward commands through
     /// <see cref="CommandIssuer"/>; the order lands after signal latency and shows in the in-flight strip.
     /// </summary>
     public sealed class FleetCard
@@ -27,7 +28,7 @@ namespace Unruled.View.UI
         private readonly VisualElement _fill, _release, _lock;
         private readonly Label _ammo, _battery, _coolant, _fuel, _psi, _omega;
         private readonly Button[] _rof = new Button[3];
-        private readonly Button _move, _hold, _reverse, _vent, _raid, _merge;
+        private readonly Button _move, _hold, _reverse, _vent, _raid, _merge, _split;
 
         private SimulationWorld _sim;
         private int _playerId;
@@ -71,6 +72,7 @@ namespace Unruled.View.UI
             _vent = TopTelemetryHud.Require<Button>(root, "order-vent");
             _raid = TopTelemetryHud.Require<Button>(root, "order-raid");
             _merge = TopTelemetryHud.Require<Button>(root, "order-merge");
+            _split = TopTelemetryHud.Require<Button>(root, "order-split");
 
             _rof[0].clicked += () => Issue(CommandType.SetRof, (int)RofStance.Conservation50);
             _rof[1].clicked += () => Issue(CommandType.SetRof, (int)RofStance.Standard100);
@@ -81,6 +83,7 @@ namespace Unruled.View.UI
             _vent.clicked += () => Issue(CommandType.VentCoolant, 0);
             _raid.clicked += () => Issue(CommandType.RaidConvoys, _raidShown == 1 ? 0 : 1);
             _merge.clicked += IssueMerge;
+            _split.clicked += IssueSplit;
         }
 
         public EntityId Fleet => _fleet;
@@ -224,6 +227,25 @@ namespace Unruled.View.UI
             }
             var command = NewCommand(CommandType.MergeFleets);
             command.ParamEntity = other;
+            Send(command);
+        }
+
+        private void IssueSplit()
+        {
+            if (_sim == null || !_sim.Fleets.Has(_fleet))
+                return;
+            ref var unit = ref _sim.Fleets.Get(_fleet);
+            if (unit.CargoConvoys > 0 || unit.LineShips / 2 + unit.EwShips / 2 + unit.SupplyTenders / 2 == 0)
+            {
+                _refusal = "REFUSED · TOO FEW SHIPS TO SPLIT";
+                _refusalUntil = _sim.Clock.CurrentTick + RefusalShowTicks;
+                _state.text = _refusal;
+                return;
+            }
+            var command = NewCommand(CommandType.SplitFleet);
+            command.ParamA = unit.LineShips / 2;
+            command.ParamB = unit.EwShips / 2;
+            command.ParamC = unit.SupplyTenders / 2;
             Send(command);
         }
 

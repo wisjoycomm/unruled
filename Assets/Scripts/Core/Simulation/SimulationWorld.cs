@@ -249,6 +249,7 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.BuildShips, shipyard);
             Commands.Register(CommandType.Retrofit, shipyard);
             Commands.Register(CommandType.MergeFleets, shipyard);
+            Commands.Register(CommandType.SplitFleet, shipyard);
             Commands.Register(CommandType.ClaimSite, new SiteControlSystem(
                 Sites, Players, Fleets, FleetMotions, FleetReadiness, FleetCombat, Stockpiles, balance.SiteControl));
             Commands.Register(CommandType.TransferCargo, new CargoTransferSystem(

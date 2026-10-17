@@ -175,5 +175,52 @@ namespace Unruled.Tests.Core.Military
 
             Assert.AreEqual(40, _sim.Fleets.Get(main).LineShips);
         }
+
+        [Test]
+        public void SplitFleet_DetachesShipsIntoANewFleetAtTheSite_WithTheirShareOfTheHold()
+        {
+            var main = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 3, LineShips = 30, EwShips = 4, SupplyTenders = 6 }, _core);
+            _sim.Stockpiles.Get(main).Add(ItemId.ItemAmmo, 1_000);
+            _sim.Stockpiles.Get(main).Add(ItemId.ItemFuel, 401);
+            _sim.StolenGoods.Add(main, default);
+            _sim.StolenGoods.Get(main).Add(ItemId.ItemAmmo, 1_000);
+
+            Order(CommandType.SplitFleet, main, 15, 2, 3);
+
+            Assert.AreEqual(2, FleetCount());
+            var split = _sim.Fleets.EntityAt(_sim.Fleets.Count - 1);
+            Assert.AreNotEqual(main, split);
+            Assert.AreEqual(15, _sim.Fleets.Get(split).LineShips);
+            Assert.AreEqual(2, _sim.Fleets.Get(split).EwShips);
+            Assert.AreEqual(3, _sim.Fleets.Get(split).SupplyTenders);
+            Assert.AreEqual(3, _sim.Fleets.Get(split).TechTier);
+            Assert.AreEqual(_core, _sim.FleetMotions.Get(split).Site);
+            Assert.AreEqual(15, _sim.Fleets.Get(main).LineShips);
+            Assert.AreEqual(2, _sim.Fleets.Get(main).EwShips);
+            Assert.AreEqual(3, _sim.Fleets.Get(main).SupplyTenders);
+            Assert.AreEqual(500, _sim.Stockpiles.Get(split).Get(ItemId.ItemAmmo), "20 of 40 ships take half");
+            Assert.AreEqual(200, _sim.Stockpiles.Get(split).Get(ItemId.ItemFuel), "rounded down");
+            Assert.AreEqual(201, _sim.Stockpiles.Get(main).Get(ItemId.ItemFuel));
+            Assert.AreEqual(500, _sim.StolenGoods.Get(split).Get(ItemId.ItemAmmo), "the ammo was all stolen");
+        }
+
+        [Test]
+        public void SplitFleet_OfEveryShip_NoShip_TooMany_Away_OrWithCargoConvoys_DoesNothing()
+        {
+            var main = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 3, LineShips = 10, EwShips = 1 }, _core);
+            var cargo = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 3, LineShips = 5, CargoConvoys = 1 }, _core);
+            var mothballed = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 3, LineShips = 5 }, _core);
+            _sim.FleetReadiness.Get(mothballed).IsMothballed = true;
+
+            Order(CommandType.SplitFleet, main, 10, 1);
+            Order(CommandType.SplitFleet, main);
+            Order(CommandType.SplitFleet, main, 11);
+            Order(CommandType.SplitFleet, main, -1, 1);
+            Order(CommandType.SplitFleet, cargo, 2);
+            Order(CommandType.SplitFleet, mothballed, 2);
+
+            Assert.AreEqual(3, FleetCount());
+            Assert.AreEqual(10, _sim.Fleets.Get(main).LineShips);
+        }
     }
 }

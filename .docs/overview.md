@@ -61,7 +61,7 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
 11. `CapitalRelocationSystem`: teardown → capital convoy → bootstrap; `RelocateBase`.
 12. `FocusedRadarSystem`: scan timelines and the Tier-5 IAEA reveal; `ScanBelt`, `CancelScan`, `EcmJam`.
 13. `ResearchSystem`: retooling ends, storm telemetry; `StressTest`.
-14. `ShipyardSystem`: delivers finished `ShipBuildOrder`s; `BuildShips`, `Retrofit`, `MergeFleets`.
+14. `ShipyardSystem`: delivers finished `ShipBuildOrder`s; `BuildShips`, `Retrofit`, `MergeFleets`, `SplitFleet` (37: detaches ships with their share of the hold into a new fleet at the site).
 15. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
 16. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
 17. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
