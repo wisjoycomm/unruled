@@ -327,6 +327,38 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void Shipyard_BuildsNoShipsOfANewTier_WhileAnOlderBattleFleetAwaitsItsRefit()
+        {
+            var fleet = Fleet(Me, _target, 4, loaded: true, tier: 3);
+            _sim.TechProgress.Get(_hq).TechTier = 4;
+            StockShipCost(4, _sim.Balance.Ai.BattleLineShips);
+            Assert.IsFalse(Find(Warlord, AiAction.BuildWarships).HasValue, "tier 4 ships would form a second fleet");
+
+            _sim.Fleets.Get(fleet).TechTier = 4;
+            Assert.IsTrue(Find(Warlord, AiAction.BuildWarships).HasValue);
+        }
+
+        [Test]
+        public void ABattleFleet_SetsOutForTheCitadel_OnlyWithTheAmmoAndTheTolls()
+        {
+            MakeTargetAnUnguardedCitadel();
+            var fleet = Fleet(Me, _home, 4, loaded: true, tier: 3);
+            ref var hold = ref _sim.Stockpiles.Get(fleet);
+            int ammo = hold.Get(ItemId.ItemAmmo);
+            hold.Add(ItemId.ItemAmmo, -ammo);
+            Assert.IsFalse(Find(Warlord, AiAction.AssaultCitadel).HasValue, "it would turn back to resupply");
+
+            _sim.Stockpiles.Get(fleet).Add(ItemId.ItemAmmo, ammo);
+            _sim.Ledger.TryFindPlayerWallet(Me, out var wallet);
+            long cash = _sim.Ledger.Balance(wallet);
+            _sim.Ledger.Burn(wallet, cash);
+            Assert.IsFalse(Find(Warlord, AiAction.AssaultCitadel).HasValue, "the highway toll can't be paid");
+
+            _sim.Ledger.Grant(wallet, cash);
+            Assert.IsTrue(Find(Warlord, AiAction.AssaultCitadel).HasValue);
+        }
+
+        [Test]
         public void ABattleFleetNeverSettles_AndAFullLineThatCannotTakeTheCitadelMothballs()
         {
             Ore(_target, ItemId.RawIron);

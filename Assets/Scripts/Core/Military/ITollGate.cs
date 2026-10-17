@@ -6,5 +6,8 @@ namespace Unruled.Core.Military
     public interface ITollGate
     {
         bool TryCharge(in FleetUnit unit, in StarlaneEdge edge);
+
+        /// <summary>What <see cref="TryCharge"/> would take from the owner for this lane now, in cents.</summary>
+        long QuoteCents(in FleetUnit unit, in StarlaneEdge edge);
     }
 }

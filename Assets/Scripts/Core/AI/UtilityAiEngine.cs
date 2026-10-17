@@ -128,6 +128,7 @@ namespace Unruled.Core.AI
         private readonly ComponentStore<WtoOrder> _wtoOrders;
         private readonly ComponentStore<ItemMarket> _markets;
         private readonly Ledger _ledger;
+        private readonly ITollGate _tolls;
         private readonly IMarketRates _rates;
         private readonly CommandIssuer _issuer;
         private readonly RoutePlanner _routes;
@@ -162,7 +163,7 @@ namespace Unruled.Core.AI
             ComponentStore<Refinery> refineries, ComponentStore<PlayerStanding> standings, ComponentStore<SystemCitadel> citadels,
             ComponentStore<WtoOrder> wtoOrders, ComponentStore<ItemMarket> markets, Ledger ledger, IMarketRates rates,
             CommandIssuer issuer,
-            RoutePlanner routes, ITechGates tech, GameBalanceConfig config)
+            RoutePlanner routes, ITollGate tolls, ITechGates tech, GameBalanceConfig config)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             _controllers = controllers ?? throw new ArgumentNullException(nameof(controllers));
@@ -190,6 +191,7 @@ namespace Unruled.Core.AI
             _rates = rates ?? throw new ArgumentNullException(nameof(rates));
             _issuer = issuer ?? throw new ArgumentNullException(nameof(issuer));
             _routes = routes ?? throw new ArgumentNullException(nameof(routes));
+            _tolls = tolls ?? throw new ArgumentNullException(nameof(tolls));
             _tech = tech ?? throw new ArgumentNullException(nameof(tech));
             _balance = config.Ai;
             _combatBalance = config.Combat;
@@ -318,10 +320,12 @@ namespace Unruled.Core.AI
                 }
                 else if (IsBattleFleet(in unit))
                 {
-                    // A full battle line that can't take the Citadel yet waits mothballed, at a fifth of the upkeep.
+                    // A full battle line that can't take the Citadel yet waits mothballed, at a fifth of the upkeep. It
+                    // only sets out with the ammo it would otherwise turn back for.
                     bool mothballed = _readiness.Has(fleet) && _readiness.Get(fleet).IsMothballed;
                     int citadelEdge = 0;
                     bool canGo = preset.SiegeConquestWeight > 0 &&
+                                 hold.Get(ItemId.ItemAmmo) >= (long)unit.LineShips * _balance.ResupplyAmmoPerLineShip &&
                                  FindCitadel(player, in unit, hold.Get(ItemId.ItemFuel), out citadelTarget, out citadelEdge);
                     if (canGo && mothballed && !_issuer.IsInFlight(player.PlayerId, CommandType.Activate, fleet))
                         Consider(AiAction.Activate, Score(preset.SiegeConquestWeight, citadelEdge), ref best, ref bestScore);
@@ -705,13 +709,14 @@ namespace Unruled.Core.AI
             }
 
             ref var stock = ref _stockpiles.Get(player.CoreBase);
+            long cash = Math.Max(0, _ledger.Balance(wallet) - AssaultTollReserve(in player, preset));
             if (!_issuer.IsInFlight(player.PlayerId, CommandType.PlaceSellOrder, player.CoreBase) &&
                 (FindBidToFill(player, hq, ref stock, out var sellItem, out long ask, out long wanted) ||
                  FindSurplusToList(player.PlayerId, hq, ref stock, tick, out sellItem, out ask, out wanted)))
             {
                 // The engine rounds the whole deposit down, so price the cap the same way.
                 long depositPercent = ask * _rates.EscrowRatePercent(player.PlayerId);
-                long quantity = depositPercent > 0 ? Math.Min(wanted, _ledger.Balance(wallet) * 100 / depositPercent) : wanted;
+                long quantity = depositPercent > 0 ? Math.Min(wanted, cash * 100 / depositPercent) : wanted;
                 if (quantity > 0)
                     Issue(new DelayedPlayerCommand
                     {
@@ -730,7 +735,7 @@ namespace Unruled.Core.AI
                 if (missing <= 0 || HasOpenOrder(player.PlayerId, cost[i].Item, OrderSide.Buy))
                     continue;
                 long price = TradePrice(cost[i].Item, tick, _balance.TradePricePercent);
-                long quantity = Math.Min(missing, _ledger.Balance(wallet) * _balance.BidBudgetPercent / 100 / price);
+                long quantity = Math.Min(missing, cash * _balance.BidBudgetPercent / 100 / price);
                 if (quantity == 0)
                     return;
                 Issue(new DelayedPlayerCommand
@@ -866,12 +871,14 @@ namespace Unruled.Core.AI
                 return;
             ref var stock = ref _stockpiles.Get(player.CoreBase);
             int lineShips = 0;
+            bool behind = false;
             for (int f = 0; f < _units.Count; f++)
             {
                 ref var unit = ref _units.At(f);
                 if (unit.OwnerPlayerId != player.PlayerId || unit.IsConvoyOnly || !IsBattleFleet(in unit))
                     continue;
                 lineShips += unit.LineShips;
+                behind |= unit.TechTier < tier;
                 var fleet = _units.EntityAt(f);
                 ref var motion = ref _motions.Get(fleet);
                 if (unit.TechTier >= tier || motion.Site != player.CoreBase || !motion.Lane.IsNull ||
@@ -884,7 +891,8 @@ namespace Unruled.Core.AI
                 }, AiAction.Retrofit, Score(weight, Full));
                 return;
             }
-            if (lineShips >= _balance.BattleLineShips || HasShipOrder(player.PlayerId, TargetFocusClass.LineShips))
+            // New ships of a higher tier would form a second fleet; one battle line only outguns the garrison whole.
+            if (behind || lineShips >= _balance.BattleLineShips || HasShipOrder(player.PlayerId, TargetFocusClass.LineShips))
                 return;
             int ships = Math.Min(Math.Min(_balance.BattleLineShips - lineShips, _shipyardBalance.MaxShipsPerOrder),
                 Affordable(ref stock, hq, tier, 100));
@@ -948,7 +956,8 @@ namespace Unruled.Core.AI
                 if (!raid && site.OwnerPlayerId == 0 && ores == 0)
                     continue; // a neutral site with no new ore isn't worth the claim cost
                 if (ores < bestOres || (ores == bestOres && advantage < edge) ||
-                    !_routes.TryPlan(player.CoreBase, entity, unit.TechTier, ref _route) || 2L * RouteFuel(in unit) > fuel)
+                    !_routes.TryPlan(player.CoreBase, entity, unit.TechTier, ref _route) || 2L * RouteFuel(in unit) > fuel ||
+                    !CanPayRouteTolls(in unit, trips: 2))
                     continue;
                 if (ores == bestOres && advantage == edge && _route.Count >= bestLanes)
                     continue;
@@ -985,7 +994,7 @@ namespace Unruled.Core.AI
                     paid = hold.Get(cost.Item) + _stockpiles.Get(site).Get(cost.Item) >= (long)cost.Quantity * rigs;
                 }
                 if (!paid || !_routes.TryPlan(player.CoreBase, site, unit.TechTier, ref _route) ||
-                    2L * RouteFuel(in unit) > fuel || _route.Count >= bestLanes)
+                    2L * RouteFuel(in unit) > fuel || _route.Count >= bestLanes || !CanPayRouteTolls(in unit, trips: 2))
                     continue;
                 target = site;
                 bestLanes = _route.Count;
@@ -1008,7 +1017,7 @@ namespace Unruled.Core.AI
                     continue;
                 long hostile = Power(site, player.PlayerId, mine: false);
                 if (hostile >= power || !_routes.TryPlan(player.CoreBase, site, unit.TechTier, ref _route) ||
-                    2L * RouteFuel(in unit) > fuel)
+                    2L * RouteFuel(in unit) > fuel || !CanPayRouteTolls(in unit, trips: 1))
                     continue;
                 int advantage = Severity(power - hostile, power);
                 if (advantage <= edge)
@@ -1104,6 +1113,51 @@ namespace Unruled.Core.AI
             for (int i = 0; i < _route.Count; i++)
                 fuel += _routes.FuelFor(unit, _lanes.Get(_route.LaneAt(i)));
             return fuel;
+        }
+
+        // The wallet covers the planned route's tolls for the trips (there, or there and back); a fleet can't depart onto a
+        // toll lane it can't pay for. A Citadel assault is one way: a fallen Citadel is the fleet's to hold.
+        private bool CanPayRouteTolls(in FleetUnit unit, int trips)
+        {
+            long tolls = RouteTolls(in unit);
+            if (tolls == 0)
+                return true;
+            return _ledger.TryFindPlayerWallet(unit.OwnerPlayerId, out var wallet) && trips * tolls <= _ledger.Balance(wallet);
+        }
+
+        private long RouteTolls(in FleetUnit unit)
+        {
+            long tolls = 0;
+            for (int i = 0; i < _route.Count; i++)
+                tolls += _tolls.QuoteCents(unit, _lanes.Get(_route.LaneAt(i)));
+            return tolls;
+        }
+
+        // Cash kept out of trade for battle fleets: a full line waiting at the core, or one on its way, keeps the cheapest
+        // toll from where it is to a standing Citadel.
+        private long AssaultTollReserve(in PlayerHq player, AiPreset preset)
+        {
+            if (preset.SiegeConquestWeight == 0)
+                return 0;
+            long reserve = 0;
+            for (int f = 0; f < _units.Count; f++)
+            {
+                ref var unit = ref _units.At(f);
+                if (unit.OwnerPlayerId != player.PlayerId || unit.IsConvoyOnly || !IsBattleFleet(in unit))
+                    continue;
+                ref var motion = ref _motions.Get(_units.EntityAt(f));
+                var from = motion.Lane.IsNull ? motion.Site : _lanes.Get(motion.Lane).OtherEnd(motion.FromSite);
+                if (from.IsNull || IsStandingCitadel(from) ||
+                    (from == player.CoreBase && unit.LineShips < _balance.BattleLineShips))
+                    continue;
+                long cheapest = long.MaxValue;
+                for (int c = 0; c < _citadels.Count; c++)
+                    if (_citadels.At(c).FallenTick == 0 && _routes.TryPlan(from, _citadels.EntityAt(c), unit.TechTier, ref _route))
+                        cheapest = Math.Min(cheapest, RouteTolls(in unit));
+                if (cheapest != long.MaxValue)
+                    reserve += cheapest;
+            }
+            return reserve;
         }
 
         private void ThinkProgress(in PlayerHq player, AiPreset preset, EntityId hq)

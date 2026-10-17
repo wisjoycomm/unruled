@@ -48,8 +48,22 @@ namespace Unruled.Core.SystemFactions
                 return true;
             if (!_ledger.TryFindPlayerWallet(unit.OwnerPlayerId, out var wallet))
                 return false;
+            return _ledger.Transfer(wallet, _pool, TollCents(unit, edge, DiscountPercent(wallet)));
+        }
+
+        public long QuoteCents(in FleetUnit unit, in StarlaneEdge edge)
+        {
+            if (!_laneBalance.Get(edge.Tier).ChargesStaToll)
+                return 0;
+            return _ledger.TryFindPlayerWallet(unit.OwnerPlayerId, out var wallet)
+                ? TollCents(unit, edge, DiscountPercent(wallet))
+                : TollCents(unit, edge, 0);
+        }
+
+        private int DiscountPercent(EntityId wallet)
+        {
             byte bracket = _standings.Has(wallet) ? _standings.Get(wallet).Bracket : LeaderboardBalance.Unrated;
-            return _ledger.Transfer(wallet, _pool, TollCents(unit, edge, _brackets.Bracket(bracket).TollDiscountPercent));
+            return _brackets.Bracket(bracket).TollDiscountPercent;
         }
     }
 }
