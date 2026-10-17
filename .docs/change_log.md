@@ -100,3 +100,4 @@
 - 2026-10-17 - Claude - THE SYSTEM also sells: SellToSystem goods go into its stock (on the WTO fee pool, added on load for old saves) and BuyFromSystem resells them at 130% into the fee pool; AI buys stress-test shortfalls and idle-cash feedstock from it; tests.
 
 2026-10-17 - Claude - AI sells a raw its refineries take in once it holds a batch above the drill stock cap, so complementary hoards (p4 copper, p5 silicon in the soak) reach the market; test.
+2026-10-17 - Claude - Unity check: compiles clean, EditMode 1189/1197 pass (3 failures are KitWright's own editor tests, 5 skipped); Play Mode capture of the BASE/SITE operations panels and the Citadel tag, no console errors.
