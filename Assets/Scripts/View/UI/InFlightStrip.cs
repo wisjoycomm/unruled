@@ -22,7 +22,7 @@ namespace Unruled.View.UI
             "Cancel order", "Audit opt-in", "Stress test",
             "Build ships", "Retrofit", "Claim site", "Build rig", "Build refinery", "Open jump gate", "Transfer cargo",
             "Convoy route", "Refinery cap", "Pause drills", "Borrow", "Repay", "Raid convoys", "Sell to THE SYSTEM", "Buy from THE SYSTEM",
-            "Merge fleets", "Standing orders", "Split fleet"
+            "Merge fleets", "Standing orders", "Split fleet", "Nuclear strike", "Build relay"
         };
 
         internal static string CommandName(CommandType type) =>

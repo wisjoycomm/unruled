@@ -14,7 +14,7 @@ main-screen HUD and the board renderer. No networking, research or galaxy map ye
 | Assembly | Folder | Notes |
 |---|---|---|
 | `Unruled.Core` | `Assets/Scripts/Core/` | `noEngineReferences`, `allowUnsafeCode` (fixed buffers). All rules and state. |
-| `Unruled.View` | `Assets/Scripts/View/` | References Core only. `UI/Theme/`: `Unruled.uss` (palette variables, type and component classes), `UnruledTheme.tss`, `UnruledPanelSettings`, OFL fonts + FontAssets, `DashedFrame`, `ItemIcon`, `UnruledPalette`, `ThemePreview.uxml`. `UI/`: `MainScreen.uxml/.uss`, `MainScreenView` (binds and refreshes once per tick) and its controllers `TopTelemetryHud`, `LeftInventoryDock`, `ContractAndMarketUI`, `FleetCard`, `InFlightStrip`, `OperationsPanel` (side tabs MARKET/BASE/SITE: research, audit, shipyard, system loan, jump gate, standing orders; claim, drills, refineries, cargo and convoy routes for the selected site and fleet), `CompactLayout` (below 1100 px: board full width, bottom bar swaps in the dock or the side column), `UiFormat`, `HudQueries`. `MapBoardRenderer` + `BoardMesh` draw one star system (with jump-gate rings) or, on the GALAXY tab, every system with gate links, as a vertex-coloured mesh. `GameSession` hosts the game: `NewGameSetup`, binds the views, advances the clock and runs AI. |
+| `Unruled.View` | `Assets/Scripts/View/` | References Core only. `UI/Theme/`: `Unruled.uss` (palette variables, type and component classes), `UnruledTheme.tss`, `UnruledPanelSettings`, OFL fonts + FontAssets, `DashedFrame`, `ItemIcon`, `UnruledPalette`, `ThemePreview.uxml`. `UI/`: `MainScreen.uxml/.uss`, `MainScreenView` (binds and refreshes once per tick) and its controllers `TopTelemetryHud`, `LeftInventoryDock`, `ContractAndMarketUI`, `FleetCard`, `InFlightStrip`, `OperationsPanel` (side tabs MARKET/BASE/SITE: research, audit, shipyard, system loan, jump gate, standing orders; claim, relay, drills, refineries, cargo and convoy routes for the selected site and fleet), `CompactLayout` (below 1100 px: board full width, bottom bar swaps in the dock or the side column), `UiFormat`, `HudQueries`. `MapBoardRenderer` + `BoardMesh` draw one star system (with jump-gate rings) or, on the GALAXY tab, every system with gate links, as a vertex-coloured mesh. `GameSession` hosts the game: `NewGameSetup`, binds the views, advances the clock and runs AI. |
 | `Unruled.Editor` | `Assets/Editor/` | Editor-only. `ThemeAssetBuilder` (menu Unruled/Build UI Theme Assets) creates missing FontAssets and the PanelSettings; `BoardAssetBuilder` the board material; `MainSceneBuilder` (menu Unruled/Build Main Scene) rebuilds `Main.unity` and puts it first in the build list. |
 | `Unruled.Tests.Core` | `Assets/Tests/Core/` | EditMode NUnit tests, one folder per Core folder. |
 
@@ -62,16 +62,20 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
 12. `FocusedRadarSystem`: scan timelines and the Tier-5 IAEA reveal; `ScanBelt`, `CancelScan`, `EcmJam`.
 13. `ResearchSystem`: retooling ends, storm telemetry; `StressTest`.
 14. `ShipyardSystem`: delivers finished `ShipBuildOrder`s; `BuildShips`, `Retrofit`, `MergeFleets`, `SplitFleet` (37: detaches ships with their share of the hold into a new fleet at the site).
-15. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
-16. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
-17. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
-18. `SystemDefenseEvaluator`: the System Citadel's garrison, shield bombardment, regeneration and fall.
-19. `VictoryEvaluator`: seats The Directorate when the Citadel falls.
+15. `RelayStationSystem`: hourly relay battery upkeep from the relay's site (unpaid or lost site → the relay goes dark);
+    `BuildRelay` (39: an own site pays 20 steel + 10 batteries for a relay station).
+16. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
+17. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
+18. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
+19. `SystemDefenseEvaluator`: the System Citadel's garrison, shield bombardment, regeneration and fall.
+20. `VictoryEvaluator`: seats The Directorate when the Citadel falls.
 
 `MiningSystem` also handles `RetractDrills`, `PauseDrills` and `BuildRig`, `RefinerySystem` handles `BuildRefinery`
 and `SetRefineryCap`, and
 `PlanetLifecycleSystem` handles `Terraform`. `SiteControlSystem` (`ClaimSite`), `JumpGateSystem` (`OpenJumpGate`) and
-`CargoTransferSystem` (`TransferCargo`) are not on the clock: they only handle commands.
+`CargoTransferSystem` (`TransferCargo`) and `NuclearStrikeSystem` (`NuclearStrike` 38: a Tier 5 fleet docked at a rival
+site fires a nuclear core from its hold → `PlanetLifecycleSystem.ApplyNuclearStrike`) are not on the clock: they only
+handle commands.
 
 In each tick, due commands run before the systems. Shared components (`Stockpile`) change only through their own
 methods, in this order (rule 4).
@@ -102,8 +106,9 @@ methods, in this order (rule 4).
   - `WtoMarketEngine` + `WtoOrder` / `ItemMarket` (VWAP ring) + `WtoBalance`; `IMarketRates` (bracket fees and
     escrow), `IMarketAccess` (Call-to-Arms bar), `ITradeSettlement`; `ContractCargo` and `StolenGoods` components.
 - **Military/**:
-  - `PlayerHq` (core base, capital convoy flag), `RelayStation`, `CapitalRelocation` (phase, convoy, cooldown,
-    paralysis).
+  - `PlayerHq` (core base, capital convoy flag), `RelayStation` (owned by `RelayStationSystem`), `CapitalRelocation`
+    (phase, convoy, cooldown, paralysis).
+  - `NuclearStrikeSystem`: the `NuclearStrike` command; the strike's effects stay in `PlanetLifecycleSystem`.
   - `ShipyardSystem` + `ShipyardBalance`: `ShipBuildOrder` queue at the core base and retrofits; it adds ships
     (`FleetUnit.Gain`), raises fleet tiers and merges two docked warship fleets of one tier (the Merge button).
   - `SiteControlSystem` + `SiteControlBalance`: the only writer of `SiteInfo.OwnerPlayerId` during play; a docked

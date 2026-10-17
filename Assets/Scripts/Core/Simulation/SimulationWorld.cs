@@ -250,6 +250,11 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Retrofit, shipyard);
             Commands.Register(CommandType.MergeFleets, shipyard);
             Commands.Register(CommandType.SplitFleet, shipyard);
+            var relays = new RelayStationSystem(Relays, Sites, Stockpiles, balance.Latency);
+            Clock.Register(relays);
+            Commands.Register(CommandType.BuildRelay, relays);
+            Commands.Register(CommandType.NuclearStrike, new NuclearStrikeSystem(
+                Fleets, FleetMotions, Sites, Stockpiles, Lifecycle, balance.Lifecycle));
             Commands.Register(CommandType.ClaimSite, new SiteControlSystem(
                 Sites, Players, Fleets, FleetMotions, FleetReadiness, FleetCombat, Stockpiles, balance.SiteControl));
             Commands.Register(CommandType.TransferCargo, new CargoTransferSystem(

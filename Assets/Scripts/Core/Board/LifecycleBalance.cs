@@ -14,11 +14,13 @@ namespace Unruled.Core.Board
         public readonly int TerraformNitrogen;
         public readonly int TerraformBiomass;
         public readonly int TerraformNuclearCores;
+        public readonly byte StrikeMinFleetTier; // the lowest fleet tech tier that may fire a nuclear core
+        public readonly int StrikeNuclearCores;
 
         public LifecycleBalance(
             int irradiationMinTicks, int irradiationMaxTicks, byte irradiationSolarLevel, int irradiatedEsiMilli,
             int terraformedEsiMilli, int terraformWater, int terraformNitrogen, int terraformBiomass,
-            int terraformNuclearCores)
+            int terraformNuclearCores, byte strikeMinFleetTier, int strikeNuclearCores)
         {
             if (irradiationMinTicks < 1) throw new ArgumentOutOfRangeException(nameof(irradiationMinTicks));
             if (irradiationMaxTicks < irradiationMinTicks) throw new ArgumentOutOfRangeException(nameof(irradiationMaxTicks));
@@ -30,6 +32,8 @@ namespace Unruled.Core.Board
             if (terraformNitrogen < 0) throw new ArgumentOutOfRangeException(nameof(terraformNitrogen));
             if (terraformBiomass < 0) throw new ArgumentOutOfRangeException(nameof(terraformBiomass));
             if (terraformNuclearCores < 0) throw new ArgumentOutOfRangeException(nameof(terraformNuclearCores));
+            if (strikeMinFleetTier < 1 || strikeMinFleetTier > 5) throw new ArgumentOutOfRangeException(nameof(strikeMinFleetTier));
+            if (strikeNuclearCores < 1) throw new ArgumentOutOfRangeException(nameof(strikeNuclearCores));
 
             IrradiationMinTicks = irradiationMinTicks;
             IrradiationMaxTicks = irradiationMaxTicks;
@@ -40,6 +44,8 @@ namespace Unruled.Core.Board
             TerraformNitrogen = terraformNitrogen;
             TerraformBiomass = terraformBiomass;
             TerraformNuclearCores = terraformNuclearCores;
+            StrikeMinFleetTier = strikeMinFleetTier;
+            StrikeNuclearCores = strikeNuclearCores;
         }
     }
 }

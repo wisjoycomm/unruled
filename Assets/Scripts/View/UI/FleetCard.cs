@@ -10,7 +10,8 @@ namespace Unruled.View.UI
     /// The selected fleet's card: ship classes, gun temperature against the release/lock thresholds, the hold's
     /// burnables, firepower (Ψ) and point defence (Ω), and its orders (Raid convoys toggles WTO piracy; Merge takes in
     /// another own warship fleet of its tier docked at the same site; Split detaches half of each ship class, rounded down,
-    /// into a new fleet there). Buttons only forward commands through
+    /// into a new fleet there; Nuclear strike fires the hold's nuclear core at the rival site a strike-tier fleet is docked at).
+    /// Buttons only forward commands through
     /// <see cref="CommandIssuer"/>; the order lands after signal latency and shows in the in-flight strip.
     /// </summary>
     public sealed class FleetCard
@@ -28,7 +29,7 @@ namespace Unruled.View.UI
         private readonly VisualElement _fill, _release, _lock;
         private readonly Label _ammo, _battery, _coolant, _fuel, _psi, _omega;
         private readonly Button[] _rof = new Button[3];
-        private readonly Button _move, _hold, _reverse, _vent, _raid, _merge, _split;
+        private readonly Button _move, _hold, _reverse, _vent, _raid, _merge, _split, _nuke;
 
         private SimulationWorld _sim;
         private int _playerId;
@@ -73,6 +74,7 @@ namespace Unruled.View.UI
             _raid = TopTelemetryHud.Require<Button>(root, "order-raid");
             _merge = TopTelemetryHud.Require<Button>(root, "order-merge");
             _split = TopTelemetryHud.Require<Button>(root, "order-split");
+            _nuke = TopTelemetryHud.Require<Button>(root, "order-nuke");
 
             _rof[0].clicked += () => Issue(CommandType.SetRof, (int)RofStance.Conservation50);
             _rof[1].clicked += () => Issue(CommandType.SetRof, (int)RofStance.Standard100);
@@ -84,6 +86,7 @@ namespace Unruled.View.UI
             _raid.clicked += () => Issue(CommandType.RaidConvoys, _raidShown == 1 ? 0 : 1);
             _merge.clicked += IssueMerge;
             _split.clicked += IssueSplit;
+            _nuke.clicked += IssueNuke;
         }
 
         public EntityId Fleet => _fleet;
@@ -247,6 +250,26 @@ namespace Unruled.View.UI
             command.ParamB = unit.EwShips / 2;
             command.ParamC = unit.SupplyTenders / 2;
             Send(command);
+        }
+
+        private void IssueNuke()
+        {
+            if (_sim == null || !_sim.Fleets.Has(_fleet))
+                return;
+            var lifecycle = _sim.Balance.Lifecycle;
+            if (_sim.Fleets.Get(_fleet).TechTier < lifecycle.StrikeMinFleetTier)
+                Refuse("REFUSED · NEEDS A TIER " + UiFormat.Number(lifecycle.StrikeMinFleetTier) + " FLEET");
+            else if (!_sim.Stockpiles.Get(_fleet).Has(ItemId.ItemNuclearCore, lifecycle.StrikeNuclearCores))
+                Refuse("REFUSED · NO NUCLEAR CORE IN THE HOLD");
+            else
+                Issue(CommandType.NuclearStrike, 0);
+        }
+
+        private void Refuse(string text)
+        {
+            _refusal = text;
+            _refusalUntil = _sim.Clock.CurrentTick + RefusalShowTicks;
+            _state.text = _refusal;
         }
 
         private void IssueHold()

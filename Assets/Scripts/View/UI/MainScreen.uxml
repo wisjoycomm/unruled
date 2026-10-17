@@ -264,6 +264,7 @@
                         <ui:Button name="order-raid" class="u-btn u-btn--secondary" text="Raid convoys: off" />
                         <ui:Button name="order-merge" class="u-btn u-btn--secondary" text="Merge fleet here" />
                         <ui:Button name="order-split" class="u-btn u-btn--secondary" text="Split in half" />
+                        <ui:Button name="order-nuke" class="u-btn u-btn--danger" text="Nuclear strike" />
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement name="side-tabs" class="seg side-tabs">
@@ -384,6 +385,7 @@
                         </ui:VisualElement>
                         <ui:VisualElement class="orders">
                             <ui:Button name="do-claim" class="u-btn" text="Claim site" />
+                            <ui:Button name="do-relay" class="u-btn u-btn--secondary" text="Build relay" />
                         </ui:VisualElement>
                         <ui:VisualElement class="item-picker">
                             <ui:Button name="item-prev" class="u-btn u-btn--secondary item-picker__step" text="‹" />

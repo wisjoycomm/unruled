@@ -357,14 +357,20 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// GDD §2.4 A and data sheet tab 04: 15 ticks at the core base, 35 per hop, 8 per relayed hop, x2 while the
         /// capital convoy is in transit. PROVISIONAL: an R3+ radio blackout on the target blocks orders (GDD §1.1 says
-        /// R3+ storms "lock communications"; laser comms that pierce them come with Tier 4 research).
+        /// R3+ storms "lock communications"; laser comms that pierce them come with Tier 4 research). PROVISIONAL (the
+        /// data sheet names "Relay Battery Upkeep" without numbers): a relay costs 20 steel + 10 batteries from its site and
+        /// burns 1 battery an hour there.
         /// </summary>
         public static LatencyBalance CreateLatencyBalance() => new LatencyBalance(
             baseTicks: 15,
             hopTicks: 35,
             relayedHopTicks: 8,
             relocationMultiplier: 2,
-            blackoutRadioLevel: 3);
+            blackoutRadioLevel: 3,
+            relayBuildSteel: 20,
+            relayBuildBatteries: 10,
+            relayUpkeepBatteries: 1,
+            relayUpkeepIntervalTicks: 3_600);
 
         /// <summary>
         /// PROVISIONAL (not in the GDD or data sheet): each system rolls every 10 min with a 25% chance of a new front;
@@ -395,7 +401,8 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// Data sheet tab 02: irradiated world = S4 radiation for 24–72h and ESI 0.00; terraforming lifts ESI to 0.60.
         /// PROVISIONAL: terraform cost of 100 water + 100 nitrogen + 100 biomass + 1 nuclear core (the sheet names
-        /// the items but not the amounts).
+        /// the items but not the amounts); a nuclear strike takes 1 core from a Tier 5 fleet (GDD §1.2 stage 4: Tier 5
+        /// nuclear ships).
         /// </summary>
         public static LifecycleBalance CreateLifecycleBalance() => new LifecycleBalance(
             irradiationMinTicks: 86_400,
@@ -406,7 +413,9 @@ namespace Unruled.Core.Simulation
             terraformWater: 100,
             terraformNitrogen: 100,
             terraformBiomass: 100,
-            terraformNuclearCores: 1);
+            terraformNuclearCores: 1,
+            strikeMinFleetTier: 5,
+            strikeNuclearCores: 1);
 
         /// <summary>
         /// GDD §2.2 A: 10-tick cycle, idle at 20% upkeep, brownout from G2.

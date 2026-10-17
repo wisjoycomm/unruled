@@ -34,7 +34,7 @@ namespace Unruled.View.UI
         private readonly Label _research, _ships, _gate, _loan, _sop, _baseFeedback;
         private readonly Label _siteName, _siteOwner, _item, _drills, _refinery, _cargo, _siteFeedback;
         private readonly Button _stressTest, _audit, _borrow, _repay, _build, _retrofit, _openGate, _sopPreset, _sopToggle;
-        private readonly Button _claim, _rig, _pause, _retract, _buildRefinery, _load, _unload, _route;
+        private readonly Button _claim, _relay, _rig, _pause, _retract, _buildRefinery, _load, _unload, _route;
 
         private SimulationWorld _sim;
         private int _playerId;
@@ -103,6 +103,7 @@ namespace Unruled.View.UI
             _sopPreset = TopTelemetryHud.Require<Button>(root, "sop-preset");
             _sopToggle = TopTelemetryHud.Require<Button>(root, "do-sop");
             _claim = TopTelemetryHud.Require<Button>(root, "do-claim");
+            _relay = TopTelemetryHud.Require<Button>(root, "do-relay");
             _rig = TopTelemetryHud.Require<Button>(root, "do-rig");
             _pause = TopTelemetryHud.Require<Button>(root, "do-pause");
             _retract = TopTelemetryHud.Require<Button>(root, "do-retract");
@@ -123,6 +124,7 @@ namespace Unruled.View.UI
             _sopPreset.clicked += StepPreset;
             _sopToggle.clicked += IssueStandingOrders;
             _claim.clicked += () => SendSite(CommandType.ClaimSite, _site, 0, 0);
+            _relay.clicked += () => SendSite(CommandType.BuildRelay, _site, 0, 0);
             _rig.clicked += IssueRig;
             _pause.clicked += IssuePause;
             _retract.clicked += IssueRetract;
@@ -392,6 +394,9 @@ namespace Unruled.View.UI
             }
             bool own = site.OwnerPlayerId == _playerId;
             _claim.SetEnabled(site.OwnerPlayerId >= 0 && !own);
+            bool lit = _sim.Relays.Has(_site);
+            _relay.text = lit ? "Relay lit" : "Build relay";
+            _relay.SetEnabled(own && !lit);
             if (_itemSlot != _cache[4])
                 UiFormat.Set(_item, ref _cache[4], _itemSlot, ContractAndMarketUI.ItemCode(Item));
 
