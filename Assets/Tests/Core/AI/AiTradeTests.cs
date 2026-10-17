@@ -91,6 +91,16 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void KeepsTheRawsItsCoreRefineriesTakeIn_Unsold()
+        {
+            var ai = _sim.Balance.Ai;
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawBiomass, ai.SellAbove + ai.SellBatch);
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemRations });
+
+            Assert.IsFalse(Find(AiAction.SellSurplus).HasValue, "rations are made from biomass");
+        }
+
+        [Test]
         public void SellsIntoARivalBid_AtItsPrice_OnlyWhenAFuelledConvoyCanReachIt()
         {
             var ai = _sim.Balance.Ai;

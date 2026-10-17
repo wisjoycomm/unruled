@@ -142,6 +142,20 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void AnOreMinedOnlyFromAMinedOutDeposit_IsNewOreAgain()
+        {
+            var deposit = _sim.World.Create();
+            _sim.Deposits.Add(deposit, new MineralDeposit { Site = _home, RawItem = ItemId.RawIron, SurfaceReserve = 1_000, RigCount = 2 });
+            Ore(_target, ItemId.RawIron);
+            Fleet(Me, _home, 4, loaded: true);
+            Assert.IsFalse(Find(Warlord, AiAction.Siege).HasValue, "iron is mined at home");
+
+            _sim.Deposits.Get(deposit).SurfaceReserve = 0;
+            _sim.Clock.Advance(_sim.Balance.Ai.ThinkIntervalTicks);
+            Assert.IsTrue(Find(Warlord, AiAction.Siege).HasValue, "the home deposit is mined out");
+        }
+
+        [Test]
         public void Sentinel_SettlesNeutralSitesOfItsHomeSystem_Only()
         {
             Ore(_target, ItemId.RawIron);

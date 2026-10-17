@@ -751,9 +751,10 @@ namespace Unruled.Core.AI
 
             ref var stock = ref _stockpiles.Get(player.CoreBase);
             long cash = _ledger.Balance(wallet);
+            int feeds = NeededRaws(in player);
             if (!_issuer.IsInFlight(player.PlayerId, CommandType.PlaceSellOrder, player.CoreBase) &&
-                (FindBidToFill(player, hq, ref stock, out var sellItem, out long ask, out long wanted) ||
-                 FindSurplusToList(player.PlayerId, hq, ref stock, tick, out sellItem, out ask, out wanted)))
+                (FindBidToFill(player, hq, ref stock, feeds, out var sellItem, out long ask, out long wanted) ||
+                 FindSurplusToList(player.PlayerId, hq, ref stock, feeds, tick, out sellItem, out ask, out wanted)))
             {
                 // The engine rounds the whole deposit down, so price the cap the same way.
                 long depositPercent = ask * _rates.EscrowRatePercent(player.PlayerId);
@@ -788,15 +789,20 @@ namespace Unruled.Core.AI
             }
         }
 
+        // A raw a core refinery or the next stress test takes in: kept, since a deposit runs out and its fuel is made from it.
+        private static bool Feeds(int feeds, ItemId item) =>
+            ItemIds.IsRaw(item) && (feeds & (1 << ItemIds.ToSlot(item))) != 0;
+
         // Core stock above a threshold and what the next stress test and the gate opening need.
         private int Surplus(int playerId, EntityId hq, ref Stockpile stock, ItemId item, int keep) =>
             stock.Get(item) - ProgressReserve(hq, item) - GateReserve(playerId, item) - keep;
 
-        // The best rival bid for an item the player has surplus of and isn't already selling, at a site a contract convoy
+        // The best rival bid for an item the player has surplus of, doesn't feed (see NeededRaws) and isn't already selling,
+        // at a site a contract convoy
         // can reach from the core base (else the contract is void) on fuel the core holds above its reserve (else the
         // convoy strands and the contract fails): sold into at its price.
-        private bool FindBidToFill(in PlayerHq player, EntityId hq, ref Stockpile stock, out ItemId item, out long price,
-            out long wanted)
+        private bool FindBidToFill(in PlayerHq player, EntityId hq, ref Stockpile stock, int feeds, out ItemId item,
+            out long price, out long wanted)
         {
             item = ItemId.None;
             price = 0;
@@ -807,7 +813,7 @@ namespace Unruled.Core.AI
                 if (bid.Side != OrderSide.Buy || bid.OwnerPlayerId == player.PlayerId || bid.PriceCents <= price)
                     continue;
                 int surplus = Surplus(player.PlayerId, hq, ref stock, bid.Item, _balance.FillAbove);
-                if (surplus <= 0 || HasOpenOrder(player.PlayerId, bid.Item, OrderSide.Sell) ||
+                if (surplus <= 0 || Feeds(feeds, bid.Item) || HasOpenOrder(player.PlayerId, bid.Item, OrderSide.Sell) ||
                     !_routes.TryPlan(player.CoreBase, bid.Site, WtoContractSystem.ConvoyTier, ref _route) ||
                     stock.Get(ItemId.ItemFuel) - _balance.CoreSupplyReserve < RouteFuel(in ContractConvoy))
                     continue;
@@ -818,9 +824,10 @@ namespace Unruled.Core.AI
             return wanted > 0;
         }
 
-        // With no listing of its own open, a batch of the first item in surplus by a whole batch, under the reference price.
-        private bool FindSurplusToList(int playerId, EntityId hq, ref Stockpile stock, long tick, out ItemId item, out long price,
-            out long wanted)
+        // With no listing of its own open, a batch of the first item in surplus by a whole batch that it doesn't feed, under
+        // the reference price.
+        private bool FindSurplusToList(int playerId, EntityId hq, ref Stockpile stock, int feeds, long tick, out ItemId item,
+            out long price, out long wanted)
         {
             item = ItemId.None;
             price = 0;
@@ -831,7 +838,7 @@ namespace Unruled.Core.AI
             for (int slot = 0; slot < ItemIds.Count; slot++)
             {
                 var candidate = ItemIds.FromSlot(slot);
-                if (Surplus(playerId, hq, ref stock, candidate, _balance.SellAbove) < _balance.SellBatch)
+                if (Feeds(feeds, candidate) || Surplus(playerId, hq, ref stock, candidate, _balance.SellAbove) < _balance.SellBatch)
                     continue;
                 item = candidate;
                 price = TradePrice(candidate, tick, -_balance.TradePricePercent);
@@ -1070,14 +1077,15 @@ namespace Unruled.Core.AI
 
         private bool IsStandingCitadel(EntityId site) => _citadels.Has(site) && _citadels.Get(site).FallenTick == 0;
 
-        // Bit per raw item slot the player has rigs on somewhere.
+        // Bit per raw item slot the player has rigs on somewhere with ore left (a mined-out deposit sends it looking again).
         private int MinedOres(int playerId)
         {
             int mask = 0;
             for (int d = 0; d < _deposits.Count; d++)
             {
                 ref var deposit = ref _deposits.At(d);
-                if (deposit.RigCount > 0 && _sites.Has(deposit.Site) && _sites.Get(deposit.Site).OwnerPlayerId == playerId)
+                if (deposit.RigCount > 0 && HasOre(in deposit) && _sites.Has(deposit.Site) &&
+                    _sites.Get(deposit.Site).OwnerPlayerId == playerId)
                     mask |= 1 << ItemIds.ToSlot(deposit.RawItem);
             }
             return mask;
