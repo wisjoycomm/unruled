@@ -391,7 +391,7 @@ namespace Unruled.Core.Simulation
         /// GDD §2.2 A: 10-tick cycle, idle at 20% upkeep, brownout from G2.
         /// PROVISIONAL: base upkeep 5 cents per cycle (18 credits an hour) and 1 battery per storm cycle are not in the GDD
         /// or data sheet; a refinery
-        /// costs 20 steel + 5 batteries, at most 8 per site; it idles while its site holds 5,000 of its output.
+        /// costs 20 steel + 5 batteries, at most 10 per site (one of each refined item); it idles while its site holds 5,000 of its output.
         /// </summary>
         public static RefineryBalance CreateRefineryBalance() => new RefineryBalance(
             cycleTicks: 10,
@@ -400,7 +400,7 @@ namespace Unruled.Core.Simulation
             idleUpkeepPercent: 20,
             brownoutMinGeoLevel: 2,
             batteryPerBrownoutCycle: 1,
-            maxRefineriesPerSite: 8,
+            maxRefineriesPerSite: 10,
             defaultStockCap: 5_000,
             buildCost: new[] { new ItemStack(ItemId.ItemSteel, 20), new ItemStack(ItemId.ItemBattery, 5) });
 

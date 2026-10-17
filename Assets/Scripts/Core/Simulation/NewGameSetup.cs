@@ -72,7 +72,8 @@ namespace Unruled.Core.Simulation
                     sim.Stockpiles.Add(site, default);
                 AddDeposits(sim, ref siteRng, site, sim.Sites.At(i).BaseEsiMilli, home: false);
             }
-            AddMissingRaws(sim, firstSite, contested, default, home: false);
+            var citadel = OuterOrbit(sim, contested);
+            AddMissingRaws(sim, firstSite, contested, default, citadel, home: false);
 
             int orbits = sim.Sites.Count - firstSite;
             for (int p = 0; p < participants; p++)
@@ -81,7 +82,6 @@ namespace Unruled.Core.Simulation
                 var far = SiteAtOrbit(sim, contested, (int)((long)p * orbits / participants));
                 sim.JumpGates.Add(sim.World.Create(), new JumpGate { OwnerPlayerId = firstPlayerId + p, HomeSite = home, FarSite = far });
             }
-            var citadel = OuterOrbit(sim, contested);
             for (int g = 0; g < sim.JumpGates.Count; g++)
                 if (sim.JumpGates.At(g).FarSite == citadel)
                     throw new InvalidOperationException($"{participants} participants leave no free orbit for the Citadel.");
@@ -135,7 +135,7 @@ namespace Unruled.Core.Simulation
                 }
             }
             if (bestEsi < 0) throw new InvalidOperationException($"System {clusterId} generated no sites.");
-            AddMissingRaws(sim, firstSite, clusterId, coreBase, home: true);
+            AddMissingRaws(sim, firstSite, clusterId, coreBase, default, home: true);
 
             sim.Sites.Get(coreBase).OwnerPlayerId = playerId;
             var hq = sim.CreatePlayer(playerId, coreBase);
@@ -186,24 +186,26 @@ namespace Unruled.Core.Simulation
             return new NewGame(hq, coreBase, fleet);
         }
 
-        // GDD §1.2: a home system lacks only the raw items excluded at home; the contested cluster lacks none. Each raw item
-        // with an ESI window that the roll left out gets a deposit on the site nearest that window (lowest orbit on a
-        // tie), never the core base unless it is the only site.
-        private static void AddMissingRaws(SimulationWorld sim, int firstSite, int clusterId, EntityId coreBase, bool home)
+        // GDD §1.2: a home system lacks only the raw items excluded at home; the contested cluster lacks none outside the
+        // Citadel (GDD §0: uranium is mined before THE SYSTEM falls). Each raw item with an ESI window that the roll left
+        // out gets a deposit on the site nearest that window (lowest orbit on a tie), never the core base unless it is
+        // the only site, and never the Citadel.
+        private static void AddMissingRaws(SimulationWorld sim, int firstSite, int clusterId, EntityId coreBase,
+            EntityId citadel, bool home)
         {
             var rules = sim.Balance.NewGame;
             for (int slot = 0; slot < ItemIds.RawCount; slot++)
             {
                 var raw = ItemIds.FromSlot(slot);
                 ref readonly var item = ref sim.Balance.Recipes.GetItem(raw);
-                if ((home && rules.IsExcludedAtHome(raw)) || !item.HasPreferredEsi || HasDeposit(sim, clusterId, raw))
+                if ((home && rules.IsExcludedAtHome(raw)) || !item.HasPreferredEsi || HasDeposit(sim, clusterId, raw, citadel))
                     continue;
                 EntityId best = default;
                 int bestDistance = int.MaxValue;
                 for (int i = firstSite; i < sim.Sites.Count; i++)
                 {
                     var site = sim.Sites.EntityAt(i);
-                    if (site == coreBase && sim.Sites.Count - firstSite > 1)
+                    if ((site == coreBase && sim.Sites.Count - firstSite > 1) || site == citadel)
                         continue;
                     int esi = sim.Sites.At(i).BaseEsiMilli;
                     int distance = esi < item.PreferredEsiMinMilli ? item.PreferredEsiMinMilli - esi
@@ -226,12 +228,12 @@ namespace Unruled.Core.Simulation
             }
         }
 
-        private static bool HasDeposit(SimulationWorld sim, int clusterId, ItemId raw)
+        private static bool HasDeposit(SimulationWorld sim, int clusterId, ItemId raw, EntityId except)
         {
             for (int d = 0; d < sim.Deposits.Count; d++)
             {
                 ref var deposit = ref sim.Deposits.At(d);
-                if (deposit.RawItem == raw && sim.Sites.Get(deposit.Site).ClusterId == clusterId)
+                if (deposit.RawItem == raw && deposit.Site != except && sim.Sites.Get(deposit.Site).ClusterId == clusterId)
                     return true;
             }
             return false;

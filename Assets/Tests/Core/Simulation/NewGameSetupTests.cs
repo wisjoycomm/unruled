@@ -59,9 +59,9 @@ namespace Unruled.Tests.Core.Simulation
         }
 
         [Test]
-        public void Create_HomesHoldEveryOtherRawItem_TheContestedClusterHoldsAll()
+        public void Create_HomesHoldEveryOtherRawItem_TheContestedClusterHoldsAll_OutsideTheCitadel()
         {
-            foreach (ulong seed in new ulong[] { 1, 1851, 2468, 3702 })
+            foreach (ulong seed in new ulong[] { 1, 1851, 2468, 3702, 2026 })
                 AssertEveryClusterHoldsItsRawItems(seed);
         }
 
@@ -81,7 +81,8 @@ namespace Unruled.Tests.Core.Simulation
                         continue;
                     bool found = false;
                     for (int d = 0; d < sim.Deposits.Count && !found; d++)
-                        found = sim.Deposits.At(d).RawItem == raw && sim.Sites.Get(sim.Deposits.At(d).Site).ClusterId == cluster;
+                        found = sim.Deposits.At(d).RawItem == raw && !sim.Citadels.Has(sim.Deposits.At(d).Site) &&
+                                sim.Sites.Get(sim.Deposits.At(d).Site).ClusterId == cluster;
                     Assert.IsTrue(found, $"seed {seed}: cluster {cluster} lacks {raw}");
                 }
             }

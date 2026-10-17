@@ -72,3 +72,4 @@
 - 2026-10-17 - Claude - World gen: home systems hold every raw item except tungsten/uranium and the contested cluster holds all of them; test over 4 seeds.
 - 2026-10-17 - Claude - AI expansion: Sentinel settles its home system, needed-ore targeting, outpost development trips, upkeep reload hysteresis, 3,000 fuel loads, fuelled bid fills; soak now reaches Tier 4 with 3 gates open; tests.
 - 2026-10-17 - Claude - AI builds the stress-test refinery first, fuels far claims, every AI opens its gate, scans keep back gate and claim batteries; soak: 17 of 20 rivals reach Tier 4 over 5 seeds.
+- 2026-10-17 - Claude - World gen keeps every contested raw item outside the Citadel; refinery cap 10 per site; soak: first rival reaches Tier 5.
