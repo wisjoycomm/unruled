@@ -38,7 +38,8 @@ namespace Unruled.Core.Simulation
         RaidConvoys = 32,
         SellToSystem = 33,
         BuyFromSystem = 34,
-        MergeFleets = 35
+        MergeFleets = 35,
+        SetStandingOrders = 36
     }
 
     /// <summary>A player or AI command that takes effect after signal latency. Shared by players and the Server 2 AI.</summary>

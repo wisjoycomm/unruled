@@ -11,7 +11,8 @@ namespace Unruled.View.UI
     /// <summary>
     /// The side column's tabs (MARKET, BASE, SITE) and the two operations panels. BASE: research and the stress test,
     /// the audit, THE SYSTEM's loan (debt, due date, borrow and repay in steps), the shipyard (class x count at the
-    /// research tier, retrofit of the selected fleet) and the jump gate.
+    /// research tier, retrofit of the selected fleet), the jump gate and standing orders (Auto-SOP: hand the empire to the
+    /// Utility AI under a picked preset, or take it back).
     /// SITE (the selected site, the core base until one is picked): claim, an item picker, drills (rig, pause/resume,
     /// retract), refineries (build, output cap) and the selected fleet's cargo and convoy route. Buttons only forward
     /// commands through <see cref="CommandIssuer"/>; the feedback line says when an order lands or why it was refused.
@@ -30,9 +31,9 @@ namespace Unruled.View.UI
         private readonly Button[] _shipClass = new Button[4];
         private readonly Button[] _shipCount = new Button[3];
         private readonly Button[] _caps = new Button[3];
-        private readonly Label _research, _ships, _gate, _loan, _baseFeedback;
+        private readonly Label _research, _ships, _gate, _loan, _sop, _baseFeedback;
         private readonly Label _siteName, _siteOwner, _item, _drills, _refinery, _cargo, _siteFeedback;
-        private readonly Button _stressTest, _audit, _borrow, _repay, _build, _retrofit, _openGate;
+        private readonly Button _stressTest, _audit, _borrow, _repay, _build, _retrofit, _openGate, _sopPreset, _sopToggle;
         private readonly Button _claim, _rig, _pause, _retract, _buildRefinery, _load, _unload, _route;
 
         private SimulationWorld _sim;
@@ -44,8 +45,9 @@ namespace Unruled.View.UI
         private int _classIndex;
         private int _countIndex;
         private int _itemSlot;
+        private int _presetIndex = 1; // Industrialist_Trader
         private bool _drillsPaused;
-        private readonly long[] _cache = new long[10];
+        private readonly long[] _cache = new long[11];
 
         public OperationsPanel(VisualElement root)
         {
@@ -81,6 +83,7 @@ namespace Unruled.View.UI
             _ships = TopTelemetryHud.Require<Label>(root, "ship-status");
             _gate = TopTelemetryHud.Require<Label>(root, "gate-status");
             _loan = TopTelemetryHud.Require<Label>(root, "loan-status");
+            _sop = TopTelemetryHud.Require<Label>(root, "sop-status");
             _baseFeedback = TopTelemetryHud.Require<Label>(root, "base-feedback");
             _siteName = TopTelemetryHud.Require<Label>(root, "site-name");
             _siteOwner = TopTelemetryHud.Require<Label>(root, "site-owner");
@@ -97,6 +100,8 @@ namespace Unruled.View.UI
             _build = TopTelemetryHud.Require<Button>(root, "do-build-ships");
             _retrofit = TopTelemetryHud.Require<Button>(root, "do-retrofit");
             _openGate = TopTelemetryHud.Require<Button>(root, "do-open-gate");
+            _sopPreset = TopTelemetryHud.Require<Button>(root, "sop-preset");
+            _sopToggle = TopTelemetryHud.Require<Button>(root, "do-sop");
             _claim = TopTelemetryHud.Require<Button>(root, "do-claim");
             _rig = TopTelemetryHud.Require<Button>(root, "do-rig");
             _pause = TopTelemetryHud.Require<Button>(root, "do-pause");
@@ -115,6 +120,8 @@ namespace Unruled.View.UI
             _build.clicked += IssueBuild;
             _retrofit.clicked += () => SendBase(CommandType.Retrofit, _fleet, 0);
             _openGate.clicked += IssueOpenGate;
+            _sopPreset.clicked += StepPreset;
+            _sopToggle.clicked += IssueStandingOrders;
             _claim.clicked += () => SendSite(CommandType.ClaimSite, _site, 0, 0);
             _rig.clicked += IssueRig;
             _pause.clicked += IssuePause;
@@ -236,6 +243,47 @@ namespace Unruled.View.UI
             if (gateKey != _cache[2])
                 UiFormat.Set(_gate, ref _cache[2], gateKey, GateText(gateKey));
             _openGate.SetEnabled(hasGate && !gate.IsOpen && unlocked);
+            RefreshStandingOrders();
+        }
+
+        private bool IsAuto => _sim.AiControllers.Has(_hq);
+
+        private void RefreshStandingOrders()
+        {
+            bool auto = IsAuto;
+            int archetype = auto ? _sim.AiControllers.Get(_hq).Archetype : 0;
+            bool pending = _sim.Issuer.IsInFlight(_playerId, CommandType.SetStandingOrders, CoreBase);
+            long key = archetype | (pending ? 1L << 8 : 0) | (long)_presetIndex << 16;
+            if (key == _cache[10])
+                return;
+            UiFormat.Set(_sop, ref _cache[10], key, (auto ? "AUTO · " + PresetName(archetype) : "OFF · YOU COMMAND") +
+                (pending ? " · ORDER SENT" : ""));
+            _sopPreset.text = PresetName(_presetIndex + 1);
+            _sopPreset.SetEnabled(!auto);
+            _sopToggle.text = auto ? "Take command" : "Hand over";
+            _sopToggle.SetEnabled(!pending);
+        }
+
+        // "Industrialist_Trader" -> "INDUSTRIALIST"
+        private string PresetName(int archetype)
+        {
+            string code = _sim.Balance.Ai.Preset((byte)archetype).Code;
+            int cut = code.IndexOf('_');
+            return (cut > 0 ? code.Substring(0, cut) : code).ToUpperInvariant();
+        }
+
+        private void StepPreset()
+        {
+            if (_sim == null)
+                return;
+            _presetIndex = (_presetIndex + 1) % _sim.Balance.Ai.Count;
+            Refresh();
+        }
+
+        private void IssueStandingOrders()
+        {
+            if (_sim != null)
+                SendBase(CommandType.SetStandingOrders, CoreBase, IsAuto ? 0 : _presetIndex + 1);
         }
 
         private void RefreshLoan(long tick)

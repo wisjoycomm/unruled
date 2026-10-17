@@ -363,6 +363,16 @@
                             <ui:Button name="do-open-gate" class="u-btn" text="Open gate" />
                         </ui:VisualElement>
                     </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:Label class="gauge__label" text="STANDING ORDERS" />
+                            <ui:Label name="sop-status" class="section-meta" text="OFF · YOU COMMAND" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="sop-preset" class="u-btn u-btn--secondary" text="Industrialist" />
+                            <ui:Button name="do-sop" class="u-btn" text="Hand over" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
                     <ui:Label name="base-feedback" class="section-meta ops__feedback" text="" />
                 </ui:ScrollView>
                 <ui:ScrollView name="ops-site" class="ops" style="display: none;">

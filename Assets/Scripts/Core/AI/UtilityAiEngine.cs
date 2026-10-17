@@ -67,7 +67,9 @@ namespace Unruled.Core.AI
     /// <summary>
     /// Owns <see cref="AiController"/>: the Utility AI shared by offline players' standing orders and PvE bots
     /// (GDD §2.5). It is not on the sim clock: the host calls <see cref="Think"/> (Server 2), and it changes the
-    /// world only through <see cref="CommandIssuer"/>, with the same latency as a player.
+    /// world only through <see cref="CommandIssuer"/>, with the same latency as a player. A player hands its empire to
+    /// standing orders (Auto-SOP) and takes it back with <see cref="CommandType.SetStandingOrders"/> (ParamA = tab-06
+    /// archetype, 0 = back in the player's hands), which reaches it through the clock like any order.
     /// Every think interval each decision maker scores its options with Dave Mark's IAUS,
     /// Score = PresetWeight x (product of m considerations)^(1/m), all in milli-units, and issues its best one:
     /// <list type="bullet">
@@ -108,7 +110,7 @@ namespace Unruled.Core.AI
     /// LineAlpha plus EW ships x EwBeta (PROVISIONAL). Orders already in effect score 0; an order of the same type for
     /// the same target still in signal latency is not sent again.
     /// </summary>
-    public sealed class UtilityAiEngine
+    public sealed class UtilityAiEngine : ICommandHandler
     {
         private const int Full = 1000;
         private const int Threshold = 500;
@@ -256,6 +258,30 @@ namespace Unruled.Core.AI
         {
             if (_controllers.Has(hq))
                 _controllers.Remove(hq);
+        }
+
+        public void Handle(in DelayedPlayerCommand command, long tick)
+        {
+            if (command.CommandType != CommandType.SetStandingOrders)
+                throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
+            if (!TryFindHq(command.PlayerId, out var hq))
+                return;
+            if (command.ParamA == 0)
+                Release(hq);
+            else if (command.ParamA > 0 && command.ParamA <= byte.MaxValue && _balance.IsValid((byte)command.ParamA))
+                Assign(hq, (byte)command.ParamA);
+        }
+
+        private bool TryFindHq(int playerId, out EntityId hq)
+        {
+            for (int i = 0; i < _players.Count; i++)
+                if (_players.At(i).PlayerId == playerId)
+                {
+                    hq = _players.EntityAt(i);
+                    return true;
+                }
+            hq = default;
+            return false;
         }
 
         /// <summary>Runs one think on ticks that are a multiple of the interval; returns the orders tried.</summary>
