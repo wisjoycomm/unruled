@@ -156,6 +156,7 @@ namespace Unruled.Core.AI
         private readonly FleetBalance _fleetBalance;
         private readonly WtoBalance _wtoBalance;
         private readonly LedgerBalance _ledgerBalance;
+        private readonly CitadelBalance _citadelBalance;
 
         private FleetRoute _route;
 
@@ -221,6 +222,7 @@ namespace Unruled.Core.AI
             _fleetBalance = config.Fleets;
             _wtoBalance = config.Wto;
             _ledgerBalance = config.Ledger;
+            _citadelBalance = config.Citadel;
         }
 
         /// <summary>The orders tried by the last think that ran, in decision order.</summary>
@@ -337,11 +339,11 @@ namespace Unruled.Core.AI
                 else if (IsBattleFleet(in unit))
                 {
                     // A full battle line that can't take the Citadel yet waits mothballed, at a fifth of the upkeep. It
-                    // only sets out with the ammo it would otherwise turn back for.
+                    // only sets out with the whole siege load: run dry under the shield, it dies to the next garrison.
                     bool mothballed = _readiness.Has(fleet) && _readiness.Get(fleet).IsMothballed;
                     int citadelEdge = 0;
                     bool canGo = preset.SiegeConquestWeight > 0 &&
-                                 hold.Get(ItemId.ItemAmmo) >= (long)unit.LineShips * _balance.ResupplyAmmoPerLineShip &&
+                                 hold.Get(ItemId.ItemAmmo) >= AmmoToLoad(preset, in unit) &&
                                  FindCitadel(player, in unit, hold.Get(ItemId.ItemFuel), out citadelTarget, out citadelEdge);
                     if (canGo && mothballed && !_issuer.IsInFlight(player.PlayerId, CommandType.Activate, fleet))
                         Consider(AiAction.Activate, Score(preset.SiegeConquestWeight, citadelEdge), ref best, ref bestScore);
@@ -473,8 +475,8 @@ namespace Unruled.Core.AI
                     TryLoad(ref stock, hq, ref hold, upkeep[k].Item, target, ref item, ref quantity, ref shortage))
                     return true;
             }
-            if (TryLoad(ref stock, hq, ref hold, ItemId.ItemAmmo, (long)unit.LineShips * _balance.LoadAmmoPerLineShip,
-                    ref item, ref quantity, ref shortage) ||
+            if (TryLoad(ref stock, hq, ref hold, ItemId.ItemAmmo, AmmoToLoad(preset, in unit), ref item, ref quantity,
+                    ref shortage) ||
                 (unit.EwShips > 0 && TryLoad(ref stock, hq, ref hold, ItemId.ItemBattery,
                     EwBatteries(in unit) + (SettleWeight(preset) > 0 ? ExpansionLoad(ItemId.ItemBattery) : 0), ref item,
                     ref quantity, ref shortage)) ||
@@ -498,6 +500,24 @@ namespace Unruled.Core.AI
                     return true;
             }
             return false;
+        }
+
+        // The standard ammo load, plus for an assaulting preset's battle fleet the ammo to bombard the weakest standing
+        // Citadel's shield down: a fleet that turns back with the shield up sees it regenerate.
+        private long AmmoToLoad(AiPreset preset, in FleetUnit unit)
+        {
+            long ammo = (long)unit.LineShips * _balance.LoadAmmoPerLineShip;
+            if (!IsBattleFleet(in unit) || preset.SiegeConquestWeight == 0 || unit.LineShips == 0)
+                return ammo;
+            long shield = long.MaxValue;
+            for (int c = 0; c < _citadels.Count; c++)
+                if (_citadels.At(c).FallenTick == 0)
+                    shield = Math.Min(shield, _citadels.At(c).Integrity);
+            if (shield == long.MaxValue)
+                return ammo;
+            long perCheck = (long)unit.LineShips * _citadelBalance.BombardPerLineShip(unit.TechTier);
+            long checks = (shield + perCheck - 1) / perCheck;
+            return ammo + checks * unit.LineShips * _citadelBalance.AmmoPerLineShip;
         }
 
         // The standard fuel load, or a round trip to where the fleet goes next if that is further: the site it would

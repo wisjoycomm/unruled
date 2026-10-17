@@ -390,6 +390,7 @@ namespace Unruled.Tests.Core.AI
         {
             MakeTargetAnUnguardedCitadel();
             var fleet = Fleet(Me, _home, 4, loaded: true, tier: 3);
+            SiegeLoad(fleet);
             ref var hold = ref _sim.Stockpiles.Get(fleet);
             int ammo = hold.Get(ItemId.ItemAmmo);
             hold.Add(ItemId.ItemAmmo, -ammo);
@@ -406,6 +407,24 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void ABattleFleet_LoadsTheAmmoToBombardTheCitadelShieldDown_OnTopOfItsStandardLoad()
+        {
+            MakeTargetAnUnguardedCitadel();
+            var fleet = Fleet(Me, _home, 4, loaded: true, tier: 5);
+            _sim.Stockpiles.Get(_home).Add(ItemId.ItemAmmo, 10_000);
+            var citadel = _sim.Balance.Citadel;
+            long checks = (citadel.MaxIntegrity + 4 * citadel.BombardPerLineShip(5) - 1) / (4 * citadel.BombardPerLineShip(5));
+
+            Assert.IsTrue(Find(Warlord, AiAction.LoadCargo).HasValue, "a shield left standing regenerates");
+            var load = Pending(CommandType.TransferCargo);
+            Assert.AreEqual((int)ItemId.ItemAmmo, load.Value.ParamA);
+            Assert.AreEqual(4 * _sim.Balance.Ai.LoadAmmoPerLineShip + checks * 4 * citadel.AmmoPerLineShip, load.Value.ParamB);
+
+            RunPendingOrders();
+            Assert.IsTrue(Find(Warlord, AiAction.AssaultCitadel).HasValue, "full, so it sets out");
+        }
+
+        [Test]
         public void ABattleFleetNeverSettles_AndAFullLineThatCannotTakeTheCitadelMothballs()
         {
             Ore(_target, ItemId.RawIron);
@@ -416,6 +435,18 @@ namespace Unruled.Tests.Core.AI
             Assert.AreEqual(fleet, order.Value.Subject);
             RunPendingOrders();
             Assert.IsTrue(_sim.FleetReadiness.Get(fleet).IsMothballed);
+        }
+
+        // Tops the hold up to the standard ammo load plus what bombarding the target Citadel's shield down takes.
+        private void SiegeLoad(EntityId fleet)
+        {
+            var unit = _sim.Fleets.Get(fleet);
+            var citadel = _sim.Balance.Citadel;
+            long perCheck = (long)unit.LineShips * citadel.BombardPerLineShip(unit.TechTier);
+            long checks = (_sim.Citadels.Get(_target).Integrity + perCheck - 1) / perCheck;
+            long ammo = (long)unit.LineShips * _sim.Balance.Ai.LoadAmmoPerLineShip + checks * unit.LineShips * citadel.AmmoPerLineShip;
+            ref var hold = ref _sim.Stockpiles.Get(fleet);
+            hold.Add(ItemId.ItemAmmo, (int)ammo - hold.Get(ItemId.ItemAmmo));
         }
 
         // The target becomes THE SYSTEM's Citadel; its garrison is struck down and not due back during the test.
@@ -433,6 +464,7 @@ namespace Unruled.Tests.Core.AI
         {
             MakeTargetAnUnguardedCitadel();
             var fleet = Fleet(Me, _home, 4, loaded: true, tier: 3);
+            SiegeLoad(fleet);
 
             var order = Find(Warlord, AiAction.AssaultCitadel);
             Assert.IsTrue(order.HasValue);
@@ -451,7 +483,7 @@ namespace Unruled.Tests.Core.AI
         public void NobodyAssaultsTheCitadel_BelowTheTier_OrAgainstAStrongerGarrison()
         {
             _sim.Defense.CreateCitadel(_target);
-            Fleet(Me, _home, 4, loaded: true, tier: 3);
+            SiegeLoad(Fleet(Me, _home, 4, loaded: true, tier: 3));
             Assert.IsFalse(Find(Warlord, AiAction.AssaultCitadel).HasValue, "the garrison outguns 4 ships");
 
             SetUp();
@@ -460,6 +492,7 @@ namespace Unruled.Tests.Core.AI
             Assert.IsFalse(Find(Warlord, AiAction.AssaultCitadel).HasValue, "tier 2");
 
             _sim.Fleets.Get(fleet).TechTier = 3;
+            SiegeLoad(fleet);
             Assert.IsFalse(Find(Sentinel, AiAction.AssaultCitadel).HasValue, "the Sentinel never besieges");
             Assert.IsTrue(Find(Warlord, AiAction.AssaultCitadel).HasValue);
         }

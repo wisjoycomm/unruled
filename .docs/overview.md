@@ -34,7 +34,7 @@ deposits; convoy fleets get routes to unserved outposts. Per deposit it pauses d
 cap, retracts them when outgunned and rebuilds bare ones; per player it joins the audit, builds convoys and refineries,
 scans, stress-tests, opens its jump gate and trades on the WTO, keeping back the next stress test's cost; from the
 Citadel assault tier its shipyard refits, merges and builds one battle fleet that only waits at home (mothballed once full) or
-assaults the Citadel with ammo aboard (every trip takes the toll-free route when the wallet can't cover the tolls), while lower-tier fleets settle and raid. An order still in signal
+assaults the Citadel with the whole siege load aboard (its standard ammo plus what bombarding the shield down takes) (every trip takes the toll-free route when the wallet can't cover the tolls), while lower-tier fleets settle and raid. An order still in signal
 latency is not sent again (`CommandIssuer.IsInFlight`). `NoaaForecast` (`Forecast`) is a read-only query for the views.
 `NewGameSetup.Create(sim, playerId)` lays out a new game from `NewGameBalance`: a home system per participant,
 stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a starting fleet and AI rivals.
