@@ -90,7 +90,7 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
-        public void SellsIntoARivalBid_AtItsPrice_OnlyWhenAConvoyCanReachIt()
+        public void SellsIntoARivalBid_AtItsPrice_OnlyWhenAFuelledConvoyCanReachIt()
         {
             var ai = _sim.Balance.Ai;
             var rivalSite = _sim.World.Create();
@@ -109,6 +109,10 @@ namespace Unruled.Tests.Core.AI
             _sim.Starlanes.Add(lane, new StarlaneEdge { SiteA = _home, SiteB = rivalSite, Tier = StarlaneTier.StaHighway, Length = 200 });
             _sim.LaneWeather.Add(lane, default);
             _sim.Graph.Rebuild(_sim.Starlanes);
+            _sim.Clock.Advance(1);
+            Assert.IsFalse(Find(AiAction.SellSurplus).HasValue, "no fuel above the core reserve for the convoy");
+
+            _sim.Stockpiles.Get(_home).Add(ItemId.ItemFuel, ai.CoreSupplyReserve + 1_000);
             _sim.Clock.Advance(1);
             Assert.IsTrue(Find(AiAction.SellSurplus).HasValue);
             DelayedPlayerCommand sell = default;

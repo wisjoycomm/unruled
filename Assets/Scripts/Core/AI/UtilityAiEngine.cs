@@ -39,7 +39,8 @@ namespace Unruled.Core.AI
         AssaultCitadel = 20,
         SellSurplus = 21,
         BuyShortfall = 22,
-        CancelOrder = 23
+        CancelOrder = 23,
+        DevelopOutpost = 24
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -298,7 +299,8 @@ namespace Unruled.Core.AI
 
             bool docked = motion.Lane.IsNull && !motion.Site.IsNull && state.EngagedUntilTick <= tick;
             bool ready = docked && (!_readiness.Has(fleet) || _readiness.Get(fleet).CanAct(tick));
-            EntityId raidTarget = default, siegeTarget = default, citadelTarget = default, rigDeposit = default;
+            EntityId raidTarget = default, siegeTarget = default, citadelTarget = default, developTarget = default,
+                rigDeposit = default;
             var loadItem = ItemId.None;
             int loadQuantity = 0;
             if (docked && motion.Site == player.CoreBase)
@@ -313,11 +315,14 @@ namespace Unruled.Core.AI
                 {
                     int fuel = hold.Get(ItemId.ItemFuel);
                     if (preset.StealthRaidWeight > 0 &&
-                        FindTarget(player, in unit, fuel, raid: true, out raidTarget, out int raidEdge))
+                        FindTarget(player, in unit, fuel, raid: true, homeOnly: false, out raidTarget, out int raidEdge))
                         Consider(AiAction.StealthRaid, Score(preset.StealthRaidWeight, raidEdge), ref best, ref bestScore);
-                    if (preset.SiegeConquestWeight > 0 && CarriesClaimCost(ref hold) &&
-                        FindTarget(player, in unit, fuel, raid: false, out siegeTarget, out int siegeEdge))
-                        Consider(AiAction.Siege, Score(preset.SiegeConquestWeight, siegeEdge), ref best, ref bestScore);
+                    if (SettleWeight(preset) > 0 && CarriesClaimCost(ref hold) &&
+                        FindTarget(player, in unit, fuel, raid: false, homeOnly: IsHomeSettler(preset), out siegeTarget,
+                            out int siegeEdge))
+                        Consider(AiAction.Siege, Score(SettleWeight(preset), siegeEdge), ref best, ref bestScore);
+                    if (SettleWeight(preset) > 0 && FindOutpostToDevelop(player, in unit, fuel, ref hold, out developTarget))
+                        Consider(AiAction.DevelopOutpost, Score(SettleWeight(preset), Full), ref best, ref bestScore);
                     if (preset.SiegeConquestWeight > 0 && FindCitadel(player, in unit, fuel, out citadelTarget, out int citadelEdge))
                         Consider(AiAction.AssaultCitadel, Score(preset.SiegeConquestWeight, citadelEdge), ref best, ref bestScore);
                 }
@@ -326,19 +331,20 @@ namespace Unruled.Core.AI
             else if (ready && IsAway(motion.Site, player.PlayerId) && Power(motion.Site, player.PlayerId, mine: false) == 0 &&
                      !IsStandingCitadel(motion.Site))
             {
-                if (preset.SiegeConquestWeight > 0 && IsClaimable(motion.Site, player.PlayerId) && CarriesClaimCost(ref hold))
-                    Consider(AiAction.ClaimSite, Score(preset.SiegeConquestWeight, Full), ref best, ref bestScore);
+                if (SettleWeight(preset) > 0 && IsClaimable(motion.Site, player.PlayerId) && CarriesClaimCost(ref hold) &&
+                    (!IsHomeSettler(preset) || IsNeutralAtHome(motion.Site, player.CoreBase)))
+                    Consider(AiAction.ClaimSite, Score(SettleWeight(preset), Full), ref best, ref bestScore);
                 else
                     Consider(AiAction.ReturnHome, Score(preset.ResupplyLogisticsWeight, Threshold), ref best, ref bestScore);
             }
             else if (ready && motion.Site != player.CoreBase && IsOwnSite(motion.Site, player.PlayerId) &&
                      Power(motion.Site, player.PlayerId, mine: false) == 0)
             {
-                var develop = preset.SiegeConquestWeight > 0
-                    ? PickDevelopment(motion.Site, ref hold, out rigDeposit, out loadItem, out loadQuantity)
+                var develop = SettleWeight(preset) > 0
+                    ? PickDevelopment(in player, motion.Site, ref hold, out rigDeposit, out loadItem, out loadQuantity)
                     : default(AiAction);
                 if (develop != default)
-                    Consider(develop, Score(preset.SiegeConquestWeight, Full), ref best, ref bestScore);
+                    Consider(develop, Score(SettleWeight(preset), Full), ref best, ref bestScore);
                 else if (hold.Get(ItemId.ItemFuel) > 0)
                     Consider(AiAction.ReturnHome, Score(preset.ResupplyLogisticsWeight, Threshold), ref best, ref bestScore);
             }
@@ -368,6 +374,10 @@ namespace Unruled.Core.AI
                 case AiAction.AssaultCitadel:
                     command.CommandType = CommandType.Move;
                     command.ParamEntity = citadelTarget;
+                    break;
+                case AiAction.DevelopOutpost:
+                    command.CommandType = CommandType.Move;
+                    command.ParamEntity = developTarget;
                     break;
                 case AiAction.ClaimSite:
                     command.CommandType = CommandType.ClaimSite;
@@ -404,19 +414,23 @@ namespace Unruled.Core.AI
             if (!_stockpiles.Has(core))
                 return false;
             ref var stock = ref _stockpiles.Get(core);
+            // Upkeep drains the hold even while docked, so it is topped up only below half the target; else the fleet
+            // would reload every interval and never leave.
             var upkeep = _fleetBalance.Tier(unit.TechTier).UpkeepPerShipHour;
             for (int k = 0; k < upkeep.Length; k++)
-                if (TryLoad(ref stock, hq, ref hold, upkeep[k].Item,
-                        (long)FleetUpkeepSystem.Due(unit.TotalShips, upkeep[k].Milli, 0) * _balance.LoadUpkeepIntervals,
-                        ref item, ref quantity, ref shortage))
+            {
+                long target = (long)FleetUpkeepSystem.Due(unit.TotalShips, upkeep[k].Milli, 0) * _balance.LoadUpkeepIntervals;
+                if (hold.Get(upkeep[k].Item) * 2 < target &&
+                    TryLoad(ref stock, hq, ref hold, upkeep[k].Item, target, ref item, ref quantity, ref shortage))
                     return true;
+            }
             if (TryLoad(ref stock, hq, ref hold, ItemId.ItemAmmo, (long)unit.LineShips * _balance.LoadAmmoPerLineShip,
                     ref item, ref quantity, ref shortage) ||
                 TryLoad(ref stock, hq, ref hold, ItemId.ItemFuel, _balance.LoadFuel, ref item, ref quantity, ref shortage) ||
                 (telemetry && TryLoad(ref stock, hq, ref hold, ItemId.ItemMicrochip, _researchBalance.TelemetryMinMicrochips,
                     ref item, ref quantity, ref shortage)))
                 return true;
-            if (preset.SiegeConquestWeight == 0)
+            if (SettleWeight(preset) == 0)
                 return false;
             for (int i = 0; i < _claimBalance.ClaimCostCount; i++)
             {
@@ -446,18 +460,29 @@ namespace Unruled.Core.AI
             return total;
         }
 
-        // At an own outpost, for the first bare deposit with ore left: rigs paid from the site, or else unload the first
-        // rig-cost item the site is short of, if the hold carries the gap.
+        // At an own outpost, for the bare deposit with ore left that matters most (see DepositRank; one already mined that
+        // no core refinery needs isn't rigged): rigs paid from the site, or else unload the first rig-cost item the site
+        // is short of, if the hold carries the gap.
         private AiAction PickDevelopment(
-            EntityId site, ref Stockpile hold, out EntityId deposit, out ItemId item, out int quantity)
+            in PlayerHq player, EntityId site, ref Stockpile hold, out EntityId deposit, out ItemId item, out int quantity)
         {
             deposit = default;
             item = ItemId.None;
             quantity = 0;
-            for (int d = 0; d < _deposits.Count && deposit.IsNull; d++)
-                if (_deposits.At(d).Site == site && _deposits.At(d).RigCount == 0 && _deposits.At(d).RetractUntilTick == 0 &&
-                    HasOre(in _deposits.At(d)))
-                    deposit = _deposits.EntityAt(d);
+            int mined = MinedOres(player.PlayerId);
+            int feeds = NeededRaws(in player);
+            int bestRank = 0;
+            for (int d = 0; d < _deposits.Count; d++)
+            {
+                ref var candidate = ref _deposits.At(d);
+                if (candidate.Site != site || candidate.RigCount != 0 || candidate.RetractUntilTick != 0 || !HasOre(in candidate))
+                    continue;
+                int rank = DepositRank(candidate.RawItem, mined, feeds);
+                if (rank <= bestRank)
+                    continue;
+                bestRank = rank;
+                deposit = _deposits.EntityAt(d);
+            }
             if (deposit.IsNull || !_stockpiles.Has(site))
                 return default;
             int rigs = Math.Min(_balance.OutpostRigs, _miningBalance.MaxRigsPerDeposit);
@@ -652,7 +677,8 @@ namespace Unruled.Core.AI
             stock.Get(item) - ResearchReserve(hq, item) - keep;
 
         // The best rival bid for an item the player has surplus of and isn't already selling, at a site a contract convoy
-        // can reach from the core base (else the contract is void): sold into at its price.
+        // can reach from the core base (else the contract is void) on fuel the core holds above its reserve (else the
+        // convoy strands and the contract fails): sold into at its price.
         private bool FindBidToFill(in PlayerHq player, EntityId hq, ref Stockpile stock, out ItemId item, out long price,
             out long wanted)
         {
@@ -666,7 +692,8 @@ namespace Unruled.Core.AI
                     continue;
                 int surplus = Surplus(hq, ref stock, bid.Item, _balance.FillAbove);
                 if (surplus <= 0 || HasOpenOrder(player.PlayerId, bid.Item, OrderSide.Sell) ||
-                    !_routes.TryPlan(player.CoreBase, bid.Site, WtoContractSystem.ConvoyTier, ref _route))
+                    !_routes.TryPlan(player.CoreBase, bid.Site, WtoContractSystem.ConvoyTier, ref _route) ||
+                    stock.Get(ItemId.ItemFuel) - _balance.CoreSupplyReserve < RouteFuel(in ContractConvoy))
                     continue;
                 item = bid.Item;
                 price = bid.PriceCents;
@@ -697,6 +724,8 @@ namespace Unruled.Core.AI
             }
             return false;
         }
+
+        private static readonly FleetUnit ContractConvoy = new FleetUnit { TechTier = WtoContractSystem.ConvoyTier, CargoConvoys = 1 };
 
         private bool HasOpenOrder(int playerId, ItemId item, OrderSide side)
         {
@@ -775,7 +804,8 @@ namespace Unruled.Core.AI
         // Best site this fleet outguns and has the fuel to reach and come back from: a raid hunts rival fleets at a rival
         // site; a siege takes a neutral or rival site, preferring the most ores the player mines nowhere yet. Never a
         // core base or THE SYSTEM's site.
-        private bool FindTarget(in PlayerHq player, in FleetUnit unit, int fuel, bool raid, out EntityId target, out int edge)
+        private bool FindTarget(in PlayerHq player, in FleetUnit unit, int fuel, bool raid, bool homeOnly, out EntityId target,
+            out int edge)
         {
             long power = FleetPower(in unit);
             target = default;
@@ -783,18 +813,21 @@ namespace Unruled.Core.AI
             int bestLanes = int.MaxValue;
             int bestOres = 0;
             int mined = raid ? 0 : MinedOres(player.PlayerId);
+            int feeds = raid ? 0 : NeededRaws(in player);
             for (int i = 0; i < _sites.Count; i++)
             {
                 ref var site = ref _sites.At(i);
                 var entity = _sites.EntityAt(i);
                 if (site.OwnerPlayerId < 0 || site.OwnerPlayerId == player.PlayerId || (raid && site.OwnerPlayerId == 0) ||
-                    IsCoreBase(entity))
+                    IsCoreBase(entity) || (homeOnly && !IsNeutralAtHome(entity, player.CoreBase)))
                     continue;
                 long hostile = Power(entity, player.PlayerId, mine: false);
                 if (hostile >= power || (raid && hostile == 0))
                     continue;
                 int advantage = Severity(power - hostile, power);
-                int ores = raid ? 0 : NewOres(entity, mined);
+                int ores = raid ? 0 : NewOres(entity, mined, feeds);
+                if (!raid && site.OwnerPlayerId == 0 && ores == 0)
+                    continue; // a neutral site with no new ore isn't worth the claim cost
                 if (ores < bestOres || (ores == bestOres && advantage < edge) ||
                     !_routes.TryPlan(player.CoreBase, entity, unit.TechTier, ref _route) || 2L * RouteFuel(in unit) > fuel)
                     continue;
@@ -804,6 +837,39 @@ namespace Unruled.Core.AI
                 edge = advantage;
                 bestLanes = _route.Count;
                 bestOres = ores;
+            }
+            return !target.IsNull;
+        }
+
+        // The nearest unthreatened own outpost with a bare deposit of ore worth rigging, whose rigs the hold and the site's
+        // stock can pay together, within a round trip of fuel.
+        private bool FindOutpostToDevelop(in PlayerHq player, in FleetUnit unit, int fuel, ref Stockpile hold, out EntityId target)
+        {
+            target = default;
+            int bestLanes = int.MaxValue;
+            int rigs = Math.Min(_balance.OutpostRigs, _miningBalance.MaxRigsPerDeposit);
+            int mined = MinedOres(player.PlayerId);
+            int feeds = NeededRaws(in player);
+            for (int d = 0; d < _deposits.Count; d++)
+            {
+                ref var deposit = ref _deposits.At(d);
+                var site = deposit.Site;
+                if (deposit.RigCount != 0 || deposit.RetractUntilTick != 0 || !HasOre(in deposit) || site == target ||
+                    DepositRank(deposit.RawItem, mined, feeds) == 0 ||
+                    site == player.CoreBase || !IsOwnSite(site, player.PlayerId) || !_stockpiles.Has(site) ||
+                    Power(site, player.PlayerId, mine: false) > 0)
+                    continue;
+                bool paid = true;
+                for (int i = 0; i < _miningBalance.RigCostCount && paid; i++)
+                {
+                    var cost = _miningBalance.RigCost(i);
+                    paid = hold.Get(cost.Item) + _stockpiles.Get(site).Get(cost.Item) >= (long)cost.Quantity * rigs;
+                }
+                if (!paid || !_routes.TryPlan(player.CoreBase, site, unit.TechTier, ref _route) ||
+                    2L * RouteFuel(in unit) > fuel || _route.Count >= bestLanes)
+                    continue;
+                target = site;
+                bestLanes = _route.Count;
             }
             return !target.IsNull;
         }
@@ -849,18 +915,69 @@ namespace Unruled.Core.AI
             return mask;
         }
 
-        // Deposits at the site with ore left of a raw item outside the mask.
-        private int NewOres(EntityId site, int mined)
+        // Deposits at the site with ore left of a raw item outside the mined mask; one a core refinery needs counts double.
+        private int NewOres(EntityId site, int mined, int feeds)
         {
             int count = 0;
             for (int d = 0; d < _deposits.Count; d++)
             {
                 ref var deposit = ref _deposits.At(d);
-                if (deposit.Site == site && HasOre(in deposit) && (mined & (1 << ItemIds.ToSlot(deposit.RawItem))) == 0)
-                    count++;
+                int bit = 1 << ItemIds.ToSlot(deposit.RawItem);
+                if (deposit.Site == site && HasOre(in deposit) && (mined & bit) == 0)
+                    count += (feeds & bit) != 0 ? 2 : 1;
             }
             return count;
         }
+
+        // Bit per raw item slot the player needs: what a core-base refinery takes in, and what goes into the next stress
+        // test's cost (refined items through their recipe).
+        private int NeededRaws(in PlayerHq player)
+        {
+            int mask = 0;
+            for (int r = 0; r < _refineries.Count; r++)
+                if (_refineries.At(r).Site == player.CoreBase)
+                    mask |= RecipeRaws(_refineries.At(r).Output);
+            for (int h = 0; h < _players.Count; h++)
+            {
+                if (_players.At(h).PlayerId != player.PlayerId)
+                    continue;
+                var hq = _players.EntityAt(h);
+                if (!_progress.Has(hq) || _progress.Get(hq).Stage > ResearchStage.StressTest)
+                    break;
+                var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
+                for (int i = 0; i < cost.Length; i++)
+                    mask |= ItemIds.IsRaw(cost[i].Item) ? 1 << ItemIds.ToSlot(cost[i].Item) : RecipeRaws(cost[i].Item);
+                break;
+            }
+            return mask;
+        }
+
+        private int RecipeRaws(ItemId output)
+        {
+            ref readonly var recipe = ref _recipes.GetRecipe(output);
+            int mask = 0;
+            if (ItemIds.IsRaw(recipe.Input1))
+                mask |= 1 << ItemIds.ToSlot(recipe.Input1);
+            if (ItemIds.IsRaw(recipe.Input2))
+                mask |= 1 << ItemIds.ToSlot(recipe.Input2);
+            return mask;
+        }
+
+        // 3: not mined yet and a core refinery needs it; 2: not mined yet; 1: a core refinery needs more; 0: neither.
+        private static int DepositRank(ItemId raw, int mined, int feeds)
+        {
+            int bit = 1 << ItemIds.ToSlot(raw);
+            return ((mined & bit) == 0 ? 2 : 0) + ((feeds & bit) != 0 ? 1 : 0);
+        }
+
+        // Presets that never conquer settle only neutral sites of their own home system.
+        private bool IsHomeSettler(AiPreset preset) => preset.SiegeConquestWeight == 0;
+
+        private int SettleWeight(AiPreset preset) =>
+            preset.SiegeConquestWeight > 0 ? preset.SiegeConquestWeight : _balance.HomeSettleWeight;
+
+        private bool IsNeutralAtHome(EntityId site, EntityId coreBase) =>
+            _sites.Get(site).OwnerPlayerId == 0 && _sites.Get(site).ClusterId == _sites.Get(coreBase).ClusterId;
 
         private long RouteFuel(in FleetUnit unit)
         {

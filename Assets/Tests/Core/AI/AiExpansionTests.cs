@@ -57,6 +57,14 @@ namespace Unruled.Tests.Core.AI
             return fleet;
         }
 
+        private void Ore(EntityId site, ItemId raw)
+        {
+            _sim.Deposits.Add(_sim.World.Create(), new MineralDeposit
+            {
+                Site = site, RawItem = raw, SurfaceReserve = 1_000, DeepCrustReserve = 1_000, CoreFractureReserve = 1_000
+            });
+        }
+
         private AiOrder? Find(byte archetype, AiAction action)
         {
             _sim.Ai.Assign(_hq, archetype);
@@ -92,6 +100,7 @@ namespace Unruled.Tests.Core.AI
         [Test]
         public void Warlord_BesiegesANeutralSite_ThenClaimsIt()
         {
+            Ore(_target, ItemId.RawIron);
             var fleet = Fleet(Me, _home, 4, loaded: true);
 
             var order = Find(Warlord, AiAction.Siege);
@@ -104,6 +113,57 @@ namespace Unruled.Tests.Core.AI
             Assert.IsTrue(Find(Warlord, AiAction.ClaimSite).HasValue);
             RunPendingOrders();
             Assert.AreEqual(Me, _sim.Sites.Get(_target).OwnerPlayerId);
+        }
+
+        [Test]
+        public void NobodyBesiegesANeutralSite_WithNoNewOre()
+        {
+            Fleet(Me, _home, 4, loaded: true);
+            Assert.IsFalse(Find(Warlord, AiAction.Siege).HasValue);
+        }
+
+        [Test]
+        public void Sentinel_SettlesNeutralSitesOfItsHomeSystem_Only()
+        {
+            Ore(_target, ItemId.RawIron);
+            Fleet(Me, _home, 4, loaded: true);
+            Assert.IsTrue(Find(Sentinel, AiAction.Siege).HasValue, "home system");
+
+            _sim.Clock.Advance(_sim.Balance.Ai.ThinkIntervalTicks);
+            _sim.Sites.Get(_target).ClusterId = 1;
+            Assert.IsFalse(Find(Sentinel, AiAction.Siege).HasValue, "another system");
+        }
+
+        [Test]
+        public void GoesBackToAnOwnOutpost_ToRigABareDeposit()
+        {
+            _sim.Sites.Get(_target).OwnerPlayerId = Me;
+            Ore(_target, ItemId.RawIron);
+            var fleet = Fleet(Me, _home, 4, loaded: true);
+            ref var hold = ref _sim.Stockpiles.Get(fleet);
+            for (int i = 0; i < _sim.Balance.Mining.RigCostCount; i++)
+                hold.Add(_sim.Balance.Mining.RigCost(i).Item, _sim.Balance.Mining.RigCost(i).Quantity * _sim.Balance.Ai.OutpostRigs);
+
+            var order = Find(Warlord, AiAction.DevelopOutpost);
+            Assert.IsTrue(order.HasValue);
+            for (int i = 0; i < 2_000 && _sim.FleetMotions.Get(fleet).Site != _target; i++)
+                _sim.Clock.Advance(1);
+            Assert.AreEqual(_target, _sim.FleetMotions.Get(fleet).Site, "arrived");
+            Assert.IsTrue(Find(Warlord, AiAction.UnloadCargo).HasValue, "the rig cost goes ashore first");
+        }
+
+        [Test]
+        public void DoesNotReload_UpkeepThatIsStillOverHalfFull()
+        {
+            var fleet = Fleet(Me, _home, 4, loaded: true);
+            var upkeep = _sim.Balance.Fleets.Tier(1).UpkeepPerShipHour;
+            for (int k = 0; k < upkeep.Length; k++)
+            {
+                int target = FleetUpkeepSystem.Due(4, upkeep[k].Milli, 0) * _sim.Balance.Ai.LoadUpkeepIntervals;
+                _sim.Stockpiles.Get(fleet).Add(upkeep[k].Item, target - 1);
+                _sim.Stockpiles.Get(_home).Add(upkeep[k].Item, 1_000);
+            }
+            Assert.IsFalse(Find(Warlord, AiAction.LoadCargo).HasValue);
         }
 
         [Test]
