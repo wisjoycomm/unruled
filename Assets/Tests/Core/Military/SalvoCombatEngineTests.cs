@@ -294,6 +294,29 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
+        public void ConvoysWithNoGuns_DoNotPinEachOther()
+        {
+            var a = OnOpenLane(_sim.CreateFleet(new FleetUnit { OwnerPlayerId = Attacker, TechTier = 1, CargoConvoys = 2 }, _citadel));
+            var d = OnOpenLane(_sim.CreateFleet(new FleetUnit { OwnerPlayerId = Defender, TechTier = 1, CargoConvoys = 2, EwShips = 1 }, _citadel));
+
+            Salvos(5);
+
+            Assert.AreEqual(0, C(a).EngagedUntilTick);
+            Assert.AreEqual(0, C(d).EngagedUntilTick);
+        }
+
+        [Test]
+        public void ALineShip_SinksAPlainConvoy()
+        {
+            var convoy = OnOpenLane(_sim.CreateFleet(new FleetUnit { OwnerPlayerId = Defender, TechTier = 1, CargoConvoys = 2 }, _citadel));
+            OnOpenLane(Fleet(Attacker, 10, 0, supplies: 100));
+
+            Salvos(5);
+
+            Assert.IsFalse(_sim.World.IsAlive(convoy), "a convoy without contract cargo is fair game");
+        }
+
+        [Test]
         public void TwoWarFleets_StillFight_WhenAContractConvoyShareTheirLane()
         {
             var convoy = ContractConvoy(Defender);

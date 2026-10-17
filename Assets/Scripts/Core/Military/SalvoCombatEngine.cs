@@ -15,9 +15,10 @@ namespace Unruled.Core.Military
     /// <item>Omega = (sum of EW ships x Beta) x (1 + fortification at own site) x F_flank (fleets with batteries).
     /// A core base in relocation teardown keeps only part of its fortification.
     /// F_flank counts hostile arrival lanes at a site whose directions are at least 90° apart.</item>
-    /// <item>Fleets carrying WTO contract cargo are only fought by players with a fleet there set to RaidConvoys:
-    /// two players are hostile when both have other fleets there, or either raids. A convoy nobody raids is not
-    /// engaged, fires at nobody and takes no damage.</item>
+    /// <item>A player with line ships there fires on another player's fleets; fleets carrying WTO contract cargo only
+    /// if one of its fleets there is set to RaidConvoys. Two players are hostile when either fires on the other, so
+    /// convoys with no guns between them never pin each other. A convoy nobody raids is not engaged, fires at nobody
+    /// and takes no damage.</item>
     /// <item>Each player fires at the hostile player with the lowest id: damage max(0, Psi - Omega) lands on the focus
     /// class of its lowest fleet, then spills to the other classes. Damage is resolved simultaneously.</item>
     /// <item>Thermal: T += heat x ROF² - passive - vent; above the overheat line guns lock and ammo cooks off a share of
@@ -62,6 +63,7 @@ namespace Unruled.Core.Military
         private int[] _lead = new int[4];
         private bool[] _armed = new bool[4]; // has a fleet with no contract cargo here
         private bool[] _raids = new bool[4]; // has a fleet here set to raid convoys
+        private bool[] _guns = new bool[4]; // has line ships here
         private bool[] _raided = new bool[4]; // a hostile player here raids convoys
         private long[] _dirX = new long[4];
         private long[] _dirY = new long[4];
@@ -243,7 +245,9 @@ namespace Unruled.Core.Military
             }
         }
 
-        private bool Hostile(int p, int q) => (_armed[p] && _armed[q]) || _raids[p] || _raids[q];
+        private bool Fires(int p, int q) => _guns[p] && (_armed[q] || _raids[p]);
+
+        private bool Hostile(int p, int q) => Fires(p, q) || Fires(q, p);
 
         // Each player's target is the hostile player with the lowest id (-1 = none). False when nobody fights.
         private bool PickTargets(int start, int end)
@@ -253,6 +257,7 @@ namespace Unruled.Core.Military
                 _armed[p] = false;
                 _raids[p] = false;
                 _raided[p] = false;
+                _guns[p] = false;
             }
             for (int k = start; k < end; k++)
             {
@@ -263,6 +268,8 @@ namespace Unruled.Core.Military
                     _armed[p] = true;
                 if (_combat.Get(fleet).RaidsConvoys)
                     _raids[p] = true;
+                if (_units.At(i).LineShips > 0)
+                    _guns[p] = true;
             }
 
             bool any = false;
@@ -314,6 +321,7 @@ namespace Unruled.Core.Military
                 Array.Resize(ref _armed, size);
                 Array.Resize(ref _raids, size);
                 Array.Resize(ref _raided, size);
+                Array.Resize(ref _guns, size);
             }
             _playerIds[_playerCount] = playerId;
             _lead[_playerCount] = denseIndex;

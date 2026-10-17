@@ -88,3 +88,4 @@
 - 2026-10-17 - Claude - AI radar keeps 1,000 batteries for fleets and starts scans only in the first 10 minutes of each hour; tests. Soak: scan burn 170k -> 34k batteries in 25 days, cores hold 5,000, p5 claims tungsten site 250.
 - 2026-10-17 - Claude - Piracy only on purpose: contract convoys are fought only by fleets set to RaidConvoys (new command, FleetCombatState key 12, save schema 3, Raid convoys toggle on the fleet card); tests.
 - 2026-10-17 - Claude - AI keeps 1,000 travel credits for tolls: WTO orders never lock it and it borrows only below it; tests. Soak: WTO deposits had maxed the 10,000 credit line in a day, leaving no cash for gate tolls.
+- 2026-10-17 - Claude - Combat: players are hostile only when one side has line ships, so unarmed convoys no longer pin each other on a lane forever; tests. Soak: p4 built an ammo refinery but its tungsten convoys were stuck against a rival convoy from day 12.
