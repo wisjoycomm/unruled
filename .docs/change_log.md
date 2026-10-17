@@ -84,3 +84,4 @@
 - 2026-10-17 - Claude - AI: a mined-out deposit no longer counts as mining its ore (it settles a site with that ore again); never sells raws its core refineries or next stress test take in; tests. Soak: core water ran out in 5-20 days, which starved fuel.
 - 2026-10-17 - Claude - Refinery upkeep cut tenfold (milli-cent rate, 0.5 cent per cycle, charged in whole cents as they add up); tests.
 - 2026-10-17 - Claude - Core-base life-support deposits hold 5x the reserves (CoreBaseReserveMultiplier); tests.
+- 2026-10-17 - Claude - AI convoy routes run their full 500 capacity (was 100); roadmap note on the month-of-play rebalance. Soak: fuel holds at the cores; batteries now short (copper/silicon mined 1:1, used 2:1).

@@ -282,7 +282,8 @@ namespace Unruled.Core.Simulation
         /// PROVISIONAL: 100% battery = 10 scan startups at the core base; resupply below 5 ammo per line ship; at the
         /// core base a fleet loads 6 upkeep intervals of oxygen and rations, up to 20 ammo per line ship, 5 batteries per EW ship (their point defence burns them in a fight, so a siege
         /// sets out with them on top of the claim cost) and 1,500 fuel (or a round trip to its next settle target); 2 rigs per bare deposit of a claimed site;
-        /// 2 cargo convoys running batches of 100 per outpost; a new refinery once 100 of both its inputs sit at the core base;
+        /// 2 cargo convoys running batches of 500 per outpost (their full capacity; 100 starved outposts of fuel and cores of
+        /// silicon, 2026-10-17); a new refinery once 100 of both its inputs sit at the core base;
         /// fleets leave 500 fuel and 500 coolant at the core base for its drills; drills pause at 5,000 ore in stock;
         /// besieging presets send Tier 3+ fleets at the Citadel; on the WTO it sells stock above 20 into rivals' bids,
         /// lists 500-unit batches of stock above 3,000 at 5% under the reference price, bids 5% over it (with at most half
@@ -294,7 +295,7 @@ namespace Unruled.Core.Simulation
         /// </summary>
         public static AiBalance CreateAiBalance() => new AiBalance(
             thinkIntervalTicks: 10, fullBatteryScans: 10, resupplyAmmoPerLineShip: 5, loadAmmoPerLineShip: 20, loadFuel: 1_500,
-            outpostRigs: 2, convoyShips: 2, convoyBatch: 100, refineryInputStock: 100,
+            outpostRigs: 2, convoyShips: 2, convoyBatch: 500, refineryInputStock: 100,
             coreSupplyReserve: 500, rawStockCap: 5_000, loadUpkeepIntervals: 6, citadelAssaultTier: 3,
             sellAbove: 3_000, fillAbove: 20, sellBatch: 500, tradePricePercent: 5, tradeOrderTicks: 3_600, bidBudgetPercent: 50,
             homeSettleWeight: 1_000, battleLineShips: 60, loadBatteryPerEwShip: 5, cashReserveCredits: 2_000,
