@@ -85,3 +85,4 @@
 - 2026-10-17 - Claude - Refinery upkeep cut tenfold (milli-cent rate, 0.5 cent per cycle, charged in whole cents as they add up); tests.
 - 2026-10-17 - Claude - Core-base life-support deposits hold 5x the reserves (CoreBaseReserveMultiplier); tests.
 - 2026-10-17 - Claude - AI convoy routes run their full 500 capacity (was 100); roadmap note on the month-of-play rebalance. Soak: fuel holds at the cores; batteries now short (copper/silicon mined 1:1, used 2:1).
+- 2026-10-17 - Claude - AI radar keeps 1,000 batteries for fleets and starts scans only in the first 10 minutes of each hour; tests. Soak: scan burn 170k -> 34k batteries in 25 days, cores hold 5,000, p5 claims tungsten site 250.

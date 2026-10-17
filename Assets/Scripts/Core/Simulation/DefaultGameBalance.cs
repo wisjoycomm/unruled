@@ -279,7 +279,9 @@ namespace Unruled.Core.Simulation
         /// </summary>
         /// <summary>
         /// Tab 06 presets (weights and ratio in milli, vent temperature in milli-degrees). Think every 10 ticks (GDD §2.5).
-        /// PROVISIONAL: 100% battery = 10 scan startups at the core base; resupply below 5 ammo per line ship; at the
+        /// PROVISIONAL: 100% battery = 10 scan startups at the core base above 1,000 kept for fleets, and scans start only
+        /// in the first 10 minutes of each hour (nonstop scans of every adjacent bypass lane burned ~30k batteries a day,
+        /// the copper of whole outposts, and left none for EW ships, claims or Tier-4 upkeep); resupply below 5 ammo per line ship; at the
         /// core base a fleet loads 6 upkeep intervals of oxygen and rations, up to 20 ammo per line ship, 5 batteries per EW ship (their point defence burns them in a fight, so a siege
         /// sets out with them on top of the claim cost) and 1,500 fuel (or a round trip to its next settle target); 2 rigs per bare deposit of a claimed site;
         /// 2 cargo convoys running batches of 500 per outpost (their full capacity; 100 starved outposts of fuel and cores of
@@ -299,6 +301,7 @@ namespace Unruled.Core.Simulation
             coreSupplyReserve: 500, rawStockCap: 5_000, loadUpkeepIntervals: 6, citadelAssaultTier: 3,
             sellAbove: 3_000, fillAbove: 20, sellBatch: 500, tradePricePercent: 5, tradeOrderTicks: 3_600, bidBudgetPercent: 50,
             homeSettleWeight: 1_000, battleLineShips: 60, loadBatteryPerEwShip: 5, cashReserveCredits: 2_000,
+            scanBatteryReserve: 1_000, scanWindowTicks: 600,
             presets: new[]
             {
                 new AiPreset(1, "Sentinel_Defender", 1_800, 1_700, 1_500, 1_400, 0, 0, 75_000, 650, 30, 3),

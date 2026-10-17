@@ -260,7 +260,8 @@ namespace Unruled.Core.AI
                 }
                 for (int d = 0; d < _deposits.Count; d++)
                     ThinkDeposit(player.PlayerId, preset, d);
-                ThinkRadar(player, preset, _controllers.EntityAt(c));
+                if (tick % SimTick.TicksPerHour < _balance.ScanWindowTicks)
+                    ThinkRadar(player, preset, _controllers.EntityAt(c));
                 ThinkProgress(player, preset, _controllers.EntityAt(c));
                 ThinkEconomy(player, preset, _controllers.EntityAt(c));
                 ThinkShipyard(player, preset, _controllers.EntityAt(c));
@@ -1390,8 +1391,10 @@ namespace Unruled.Core.AI
         {
             if (!_stockpiles.Has(player.CoreBase))
                 return;
-            // Scans spend only what the next stress test, the gate opening and a settler's next claim leave over.
-            int batteries = _stockpiles.Get(player.CoreBase).Get(ItemId.ItemBattery) - ProgressReserve(hq, ItemId.ItemBattery) -
+            // Scans spend only what the fleets' reserve, the next stress test, the gate opening and a settler's next claim
+            // leave over.
+            int batteries = _stockpiles.Get(player.CoreBase).Get(ItemId.ItemBattery) - _balance.ScanBatteryReserve -
+                            ProgressReserve(hq, ItemId.ItemBattery) -
                             GateReserve(player.PlayerId, ItemId.ItemBattery) -
                             (SettleWeight(preset) > 0 ? (int)ExpansionLoad(ItemId.ItemBattery) : 0);
             long full = (long)_balance.FullBatteryScans * _radarBalance.StartupBatteries;

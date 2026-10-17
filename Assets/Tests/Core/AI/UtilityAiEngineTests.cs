@@ -192,6 +192,9 @@ namespace Unruled.Tests.Core.AI
         {
             int startup = _sim.Balance.Radar.StartupBatteries;
             ref var core = ref _sim.Stockpiles.Get(_home);
+            core.Add(ItemId.ItemBattery, _sim.Balance.Ai.ScanBatteryReserve - 1); // kept back for the fleets
+            Assert.AreEqual(0, Think(Sentinel), "nothing over the fleets' reserve");
+            core.Add(ItemId.ItemBattery, 1);
             var testCost = _sim.Balance.Research.Tier(2).StressTestCost;
             for (int i = 0; i < testCost.Length; i++)
                 if (testCost[i].Item == ItemId.ItemBattery)
@@ -212,12 +215,24 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void ScansStart_OnlyAtTheTopOfTheHour()
+        {
+            _sim.Stockpiles.Get(_home).Add(ItemId.ItemBattery, 5_000);
+            _sim.Clock.Advance(_sim.Balance.Ai.ScanWindowTicks);
+            Assert.AreEqual(0, CountOrders(Sentinel, AiAction.RadarScan), "past the window");
+
+            _sim.Clock.Advance(SimTick.TicksPerHour - _sim.Balance.Ai.ScanWindowTicks);
+            Assert.AreEqual(1, CountOrders(Sentinel, AiAction.RadarScan), "the next hour");
+        }
+
+        [Test]
         public void ScansKeepBack_WhatOpeningAnUnlockedGateNeeds()
         {
             _sim.TechProgress.Get(_hq).TechTier = 2; // the gate unlocks; the next stress test takes no batteries
             var gate = _sim.World.Create();
             _sim.JumpGates.Add(gate, new JumpGate { OwnerPlayerId = Me, HomeSite = _home, FarSite = _field });
             ref var core = ref _sim.Stockpiles.Get(_home);
+            core.Add(ItemId.ItemBattery, _sim.Balance.Ai.ScanBatteryReserve);
             for (int i = 0; i < _sim.Balance.SiteControl.ClaimCostCount; i++)
                 if (_sim.Balance.SiteControl.ClaimCost(i).Item == ItemId.ItemBattery)
                     core.Add(ItemId.ItemBattery, _sim.Balance.SiteControl.ClaimCost(i).Quantity);
