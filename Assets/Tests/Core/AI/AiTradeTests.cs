@@ -271,6 +271,7 @@ namespace Unruled.Tests.Core.AI
             _sim.TechProgress.Get(_hq).Stage = ResearchStage.Complete;
             _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemRations });
             _sim.Stockpiles.Get(_sim.WtoFeePool).Add(ItemId.RawBiomass, 2 * ai.SellBatch);
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawBiomass, ai.SellBatch); // not starving: idle cash only
 
             Assert.IsTrue(Find(AiAction.BuyFromSystem).HasValue);
             RunPendingOrders();
@@ -278,6 +279,25 @@ namespace Unruled.Tests.Core.AI
             long budget = (FundedBalance.StartingCredits - 2 * ai.CashReserveCredits) * Wallet.CentsPerCredit * ai.BidBudgetPercent / 100;
             Assert.AreEqual(2 * ai.SellBatch - System.Math.Min(ai.SellBatch, budget / ask), _sim.Market.SystemStock(ItemId.RawBiomass),
                 "up to a batch, from the bid budget of the idle cash");
+        }
+
+        [Test]
+        public void AFeedstockUnderABatch_IsBoughtFromTheSystem_EvenInDebt_FromTheCashAboveTheTravelCash()
+        {
+            var ai = _sim.Balance.Ai;
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.Complete;
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemRations });
+            _sim.Stockpiles.Get(_sim.WtoFeePool).Add(ItemId.RawBiomass, 2 * ai.SellBatch);
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawBiomass, ai.SellBatch - 1);
+            _sim.Loans.Get(_hq).PrincipalCents = 1;
+            long cash = _sim.Ledger.Balance(_hq);
+
+            Assert.IsTrue(Find(AiAction.BuyFromSystem).HasValue);
+            RunPendingOrders();
+            long ask = _sim.Market.SystemAskCents(ItemId.RawBiomass, _sim.Clock.CurrentTick);
+            long budget = (cash - ai.TravelCashCredits * Wallet.CentsPerCredit) * ai.BidBudgetPercent / 100;
+            Assert.AreEqual(2 * ai.SellBatch - System.Math.Min(ai.SellBatch, budget / ask), _sim.Market.SystemStock(ItemId.RawBiomass),
+                "up to a batch, from the bid budget of the cash above the travel cash");
         }
 
         [Test]

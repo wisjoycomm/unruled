@@ -98,6 +98,32 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
+        public void Route_HaulsABatchOfGoods_OnlyWhenItIsWorthMoreThanTheFuelOfTheRoundTrip()
+        {
+            const int batch = 20;
+            var recipes = _sim.Balance.Recipes;
+            long fuelWorth = 2L * _sim.Movement.FuelFor(_sim.Fleets.Get(_fleet), _sim.Starlanes.At(0)) *
+                             recipes.GetItem(ItemId.ItemFuel).BaseWtoPrice;
+            Assert.LessOrEqual(batch * recipes.GetItem(ItemId.RawWater).BaseWtoPrice, fuelWorth, "cheap water");
+            Assert.Greater(batch * (recipes.GetItem(ItemId.RawWater).BaseWtoPrice + recipes.GetItem(ItemId.RawTungsten).BaseWtoPrice),
+                fuelWorth, "a batch of each pays");
+            Outpost.Add(ItemId.ItemFuel, batch);
+            Outpost.Add(ItemId.ItemCoolant, batch);
+            Outpost.Add(ItemId.ItemOxygen, batch);
+            Outpost.Add(ItemId.ItemRations, batch);
+            Outpost.Add(ItemId.RawWater, batch);
+            SetRoute(_fleet, _outpost, batch);
+
+            Run(2_000);
+            Assert.AreEqual(batch, Outpost.Get(ItemId.RawWater), "a batch of water isn't worth the trip");
+            Assert.AreEqual(_hub, _sim.FleetMotions.Get(_fleet).Site);
+
+            Outpost.Add(ItemId.RawTungsten, batch);
+            Run(2_000);
+            Assert.Greater(Hub.Get(ItemId.RawTungsten) + Hub.Get(ItemId.RawWater), 0, "with tungsten in the mix it is");
+        }
+
+        [Test]
         public void Route_CarriesLifeSupport_AndKeepsItsOwnUpkeep_EvenWhenGrounded()
         {
             Hub.Add(ItemId.ItemOxygen, 1_000);
@@ -176,8 +202,8 @@ namespace Unruled.Tests.Core.Military
                     bypass += fuel;
             }
             Assert.Greater(bypass, highway + 1, "the bypass home takes more than a highway leg's fuel");
-            Outpost.Add(ItemId.RawIron, 1);
-            SetRoute(_fleet, _outpost, 1);
+            Outpost.Add(ItemId.RawIron, Batch);
+            SetRoute(_fleet, _outpost, Batch);
             for (int i = 0; i < 3_000 && _sim.FleetMotions.Get(_fleet).Lane.IsNull; i++)
                 Run(1);
             Assert.AreEqual(StarlaneTier.StaHighway, _sim.Starlanes.Get(_sim.FleetMotions.Get(_fleet).Lane).Tier, "out on the highway");

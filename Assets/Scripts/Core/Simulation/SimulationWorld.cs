@@ -211,7 +211,7 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Reverse, Movement);
             var convoys = new ConvoyRouteSystem(
                 ConvoyRoutes, Fleets, FleetMotions, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, ContractCargo,
-                StolenGoods, Routes, Movement, Tolls, Ledger, balance.Convoys, balance.Fleets);
+                StolenGoods, Routes, Movement, Tolls, Ledger, balance.Convoys, balance.Fleets, balance.Recipes);
             Clock.Register(convoys);
             Commands.Register(CommandType.SetConvoyRoute, convoys);
 
@@ -276,7 +276,7 @@ namespace Unruled.Core.Simulation
             Ai = new UtilityAiEngine(
                 AiControllers, Players, Fleets, FleetMotions, FleetCombat, FleetReadiness, Stockpiles, Sites, Weather, Deposits,
                 Starlanes, RadarScans, TechProgress, JumpGates, ConvoyRoutes, ShipOrders, Refineries, Standings, Citadels, WtoOrders,
-                ItemMarkets, Loans, Ledger, WtoFeePool, Rates, Issuer, Routes, Tolls, TechGates, balance);
+                ItemMarkets, Loans, Sanctions, Ledger, WtoFeePool, Rates, Issuer, Routes, Tolls, TechGates, balance);
         }
 
         /// <summary>

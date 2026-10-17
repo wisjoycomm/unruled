@@ -78,6 +78,7 @@ namespace Unruled.Core.AI
         public readonly int BidBudgetPercent; // a bid spends at most this share of the wallet, leaving deposits for sales
         public readonly int HomeSettleWeight; // presets with no conquest weight still claim neutral home-system sites at this weight
         public readonly int BattleLineShips; // line ships the shipyard builds up to, at the research tier
+        public readonly int CoreOreLowReserve; // a core-base deposit with less ore left than this no longer counts as a source: it settles another
         private readonly AiPreset[] _presets;
 
         public AiBalance(
@@ -86,7 +87,7 @@ namespace Unruled.Core.AI
             int rawStockCap, int loadUpkeepIntervals, byte citadelAssaultTier, int sellAbove, int fillAbove, int sellBatch,
             int tradePricePercent, int tradeOrderTicks, int bidBudgetPercent, int homeSettleWeight,
             int battleLineShips, int loadBatteryPerEwShip, long cashReserveCredits, long travelCashCredits, int scanBatteryReserve, int scanWindowTicks,
-            AiPreset[] presets)
+            int coreOreLowReserve, AiPreset[] presets)
         {
             if (thinkIntervalTicks < 1) throw new ArgumentOutOfRangeException(nameof(thinkIntervalTicks));
             if (fullBatteryScans < 1) throw new ArgumentOutOfRangeException(nameof(fullBatteryScans));
@@ -115,6 +116,7 @@ namespace Unruled.Core.AI
                 throw new ArgumentOutOfRangeException(nameof(travelCashCredits));
             if (scanBatteryReserve < 0) throw new ArgumentOutOfRangeException(nameof(scanBatteryReserve));
             if (scanWindowTicks < 1 || scanWindowTicks > SimTick.TicksPerHour) throw new ArgumentOutOfRangeException(nameof(scanWindowTicks));
+            if (coreOreLowReserve < 0) throw new ArgumentOutOfRangeException(nameof(coreOreLowReserve));
             if (presets == null || presets.Length == 0) throw new ArgumentException("Presets required.", nameof(presets));
             for (int i = 0; i < presets.Length; i++)
             {
@@ -147,6 +149,7 @@ namespace Unruled.Core.AI
             BidBudgetPercent = bidBudgetPercent;
             HomeSettleWeight = homeSettleWeight;
             BattleLineShips = battleLineShips;
+            CoreOreLowReserve = coreOreLowReserve;
             _presets = (AiPreset[])presets.Clone();
         }
 

@@ -24,7 +24,8 @@ namespace Unruled.Core.Military
     /// unloads everything else, takes on each supply up to the batch plus its reserve (even while grounded for unpaid
     /// upkeep) from what the hub holds above its supply reserve, and leaves, once it can act, when it carries half a batch of a supply above its reserve for an outpost below half a batch of it (so a run never
     /// burns more fuel than it hauls), or the
-    /// outpost holds a batch of goods. At the outpost it tops each supply up to the batch from what it carries above
+    /// outpost holds a batch of goods and what a run would load there is worth more than the fuel of the round trip (base
+    /// WTO prices: hauling cheap ore down a long route would burn more value than it brings home). At the outpost it tops each supply up to the batch from what it carries above
     /// its reserve, loads up to a batch of every other item there and heads home. Docked anywhere else (its route was cut
     /// short) it heads back to the hub; moving or engaged, the route waits; it ends when either site is lost. Each run takes the fastest route whose STA tolls the owner's wallet
     /// covers there and back, else the toll-free one (bypass lanes: 0 credits, more fuel); the fuel reserve follows the
@@ -49,6 +50,7 @@ namespace Unruled.Core.Military
         private readonly Ledger _ledger;
         private readonly ConvoyBalance _balance;
         private readonly FleetBalance _fleetBalance;
+        private readonly RecipeDatabase _recipes;
         private FleetRoute _scratch;
 
         public ConvoyRouteSystem(
@@ -56,7 +58,8 @@ namespace Unruled.Core.Military
             ComponentStore<FleetReadiness> readiness, ComponentStore<FleetCombatState> combat,
             ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes, ComponentStore<Stockpile> stockpiles,
             ComponentStore<ContractCargo> contracts, ComponentStore<StolenGoods> stolen, RoutePlanner planner,
-            FleetMovementSystem movement, ITollGate tolls, Ledger ledger, ConvoyBalance balance, FleetBalance fleetBalance)
+            FleetMovementSystem movement, ITollGate tolls, Ledger ledger, ConvoyBalance balance, FleetBalance fleetBalance,
+            RecipeDatabase recipes)
         {
             _routes = routes ?? throw new ArgumentNullException(nameof(routes));
             _units = units ?? throw new ArgumentNullException(nameof(units));
@@ -74,6 +77,7 @@ namespace Unruled.Core.Military
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
             _fleetBalance = fleetBalance ?? throw new ArgumentNullException(nameof(fleetBalance));
+            _recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
         }
 
         public void Handle(in DelayedPlayerCommand command, long tick)
@@ -154,7 +158,8 @@ namespace Unruled.Core.Military
             if (!_readiness.Get(fleet).CanAct(tick) || hold.Get(ItemId.ItemFuel) < roundTrip)
                 return;
             ref var outpost = ref _stockpiles.Get(route.Outpost);
-            bool run = Goods(ref outpost) >= route.Batch;
+            bool run = Goods(ref outpost) >= route.Batch &&
+                       GoodsWorth(ref outpost, route.Batch) > roundTrip * _recipes.GetItem(ItemId.ItemFuel).BaseWtoPrice;
             for (int s = 0; s < Supplies.Length && !run; s++)
                 run = outpost.Get(Supplies[s]) < route.Batch / 2 &&
                       hold.Get(Supplies[s]) - Reserve(fleet, Supplies[s], roundTrip) >= route.Batch / 2;
@@ -227,6 +232,19 @@ namespace Unruled.Core.Military
             for (int i = 0; i < _scratch.Count; i++)
                 bypass += _planner.FuelFor(unit, _lanes.Get(_scratch.LaneAt(i)));
             return Math.Max(fuel, bypass);
+        }
+
+        // What a run would load at the site (up to a batch of each good), at base WTO prices.
+        private long GoodsWorth(ref Stockpile stock, int batch)
+        {
+            long worth = 0;
+            for (int slot = 0; slot < ItemIds.Count; slot++)
+            {
+                var item = ItemIds.FromSlot(slot);
+                if (!IsSupply(item))
+                    worth += (long)Math.Min(stock.Get(item), batch) * _recipes.GetItem(item).BaseWtoPrice;
+            }
+            return worth;
         }
 
         private static long Goods(ref Stockpile stock)

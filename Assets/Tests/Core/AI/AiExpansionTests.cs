@@ -145,7 +145,10 @@ namespace Unruled.Tests.Core.AI
         public void AnOreMinedOnlyFromAMinedOutDeposit_IsNewOreAgain()
         {
             var deposit = _sim.World.Create();
-            _sim.Deposits.Add(deposit, new MineralDeposit { Site = _home, RawItem = ItemId.RawIron, SurfaceReserve = 1_000, RigCount = 2 });
+            _sim.Deposits.Add(deposit, new MineralDeposit
+            {
+                Site = _home, RawItem = ItemId.RawIron, SurfaceReserve = _sim.Balance.Ai.CoreOreLowReserve, RigCount = 2
+            });
             Ore(_target, ItemId.RawIron);
             Fleet(Me, _home, 4, loaded: true);
             Assert.IsFalse(Find(Warlord, AiAction.Siege).HasValue, "iron is mined at home");
@@ -153,6 +156,24 @@ namespace Unruled.Tests.Core.AI
             _sim.Deposits.Get(deposit).SurfaceReserve = 0;
             _sim.Clock.Advance(_sim.Balance.Ai.ThinkIntervalTicks);
             Assert.IsTrue(Find(Warlord, AiAction.Siege).HasValue, "the home deposit is mined out");
+        }
+
+        [Test]
+        public void ACoreDepositUnderTheLowReserve_SendsItSettlingAnotherSource_BeforeItRunsDry()
+        {
+            var deposit = _sim.World.Create();
+            int low = _sim.Balance.Ai.CoreOreLowReserve;
+            _sim.Deposits.Add(deposit, new MineralDeposit
+            {
+                Site = _home, RawItem = ItemId.RawIron, SurfaceReserve = low / 2, DeepCrustReserve = low - low / 2, RigCount = 2
+            });
+            Ore(_target, ItemId.RawIron);
+            Fleet(Me, _home, 4, loaded: true);
+            Assert.IsFalse(Find(Warlord, AiAction.Siege).HasValue, "surface and deep crust together hold the low reserve");
+
+            _sim.Deposits.Get(deposit).DeepCrustReserve--;
+            _sim.Clock.Advance(_sim.Balance.Ai.ThinkIntervalTicks);
+            Assert.IsTrue(Find(Warlord, AiAction.Siege).HasValue, "the home deposit runs low");
         }
 
         [Test]
@@ -209,6 +230,50 @@ namespace Unruled.Tests.Core.AI
             var order = Find(Raider, AiAction.StealthRaid);
             Assert.IsTrue(order.HasValue);
             Assert.AreEqual(IssueResult.Issued, order.Value.Result);
+        }
+
+        [Test]
+        public void Raider_SetsItsEscortsToRaidContractConvoys_AndAnotherPresetStandsThemDown()
+        {
+            var fleet = Fleet(Me, _home, 4, loaded: false);
+
+            Assert.IsTrue(Find(Raider, AiAction.RaidConvoys).HasValue);
+            RunPendingOrders();
+            Assert.IsTrue(_sim.FleetCombat.Get(fleet).RaidsConvoys);
+            Assert.IsFalse(Find(Raider, AiAction.RaidConvoys).HasValue, "already raiding");
+
+            Assert.IsTrue(Find(Warlord, AiAction.RaidConvoys).HasValue, "piracy only on purpose");
+            RunPendingOrders();
+            Assert.IsFalse(_sim.FleetCombat.Get(fleet).RaidsConvoys);
+        }
+
+        [Test]
+        public void Raider_NeverSetsItsBattleLineOrAConvoyToRaid()
+        {
+            Fleet(Me, _home, 4, loaded: false, tier: (byte)_sim.Balance.Ai.CitadelAssaultTier);
+            _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Me, TechTier = 1, LineShips = 2, CargoConvoys = 2 }, _home);
+
+            Assert.IsFalse(Find(Raider, AiAction.RaidConvoys).HasValue);
+        }
+
+        [Test]
+        public void Raider_StandsDown_WhileOneMoreOffenceWouldBringTheSystemDefenceFleet()
+        {
+            var fleet = Fleet(Me, _home, 4, loaded: false);
+            _sim.FleetCombat.Get(fleet).RaidsConvoys = true;
+            var authority = _sim.Balance.Authority;
+            _sim.Clock.Advance(1);
+            _sim.Sanctions.Add(_hq, new SystemSanction
+            {
+                Offences = authority.LayerTwoOffences - 1, LastOffenceTick = _sim.Clock.CurrentTick
+            });
+
+            Assert.IsTrue(Find(Raider, AiAction.RaidConvoys).HasValue);
+            RunPendingOrders();
+            Assert.IsFalse(_sim.FleetCombat.Get(fleet).RaidsConvoys);
+
+            _sim.Sanctions.Get(_hq).LastOffenceTick -= authority.OffenceWindowTicks + 1;
+            Assert.IsTrue(Find(Raider, AiAction.RaidConvoys).HasValue, "the offences aged out of the window");
         }
 
         [Test]

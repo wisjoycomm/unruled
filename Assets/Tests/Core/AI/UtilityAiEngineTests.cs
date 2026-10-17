@@ -195,6 +195,31 @@ namespace Unruled.Tests.Core.AI
             Assert.AreEqual(0, Pause()?.ParamA);
         }
 
+        [Test]
+        public void UnderTheDrillReserveOfFuel_OnlyTheCoresFuelAndCoolantFeedDrillsRun()
+        {
+            int reserve = _sim.Balance.Ai.CoreSupplyReserve;
+            var iron = _sim.World.Create();
+            _sim.Deposits.Add(iron, new MineralDeposit { Site = _home, RawItem = ItemId.RawIron, SurfaceReserve = 1_000, RigCount = 1 });
+            var water = _sim.World.Create();
+            _sim.Deposits.Add(water, new MineralDeposit { Site = _home, RawItem = ItemId.RawWater, SurfaceReserve = 1_000, RigCount = 1 });
+            ref var core = ref _sim.Stockpiles.Get(_home);
+            core.Add(ItemId.ItemFuel, reserve - core.Get(ItemId.ItemFuel));
+            core.Add(ItemId.ItemCoolant, reserve - core.Get(ItemId.ItemCoolant));
+            Assert.IsNull(Pause(), "the reserve is in hand");
+
+            core.Add(ItemId.ItemFuel, -1);
+            var order = Pause();
+            Assert.AreEqual(1, order?.ParamA);
+            Assert.AreEqual(iron, order.Value.Target, "the water drill makes the fuel");
+            RunPendingOrders();
+            Assert.IsTrue(_sim.Deposits.Get(iron).IsPaused);
+            Assert.IsFalse(_sim.Deposits.Get(water).IsPaused);
+
+            core.Add(ItemId.ItemFuel, 1);
+            Assert.AreEqual(0, Pause()?.ParamA, "rationing ends with the reserve back");
+        }
+
         private DelayedPlayerCommand? Pause()
         {
             _sim.Clock.Advance(_sim.Balance.Ai.ThinkIntervalTicks - _sim.Clock.CurrentTick % _sim.Balance.Ai.ThinkIntervalTicks);

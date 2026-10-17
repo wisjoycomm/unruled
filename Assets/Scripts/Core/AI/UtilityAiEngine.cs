@@ -50,7 +50,8 @@ namespace Unruled.Core.AI
         SellToSystem = 31,
         BuyFeedstock = 32,
         BuyFromSystem = 33,
-        MergeFleets = 34
+        MergeFleets = 34,
+        RaidConvoys = 35
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -134,6 +135,7 @@ namespace Unruled.Core.AI
         private readonly ComponentStore<WtoOrder> _wtoOrders;
         private readonly ComponentStore<ItemMarket> _markets;
         private readonly ComponentStore<Loan> _loans;
+        private readonly ComponentStore<SystemSanction> _sanctions;
         private readonly Ledger _ledger;
         private readonly EntityId _systemStock;
         private readonly ITollGate _tolls;
@@ -157,6 +159,7 @@ namespace Unruled.Core.AI
         private readonly WtoBalance _wtoBalance;
         private readonly LedgerBalance _ledgerBalance;
         private readonly CitadelBalance _citadelBalance;
+        private readonly SystemAuthorityBalance _authorityBalance;
 
         private FleetRoute _route;
 
@@ -171,7 +174,8 @@ namespace Unruled.Core.AI
             ComponentStore<RadarScan> scans, ComponentStore<TechProgress> progress, ComponentStore<JumpGate> gates,
             ComponentStore<ConvoyRoute> convoyRoutes, ComponentStore<ShipBuildOrder> shipOrders,
             ComponentStore<Refinery> refineries, ComponentStore<PlayerStanding> standings, ComponentStore<SystemCitadel> citadels,
-            ComponentStore<WtoOrder> wtoOrders, ComponentStore<ItemMarket> markets, ComponentStore<Loan> loans, Ledger ledger,
+            ComponentStore<WtoOrder> wtoOrders, ComponentStore<ItemMarket> markets, ComponentStore<Loan> loans,
+            ComponentStore<SystemSanction> sanctions, Ledger ledger,
             EntityId systemStock, IMarketRates rates,
             CommandIssuer issuer,
             RoutePlanner routes, ITollGate tolls, ITechGates tech, GameBalanceConfig config)
@@ -199,6 +203,7 @@ namespace Unruled.Core.AI
             _wtoOrders = wtoOrders ?? throw new ArgumentNullException(nameof(wtoOrders));
             _markets = markets ?? throw new ArgumentNullException(nameof(markets));
             _loans = loans ?? throw new ArgumentNullException(nameof(loans));
+            _sanctions = sanctions ?? throw new ArgumentNullException(nameof(sanctions));
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             if (systemStock.IsNull) throw new ArgumentException("THE SYSTEM's stock required.", nameof(systemStock));
             _systemStock = systemStock;
@@ -223,6 +228,7 @@ namespace Unruled.Core.AI
             _wtoBalance = config.Wto;
             _ledgerBalance = config.Ledger;
             _citadelBalance = config.Citadel;
+            _authorityBalance = config.Authority;
         }
 
         /// <summary>The orders tried by the last think that ran, in decision order.</summary>
@@ -300,6 +306,10 @@ namespace Unruled.Core.AI
                     _combatBalance.OverheatMilli - preset.CoolantVentTempMilli);
                 Consider(AiAction.VentCoolant, Score(preset.DefenseHoldWeight, heat, Full), ref best, ref bestScore);
             }
+
+            bool raid = WantsPiracy(preset, hq, in unit, tick);
+            if (state.RaidsConvoys != raid && !_issuer.IsInFlight(player.PlayerId, CommandType.RaidConvoys, fleet))
+                Consider(AiAction.RaidConvoys, Score(preset.StealthRaidWeight, Threshold), ref best, ref bestScore);
 
             bool awayFromHome = !motion.Site.IsNull && motion.Site != player.CoreBase;
             if (awayFromHome)
@@ -442,6 +452,10 @@ namespace Unruled.Core.AI
                     command.CommandType = CommandType.BuildRig;
                     command.Target = rigDeposit;
                     command.ParamA = loadQuantity;
+                    break;
+                case AiAction.RaidConvoys:
+                    command.CommandType = CommandType.RaidConvoys;
+                    command.ParamA = raid ? 1 : 0;
                     break;
                 default:
                     command.CommandType = CommandType.Move;
@@ -825,6 +839,16 @@ namespace Unruled.Core.AI
                 }
             }
 
+            // A raw it feeds, down to under a batch (its deposits mined out), is bought from THE SYSTEM even in debt, from
+            // the cash above the travel cash: without it the core's fuel, coolant and oxygen refineries stop.
+            for (int slot = 0; slot < ItemIds.Count; slot++)
+            {
+                var raw = ItemIds.FromSlot(slot);
+                if (Feeds(feeds, raw) && stock.Get(raw) < _balance.SellBatch &&
+                    BuyFromSystem(player.PlayerId, player.CoreBase, raw, _balance.SellBatch, spare, tick, weight))
+                    return;
+            }
+
             long idle = cash - 2 * _balance.CashReserveCredits * Wallet.CentsPerCredit;
             if (idle <= 0 || (_loans.Has(hq) && _loans.Get(hq).DebtCents > 0))
                 return;
@@ -1029,6 +1053,21 @@ namespace Unruled.Core.AI
         // A fleet of the Citadel assault tier or higher is a battle fleet: built by the shipyard, it stays at the core base
         // until it can take the Citadel, leaving the fuel to the lower-tier fleets that settle and raid.
         private bool IsBattleFleet(in FleetUnit unit) => unit.TechTier >= _balance.CitadelAssaultTier;
+
+        // Piracy is on purpose: only a preset that weighs Stealth_Raid above Siege_Conquest (the Raider) sets its escorts
+        // (line ships, no cargo, not the Citadel battle line) to raid WTO contract convoys, and it stands down while one more
+        // offence would bring THE SYSTEM's defence fleet to its core base.
+        private bool WantsPiracy(AiPreset preset, EntityId hq, in FleetUnit unit, long tick)
+        {
+            if (preset.StealthRaidWeight <= preset.SiegeConquestWeight || unit.LineShips == 0 || unit.CargoConvoys > 0 ||
+                IsBattleFleet(in unit))
+                return false;
+            if (!_sanctions.Has(hq))
+                return true;
+            ref var sanction = ref _sanctions.Get(hq);
+            int offences = tick - sanction.LastOffenceTick > _authorityBalance.OffenceWindowTicks ? 0 : sanction.Offences;
+            return offences + 1 < _authorityBalance.LayerTwoOffences && !sanction.DefencePending && sanction.DefenceUntilTick <= tick;
+        }
 
         // Shipyard (Defense_Hold or Siege_Conquest), from the Citadel assault tier on (earlier, ships would eat the steel
         // the economy grows on): refits a battle fleet docked at the core base to the research tier, else builds line
@@ -1237,7 +1276,8 @@ namespace Unruled.Core.AI
 
         private bool IsStandingCitadel(EntityId site) => _citadels.Has(site) && _citadels.Get(site).FallenTick == 0;
 
-        // Bit per raw item slot the player has rigs on somewhere with ore left (a mined-out deposit sends it looking again).
+        // Bit per raw item slot the player has rigs on somewhere with ore left (a mined-out deposit, or a core-base one under
+        // the low reserve, sends it looking again).
         private int MinedOres(int playerId)
         {
             int mask = 0;
@@ -1245,7 +1285,8 @@ namespace Unruled.Core.AI
             {
                 ref var deposit = ref _deposits.At(d);
                 if (deposit.RigCount > 0 && HasOre(in deposit) && _sites.Has(deposit.Site) &&
-                    _sites.Get(deposit.Site).OwnerPlayerId == playerId)
+                    _sites.Get(deposit.Site).OwnerPlayerId == playerId &&
+                    (!IsCoreBase(deposit.Site) || OreLeft(in deposit) >= _balance.CoreOreLowReserve))
                     mask |= 1 << ItemIds.ToSlot(deposit.RawItem);
             }
             return mask;
@@ -1495,7 +1536,7 @@ namespace Unruled.Core.AI
                 return;
             }
             int score = Score(preset.EvacuateSafetyWeight, storm);
-            bool pause = score > 0 || stocked >= _balance.RawStockCap;
+            bool pause = score > 0 || stocked >= _balance.RawStockCap || IsRationed(coreBase, in deposit);
             if (score == 0)
                 score = Score(preset.ResupplyLogisticsWeight, Threshold);
             if (pause != deposit.IsPaused && (pause || stocked < _balance.RawStockCap / 2))
@@ -1504,6 +1545,19 @@ namespace Unruled.Core.AI
                     PlayerId = playerId, CommandType = CommandType.PauseDrills, Target = _deposits.EntityAt(denseIndex),
                     ParamA = pause ? 1 : 0
                 }, AiAction.PauseDrills, score);
+        }
+
+        // While the core base holds under its drill reserve of fuel or coolant, only the drills feeding those two refineries
+        // run there: the others would burn the last fuel the water drill needs to make more, and every drill would stall.
+        private bool IsRationed(EntityId coreBase, in MineralDeposit deposit)
+        {
+            if (deposit.Site != coreBase || !_stockpiles.Has(coreBase))
+                return false;
+            ref var stock = ref _stockpiles.Get(coreBase);
+            if (stock.Get(ItemId.ItemFuel) >= _balance.CoreSupplyReserve && stock.Get(ItemId.ItemCoolant) >= _balance.CoreSupplyReserve)
+                return false;
+            int lifeline = RecipeRaws(ItemId.ItemFuel) | RecipeRaws(ItemId.ItemCoolant);
+            return (lifeline & (1 << ItemIds.ToSlot(deposit.RawItem))) == 0;
         }
 
         // Rigs back on a bare deposit with ore left, up to its target, when the site can pay for them all.
@@ -1543,6 +1597,10 @@ namespace Unruled.Core.AI
                     return _players.At(i).CoreBase == site;
             return false;
         }
+
+        private static long OreLeft(in MineralDeposit deposit) =>
+            (long)deposit.SurfaceReserve + deposit.DeepCrustReserve +
+            (deposit.IsCoreFractureUnlocked ? deposit.CoreFractureReserve : 0);
 
         private static bool HasOre(in MineralDeposit deposit) =>
             deposit.SurfaceReserve > 0 || deposit.DeepCrustReserve > 0 ||

@@ -28,13 +28,13 @@ components, then rebuilds the graph. `CreatePlayer(playerId, coreBase)` creates 
 which adds every fleet component and an empty cargo hold. Orders enter through `CommandIssuer.Issue`, which stamps
 the signal latency and queues them; when due, `SimClock` sends them through `CommandRouter` to the owning system.
 `UtilityAiEngine` (`Ai`) is not on the clock: the host calls `Ai.Think(tick)` (every 10 ticks, Server 2), and it
-issues orders only through `CommandIssuer`. Per player it first borrows up to its cash reserve once under its travel cash (kept for tolls; WTO orders never lock it, and under it surplus goes to THE SYSTEM's bid instead of a listing; a raw its refineries take in counts as surplus only above the stock its drills stop at); an outpost's drills pause while its core holds that stock; debt-free cash above twice the reserve buys rival listings of raws its refineries take in, or else THE SYSTEM's stock of them; stress-test shortfalls THE SYSTEM holds are bought from it and repays debt above twice the reserve, or all it can once the debt falls due. Per fleet it vents, retreats, resupplies, loads up at the core base
+issues orders only through `CommandIssuer`. Per player it first borrows up to its cash reserve once under its travel cash (kept for tolls; WTO orders never lock it, and under it surplus goes to THE SYSTEM's bid instead of a listing; a raw its refineries take in counts as surplus only above the stock its drills stop at); an outpost's drills pause while its core holds that stock; a raw its refineries take in, down to under a sell batch, is bought from THE SYSTEM even in debt (cash above the travel cash); debt-free cash above twice the reserve buys rival listings of such raws, or else THE SYSTEM's stock of them; stress-test shortfalls THE SYSTEM holds are bought from it and repays debt above twice the reserve, or all it can once the debt falls due. Per fleet it vents, retreats, resupplies, loads up at the core base
 (fill-to transfers), then stealth-raids or besieges a site it outguns with round-trip fuel, claims it and rigs its
 deposits; convoy fleets get routes to unserved outposts. Per deposit it pauses drills in storms or at the raw stock
-cap, retracts them when outgunned and rebuilds bare ones; per player it joins the audit, builds convoys and refineries,
+cap (and, while the core holds under its drill reserve of fuel or coolant, every core drill but the fuel and coolant feeds), retracts them when outgunned and rebuilds bare ones; per player it joins the audit, builds convoys and refineries,
 scans, stress-tests, opens its jump gate and trades on the WTO, keeping back the next stress test's cost; from the
 Citadel assault tier its shipyard refits, merges and builds one battle fleet that only waits at home (mothballed once full) or
-assaults the Citadel with the whole siege load aboard (its standard ammo plus what bombarding the shield down takes) (every trip takes the toll-free route when the wallet can't cover the tolls), while lower-tier fleets settle and raid. An order still in signal
+assaults the Citadel with the whole siege load aboard (its standard ammo plus what bombarding the shield down takes) (every trip takes the toll-free route when the wallet can't cover the tolls), while lower-tier fleets settle and raid; only the Raider preset (Stealth_Raid over Siege_Conquest) sets its escorts to raid WTO contract convoys, standing down while one more offence would bring THE SYSTEM's defence fleet. An order still in signal
 latency is not sent again (`CommandIssuer.IsInFlight`). `NoaaForecast` (`Forecast`) is a read-only query for the views.
 `NewGameSetup.Create(sim, playerId)` lays out a new game from `NewGameBalance`: a home system per participant,
 stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a starting fleet and AI rivals.
@@ -112,8 +112,8 @@ methods, in this order (rule 4).
     stolen tags travel with the stolen units (moved first, `CargoMover`); WTO contract convoys can't transfer.
   - `ConvoyRouteSystem` + `ConvoyBalance`: owns `ConvoyRoute`; a fleet with cargo convoys works a hub ↔ outpost run on
     its own, sending departures through `FleetMovementSystem.TryMoveTo`; a run the owner can't pay tolls for goes
-    toll-free, a supply run leaves only with half a batch to deliver, and a convoy docked off its route heads back to
-    the hub.
+    toll-free, a supply run leaves only with half a batch to deliver, a goods run only when what it would load is worth
+    more than the round trip's fuel (base WTO prices), and a convoy docked off its route heads back to the hub.
   - `JumpGateSystem`: owns `JumpGate` (Board) and the lanes it opens; at the jump-gate tech tier it charges the core
     base, adds the gate lane into the contested cluster and rebuilds `StarlaneGraph`. Dormant gates keep homes sealed.
   - Fleet components (`FleetComponents.cs`), one owner each: `FleetUnit` (ship counts by class; combat),
