@@ -54,8 +54,9 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
    toll lanes); `Move`, `Hold`, `Reverse`.
 9. `ConvoyRouteSystem`: standing supply runs between a hub and an outpost (fuel, coolant, oxygen and rations out,
    goods home; the fleet keeps its own trip fuel and upkeep, the hub keeps a supply reserve); `SetConvoyRoute`.
-10. `SalvoCombatEngine`: a salvo every 5 ticks between hostile fleets at one site or lane; loot and piracy
-    reports; `SetRof`, `SetFocus`, `VentCoolant`.
+10. `SalvoCombatEngine`: a salvo every 5 ticks between hostile fleets at one site or lane; WTO contract
+    convoys are fought only by fleets set to `RaidConvoys`; loot and piracy reports; `SetRof`, `SetFocus`,
+    `VentCoolant`, `RaidConvoys`.
 11. `CapitalRelocationSystem`: teardown → capital convoy → bootstrap; `RelocateBase`.
 12. `FocusedRadarSystem`: scan timelines and the Tier-5 IAEA reveal; `ScanBelt`, `CancelScan`, `EcmJam`.
 13. `ResearchSystem`: retooling ends, storm telemetry; `StressTest`.

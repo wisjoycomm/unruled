@@ -15,15 +15,19 @@ namespace Unruled.Core.Military
     /// <item>Omega = (sum of EW ships x Beta) x (1 + fortification at own site) x F_flank (fleets with batteries).
     /// A core base in relocation teardown keeps only part of its fortification.
     /// F_flank counts hostile arrival lanes at a site whose directions are at least 90° apart.</item>
+    /// <item>Fleets carrying WTO contract cargo are only fought by players with a fleet there set to RaidConvoys:
+    /// two players are hostile when both have other fleets there, or either raids. A convoy nobody raids is not
+    /// engaged, fires at nobody and takes no damage.</item>
     /// <item>Each player fires at the hostile player with the lowest id: damage max(0, Psi - Omega) lands on the focus
     /// class of its lowest fleet, then spills to the other classes. Damage is resolved simultaneously.</item>
     /// <item>Thermal: T += heat x ROF² - passive - vent; above the overheat line guns lock and ammo cooks off a share of
     /// hull per salvo until T drops below the release line.</item>
     /// </list>
     /// Fleets left with no ships are destroyed. Their hold goes to the surviving hostile fleet with the lowest entity id
-    /// at the same site or lane (PROVISIONAL loot rule); WTO contract cargo and goods already stolen become
-    /// <see cref="StolenGoods"/> of the taker, and taking contract cargo is reported as piracy. With no hostile player
-    /// fleet left there, or from a THE SYSTEM fleet, the hold is lost. SetRof, SetFocus (ParamA) and VentCoolant target an own fleet.
+    /// at the same site or lane (PROVISIONAL loot rule; for a contract convoy, the lowest raiding fleet); WTO contract
+    /// cargo and goods already stolen become <see cref="StolenGoods"/> of the taker, and taking contract cargo is
+    /// reported as piracy. With no such fleet left there, or from a THE SYSTEM fleet, the hold is lost. SetRof,
+    /// SetFocus, RaidConvoys (ParamA, 1 = on) and VentCoolant target an own fleet.
     /// </summary>
     public sealed class SalvoCombatEngine : ISimSystem, ICommandHandler
     {
@@ -56,6 +60,9 @@ namespace Unruled.Core.Military
         private long[] _damage = new long[4];
         private int[] _target = new int[4];
         private int[] _lead = new int[4];
+        private bool[] _armed = new bool[4]; // has a fleet with no contract cargo here
+        private bool[] _raids = new bool[4]; // has a fleet here set to raid convoys
+        private bool[] _raided = new bool[4]; // a hostile player here raids convoys
         private long[] _dirX = new long[4];
         private long[] _dirY = new long[4];
 
@@ -133,6 +140,10 @@ namespace Unruled.Core.Military
                     if (own)
                         _combat.Get(fleet).IsVenting = true;
                     break;
+                case CommandType.RaidConvoys:
+                    if (own)
+                        _combat.Get(fleet).RaidsConvoys = command.ParamA != 0;
+                    break;
                 default:
                     throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
             }
@@ -161,7 +172,7 @@ namespace Unruled.Core.Military
             _playerCount = 0;
             for (int k = start; k < end; k++)
                 SlotOf(_units.At(Dense(_keys[k])).OwnerPlayerId, Dense(_keys[k]));
-            if (_playerCount < 2)
+            if (_playerCount < 2 || !PickTargets(start, end))
                 return;
 
             var firstMotion = _motions.Get(_units.EntityAt(Dense(_keys[start])));
@@ -184,6 +195,8 @@ namespace Unruled.Core.Military
                 ref var unit = ref _units.At(i);
                 ref var state = ref _combat.Get(fleet);
                 int p = SlotOf(unit.OwnerPlayerId, i);
+                if (_target[p] < 0 || (_cargo.Has(fleet) && !_raided[p]))
+                    continue;
                 var tier = _fleetBalance.Tier(unit.TechTier);
                 state.EngagedUntilTick = tick + _balance.SalvoCycleTicks;
                 if (!_readiness.Get(fleet).CanAct(tick))
@@ -210,16 +223,9 @@ namespace Unruled.Core.Military
 
             for (int p = 0; p < _playerCount; p++)
             {
-                int t = -1;
-                for (int q = 0; q < _playerCount; q++)
-                    if (q != p && (t < 0 || _playerIds[q] < _playerIds[t]))
-                        t = q;
-                _target[p] = t;
-            }
-
-            for (int p = 0; p < _playerCount; p++)
-            {
                 int t = _target[p];
+                if (t < 0)
+                    continue;
                 long omega = _omegaBase[t];
                 if (!site.IsNull && _sites.Get(site).OwnerPlayerId == _playerIds[t])
                     omega = omega * (100 + FortificationPercent(_playerIds[t], site)) / 100;
@@ -233,8 +239,48 @@ namespace Unruled.Core.Military
                 if (_damage[p] == 0)
                     continue;
                 var focus = _combat.Get(_units.EntityAt(_lead[p])).Focus;
-                ApplyDamage(start, end, _playerIds[_target[p]], _damage[p], focus);
+                ApplyDamage(start, end, _playerIds[_target[p]], _damage[p], focus, _raids[p]);
             }
+        }
+
+        private bool Hostile(int p, int q) => (_armed[p] && _armed[q]) || _raids[p] || _raids[q];
+
+        // Each player's target is the hostile player with the lowest id (-1 = none). False when nobody fights.
+        private bool PickTargets(int start, int end)
+        {
+            for (int p = 0; p < _playerCount; p++)
+            {
+                _armed[p] = false;
+                _raids[p] = false;
+                _raided[p] = false;
+            }
+            for (int k = start; k < end; k++)
+            {
+                int i = Dense(_keys[k]);
+                var fleet = _units.EntityAt(i);
+                int p = SlotOf(_units.At(i).OwnerPlayerId, i);
+                if (!_cargo.Has(fleet))
+                    _armed[p] = true;
+                if (_combat.Get(fleet).RaidsConvoys)
+                    _raids[p] = true;
+            }
+
+            bool any = false;
+            for (int p = 0; p < _playerCount; p++)
+            {
+                int t = -1;
+                for (int q = 0; q < _playerCount; q++)
+                {
+                    if (q == p || !Hostile(p, q))
+                        continue;
+                    _raided[p] |= _raids[q];
+                    if (t < 0 || _playerIds[q] < _playerIds[t])
+                        t = q;
+                }
+                _target[p] = t;
+                any |= t >= 0;
+            }
+            return any;
         }
 
         private int FortificationPercent(int playerId, EntityId site)
@@ -265,6 +311,9 @@ namespace Unruled.Core.Military
                 Array.Resize(ref _damage, size);
                 Array.Resize(ref _target, size);
                 Array.Resize(ref _lead, size);
+                Array.Resize(ref _armed, size);
+                Array.Resize(ref _raids, size);
+                Array.Resize(ref _raided, size);
             }
             _playerIds[_playerCount] = playerId;
             _lead[_playerCount] = denseIndex;
@@ -354,7 +403,7 @@ namespace Unruled.Core.Military
             }
         }
 
-        private void ApplyDamage(int start, int end, int targetPlayerId, long damage, TargetFocusClass focus)
+        private void ApplyDamage(int start, int end, int targetPlayerId, long damage, TargetFocusClass focus, bool raids)
         {
             for (int pass = 0; pass < 4 && damage > 0; pass++)
             {
@@ -368,7 +417,8 @@ namespace Unruled.Core.Military
                 {
                     int i = Dense(_keys[k]);
                     ref var unit = ref _units.At(i);
-                    if (unit.OwnerPlayerId != targetPlayerId || unit.Count(shipClass) == 0)
+                    if (unit.OwnerPlayerId != targetPlayerId || unit.Count(shipClass) == 0 ||
+                        (!raids && _cargo.Has(_units.EntityAt(i))))
                         continue;
                     damage = Hit(i, shipClass, damage, hp);
                 }
@@ -455,6 +505,7 @@ namespace Unruled.Core.Military
             int owner = _units.Get(dead).OwnerPlayerId;
             if (owner <= 0)
                 return;
+            bool contract = _cargo.Has(dead);
             EntityId taker = default;
             for (int i = 0; i < _units.Count; i++)
             {
@@ -462,6 +513,8 @@ namespace Unruled.Core.Military
                 if (unit.TotalShips == 0 || unit.OwnerPlayerId == owner || unit.OwnerPlayerId <= 0)
                     continue;
                 var fleet = _units.EntityAt(i);
+                if (contract && !_combat.Get(fleet).RaidsConvoys)
+                    continue;
                 ref var motion = ref _motions.Get(fleet);
                 bool here = at.Lane.IsNull ? motion.Lane.IsNull && motion.Site == at.Site : motion.Lane == at.Lane;
                 if (here && (taker.IsNull || fleet.Index < taker.Index))
@@ -469,7 +522,7 @@ namespace Unruled.Core.Military
             }
             if (taker.IsNull)
                 return;
-            if (_cargo.Has(dead))
+            if (contract)
                 _offences.ReportPiracy(_units.Get(taker).OwnerPlayerId, tick);
 
             if (!_stolen.Has(taker))

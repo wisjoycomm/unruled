@@ -219,6 +219,7 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.SetRof, combat);
             Commands.Register(CommandType.SetFocus, combat);
             Commands.Register(CommandType.VentCoolant, combat);
+            Commands.Register(CommandType.RaidConvoys, combat);
 
             Relocation = new CapitalRelocationSystem(
                 World, Players, Relocations, Fleets, FleetMotions, Sites, Starlanes, Stockpiles, FleetFactory,

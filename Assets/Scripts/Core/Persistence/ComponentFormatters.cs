@@ -330,7 +330,7 @@ namespace Unruled.Core.Persistence
 
         internal static void Write(MsgPackWriter w, in FleetCombatState v)
         {
-            w.WriteArrayHeader(12);
+            w.WriteArrayHeader(13);
             w.Write((int)v.Focus);
             w.Write((int)v.Rof);
             w.Write(v.TemperatureMilli);
@@ -343,6 +343,7 @@ namespace Unruled.Core.Persistence
             w.Write(v.BatteryDebtMilli);
             w.Write(v.CoolantDebtMilli);
             w.Write(v.FuelDebtMilli);
+            w.Write(v.RaidsConvoys);
         }
 
         internal static FleetCombatState ReadFleetCombatState(MsgPackReader r)
@@ -361,7 +362,8 @@ namespace Unruled.Core.Persistence
             if (n > 9) v.BatteryDebtMilli = r.ReadInt32();
             if (n > 10) v.CoolantDebtMilli = r.ReadInt32();
             if (n > 11) v.FuelDebtMilli = r.ReadInt32();
-            SkipNewer(r, n, 12);
+            if (n > 12) v.RaidsConvoys = r.ReadBool();
+            SkipNewer(r, n, 13);
             return v;
         }
 

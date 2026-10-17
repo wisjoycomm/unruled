@@ -250,5 +250,61 @@ namespace Unruled.Tests.Core.Military
             Assert.IsTrue(_sim.FleetMotions.Get(mover).IsReversing);
             Assert.Greater(_sim.FleetMotions.Get(mover).TravelledMilli, 500_000 - pinned, "reversing fleets break away");
         }
+
+        private EntityId ContractConvoy(int owner)
+        {
+            var convoy = OnOpenLane(_sim.CreateFleet(
+                new FleetUnit { OwnerPlayerId = owner, TechTier = 1, CargoConvoys = 1 }, _citadel));
+            _sim.ContractCargo.Add(convoy, new ContractCargo { Item = ItemId.ItemSteel, Quantity = 10 });
+            _sim.Stockpiles.Get(convoy).Add(ItemId.ItemSteel, 10);
+            return convoy;
+        }
+
+        [Test]
+        public void AContractConvoy_IsLeftAlone_ByAFleetNotSetToRaid()
+        {
+            var convoy = ContractConvoy(Defender);
+            var warFleet = OnOpenLane(Fleet(Attacker, 10, 5, supplies: 100));
+
+            Salvos(20);
+
+            Assert.IsTrue(_sim.World.IsAlive(convoy), "no accidental piracy");
+            Assert.AreEqual(1, U(convoy).CargoConvoys);
+            Assert.AreEqual(0, C(convoy).EngagedUntilTick, "the convoy is not pinned");
+            Assert.AreEqual(0, C(warFleet).EngagedUntilTick);
+            Assert.AreEqual(100, _sim.Stockpiles.Get(warFleet).Get(ItemId.ItemAmmo), "no shots fired");
+        }
+
+        [Test]
+        public void AFleetSetToRaid_SinksTheContractConvoy_AndIsChargedWithPiracy()
+        {
+            _sim.CreatePlayer(Attacker, _north);
+            _sim.CreatePlayer(Defender, _citadel);
+            var convoy = ContractConvoy(Defender);
+            var raider = OnOpenLane(Fleet(Attacker, 10, 5, supplies: 100));
+            Order(CommandType.RaidConvoys, raider, Attacker, 1, 1);
+
+            for (int i = 0; i < 200 && _sim.World.IsAlive(convoy); i++)
+                Salvos(1);
+
+            Assert.IsTrue(C(raider).RaidsConvoys);
+            Assert.IsFalse(_sim.World.IsAlive(convoy), "the convoy was sunk");
+            Assert.AreEqual(10, _sim.StolenGoods.Get(raider).Get(ItemId.ItemSteel), "the cargo is Stolen_WTO_Cargo");
+            Assert.IsFalse(_sim.Authority.MayTrade(Attacker, _sim.Clock.CurrentTick), "piracy bars the WTO");
+        }
+
+        [Test]
+        public void TwoWarFleets_StillFight_WhenAContractConvoyShareTheirLane()
+        {
+            var convoy = ContractConvoy(Defender);
+            var a = OnOpenLane(Fleet(Attacker, 20, 5, supplies: 100));
+            var d = OnOpenLane(Fleet(Defender, 10, 5, supplies: 100));
+
+            Salvos(5);
+
+            Assert.Less(U(d).TotalShips, 15, "the escort takes the hits");
+            Assert.AreEqual(1, U(convoy).CargoConvoys, "the convoy is spared");
+            Assert.Greater(C(a).EngagedUntilTick, 0);
+        }
     }
 }

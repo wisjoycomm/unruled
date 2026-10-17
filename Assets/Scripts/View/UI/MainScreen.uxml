@@ -261,6 +261,7 @@
                         <ui:Button name="order-hold" class="u-btn u-btn--secondary" text="Hold" />
                         <ui:Button name="order-reverse" class="u-btn u-btn--secondary" text="Reverse" />
                         <ui:Button name="order-vent" class="u-btn u-btn--danger" text="Vent coolant" />
+                        <ui:Button name="order-raid" class="u-btn u-btn--secondary" text="Raid convoys: off" />
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement name="side-tabs" class="seg side-tabs">

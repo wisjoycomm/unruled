@@ -155,6 +155,7 @@ namespace Unruled.Core.Military
         public int BatteryDebtMilli;
         public int CoolantDebtMilli;
         public int FuelDebtMilli;
+        public bool RaidsConvoys; // fires on WTO contract convoys (piracy); off, combat leaves them alone
     }
 
     /// <summary>ECS component: what enemy sensors know about a fleet.</summary>

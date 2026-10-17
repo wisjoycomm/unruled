@@ -73,6 +73,28 @@ namespace Unruled.Tests.Core.Persistence
             Assert.AreEqual(0, citadel.FallenTick);
         }
 
+        // Migration: schema 2 saved fleet combat state with 12 keys; those fleets load not raiding convoys.
+        [Test]
+        public void Schema2FleetCombatState_LoadsNotRaidingConvoys()
+        {
+            var w = new MsgPackWriter();
+            w.WriteArrayHeader(12);
+            w.Write(1);
+            w.Write(2);
+            w.Write(25_000);
+            w.Write(false);
+            w.Write(false);
+            for (int i = 0; i < 3; i++)
+                w.Write(0L);
+            for (int i = 0; i < 4; i++)
+                w.Write(i);
+            var state = ComponentFormatters.ReadFleetCombatState(new MsgPackReader(w.ToArray()));
+
+            Assert.AreEqual(25_000, state.TemperatureMilli);
+            Assert.AreEqual(3, state.FuelDebtMilli);
+            Assert.IsFalse(state.RaidsConvoys);
+        }
+
         [Test]
         public void NewerComponentShape_UnknownTrailingKeys_AreSkipped()
         {
@@ -144,7 +166,7 @@ namespace Unruled.Tests.Core.Persistence
             for (int i = 0; i < loaded.Players.Count; i++)
                 Assert.AreEqual(0, loaded.Loans.Get(loaded.Players.EntityAt(i)).DebtCents);
             CollectionAssert.AreEqual(SaveGame.Write(loaded), SaveGame.Write(SaveGame.Load(balance, SaveGame.Write(loaded))),
-                "resaved as schema 2");
+                "resaved as the current schema");
         }
 
         [Test]

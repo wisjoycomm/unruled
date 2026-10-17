@@ -127,6 +127,7 @@ namespace Unruled.Tests.Core.SystemFactions
         {
             Open(_buyerSite); // stuck at the seller's site without fuel
             var raider = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Pirate, TechTier = 1, LineShips = 10 }, _sellerSite);
+            _sim.FleetCombat.Get(raider).RaidsConvoys = true;
             ref var hold = ref _sim.Stockpiles.Get(raider);
             for (int i = 0; i < ItemIds.Count; i++)
                 hold.Add(ItemIds.FromSlot(i), 1_000);

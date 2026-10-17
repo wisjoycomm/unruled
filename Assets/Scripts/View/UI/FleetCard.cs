@@ -8,7 +8,7 @@ namespace Unruled.View.UI
 {
     /// <summary>
     /// The selected fleet's card: ship classes, gun temperature against the release/lock thresholds, the hold's
-    /// burnables, firepower (Ψ) and point defence (Ω), and its orders. Buttons only forward commands through
+    /// burnables, firepower (Ψ) and point defence (Ω), and its orders (Raid convoys toggles WTO piracy). Buttons only forward commands through
     /// <see cref="CommandIssuer"/>; the order lands after signal latency and shows in the in-flight strip.
     /// </summary>
     public sealed class FleetCard
@@ -26,7 +26,7 @@ namespace Unruled.View.UI
         private readonly VisualElement _fill, _release, _lock;
         private readonly Label _ammo, _battery, _coolant, _fuel, _psi, _omega;
         private readonly Button[] _rof = new Button[3];
-        private readonly Button _move, _hold, _reverse, _vent;
+        private readonly Button _move, _hold, _reverse, _vent, _raid;
 
         private SimulationWorld _sim;
         private int _playerId;
@@ -36,6 +36,7 @@ namespace Unruled.View.UI
         private long _refusalUntil;
         private long _tempCache = long.MinValue;
         private int _rofShown = -1;
+        private int _raidShown = -1;
         private readonly long[] _numbers = new long[10];
 
         public FleetCard(VisualElement root)
@@ -67,6 +68,7 @@ namespace Unruled.View.UI
             _hold = TopTelemetryHud.Require<Button>(root, "order-hold");
             _reverse = TopTelemetryHud.Require<Button>(root, "order-reverse");
             _vent = TopTelemetryHud.Require<Button>(root, "order-vent");
+            _raid = TopTelemetryHud.Require<Button>(root, "order-raid");
 
             _rof[0].clicked += () => Issue(CommandType.SetRof, (int)RofStance.Conservation50);
             _rof[1].clicked += () => Issue(CommandType.SetRof, (int)RofStance.Standard100);
@@ -75,6 +77,7 @@ namespace Unruled.View.UI
             _hold.clicked += IssueHold;
             _reverse.clicked += () => Issue(CommandType.Reverse, 0);
             _vent.clicked += () => Issue(CommandType.VentCoolant, 0);
+            _raid.clicked += () => Issue(CommandType.RaidConvoys, _raidShown == 1 ? 0 : 1);
         }
 
         public EntityId Fleet => _fleet;
@@ -100,6 +103,7 @@ namespace Unruled.View.UI
             _refusal = null;
             _tempCache = long.MinValue;
             _rofShown = -1;
+            _raidShown = -1;
             for (int i = 0; i < _numbers.Length; i++)
                 _numbers[i] = long.MinValue;
             bool has = _sim != null && _sim.Fleets.Has(fleet);
@@ -153,6 +157,13 @@ namespace Unruled.View.UI
                 for (int i = 0; i < _rof.Length; i++)
                     _rof[i].EnableInClassList(OnClass, i == rof);
                 _rofShown = rof;
+            }
+
+            int raid = combat.RaidsConvoys ? 1 : 0;
+            if (raid != _raidShown)
+            {
+                _raid.text = raid == 1 ? "Raid convoys: ON" : "Raid convoys: off";
+                _raidShown = raid;
             }
 
             bool onLane = !motion.Lane.IsNull;
