@@ -43,6 +43,28 @@ namespace Unruled.Tests.Core.Economy
         private ref Stockpile Stock => ref _stockpiles.Get(_site);
         private ref Refinery Plant => ref _refineries.Get(_oxygenPlant);
 
+        // Upkeep cents charged over cycles first..last, active or idle.
+        private long Due(int first, int last, bool idle)
+        {
+            long cents = 0;
+            for (int c = first; c <= last; c++)
+                cents += _balance.UpkeepCents(c, idle);
+            return cents;
+        }
+
+        // The default balance with a whole-cent rate, so each cycle charges the same.
+        private void UseWholeCentUpkeep(int centsPerCycle)
+        {
+            var d = DefaultGameBalance.CreateRefineryBalance();
+            var cost = new ItemStack[d.BuildCostCount];
+            for (int i = 0; i < cost.Length; i++)
+                cost[i] = d.BuildCost(i);
+            _balance = new RefineryBalance(d.CycleTicks, d.MaxBatchesPerCycle, centsPerCycle * 1_000, d.IdleUpkeepPercent,
+                d.BrownoutMinGeoLevel, d.BatteryPerBrownoutCycle, d.MaxRefineriesPerSite, d.DefaultStockCap, cost);
+            _system = new RefinerySystem(
+                _world, _refineries, _stockpiles, _weather, _sites, _ledger, DefaultGameBalance.CreateRecipeDatabase(), _balance);
+        }
+
         private void RunCycles(int cycles)
         {
             var clock = new SimClock(new NoCommands());
@@ -75,7 +97,7 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(2 * max + 1, Stock.Get(ItemId.ItemOxygen));
             Assert.AreEqual(0, Stock.Get(ItemId.RawWater));
             Assert.AreEqual(4, Stock.Get(ItemId.RawNitrogen));
-            Assert.AreEqual(3L * _balance.BaseUpkeepCentsPerCycle, Plant.AccruedUpkeepCents);
+            Assert.AreEqual(Due(1, 3, idle: false), Plant.AccruedUpkeepCents);
         }
 
         [Test]
@@ -88,8 +110,8 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(RefineryState.IdleStarved, Plant.State);
             Assert.AreEqual(0, Stock.Get(ItemId.ItemOxygen));
             Assert.AreEqual(5, Stock.Get(ItemId.RawWater));
-            Assert.AreEqual(2L * _balance.IdleUpkeepCentsPerCycle, Plant.AccruedUpkeepCents);
-            Assert.AreEqual(_balance.BaseUpkeepCentsPerCycle * 20 / 100, _balance.IdleUpkeepCentsPerCycle);
+            Assert.AreEqual(Due(1, 2, idle: true), Plant.AccruedUpkeepCents);
+            Assert.AreEqual(_balance.BaseUpkeepMilliCentsPerCycle * 20 / 100, _balance.IdleUpkeepMilliCentsPerCycle);
         }
 
         [Test]
@@ -117,7 +139,7 @@ namespace Unruled.Tests.Core.Economy
 
             Assert.AreEqual(RefineryState.GridBrownout, Plant.State);
             Assert.AreEqual(0, Stock.Get(ItemId.ItemOxygen));
-            Assert.AreEqual(_balance.IdleUpkeepCentsPerCycle, Plant.AccruedUpkeepCents);
+            Assert.AreEqual(Due(1, 1, idle: true), Plant.AccruedUpkeepCents);
         }
 
         [Test]
@@ -160,7 +182,17 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(RefineryState.IdleFull, Plant.State);
             Assert.AreEqual(Plant.StockCap, Stock.Get(ItemId.ItemOxygen), "two cycles reach the cap, the third idles");
             Assert.AreEqual(100 - Plant.StockCap, Stock.Get(ItemId.RawWater));
-            Assert.AreEqual(_balance.BaseUpkeepCentsPerCycle * 2 + _balance.IdleUpkeepCentsPerCycle, Plant.AccruedUpkeepCents);
+            Assert.AreEqual(Due(1, 2, idle: false) + Due(3, 3, idle: true), Plant.AccruedUpkeepCents);
+        }
+
+        [Test]
+        public void AFractionalCentRate_AddsUpToExactlyTheRate()
+        {
+            // 1,000 cycles at a rate in milli-cents: the rate, in cents.
+            Assert.AreEqual(_balance.BaseUpkeepMilliCentsPerCycle, Due(0, 999, idle: false));
+            Assert.AreEqual(_balance.IdleUpkeepMilliCentsPerCycle, Due(0, 999, idle: true));
+            for (int c = 0; c < 1_000; c++)
+                Assert.LessOrEqual(_balance.UpkeepCents(c, idle: false), (_balance.BaseUpkeepMilliCentsPerCycle + 999) / 1_000);
         }
 
         [Test]
@@ -170,7 +202,8 @@ namespace Unruled.Tests.Core.Economy
             _sites.Add(_site, new SiteInfo { OwnerPlayerId = owner });
             var wallet = _world.Create();
             _wallets.Add(wallet, new Wallet { OwnerPlayerId = owner });
-            long cycleCents = _balance.BaseUpkeepCentsPerCycle;
+            UseWholeCentUpkeep(5);
+            long cycleCents = 5;
             _ledger.Grant(wallet, cycleCents * 2 - 1);
             int max = _balance.MaxBatchesPerCycle;
             Stock.Add(ItemId.RawWater, 3 * max);
@@ -181,7 +214,7 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(cycleCents - 1, _ledger.Balance(wallet));
 
             _system.OnTick(2L * _balance.CycleTicks);
-            Assert.AreEqual(_balance.BaseUpkeepCentsPerCycle, Plant.AccruedUpkeepCents, "short by one cent: the cycle is owed");
+            Assert.AreEqual(cycleCents, Plant.AccruedUpkeepCents, "short by one cent: the cycle is owed");
             Assert.AreEqual(cycleCents - 1, _ledger.Balance(wallet), "nothing is paid partly");
             Assert.AreEqual(2 * max, Stock.Get(ItemId.ItemOxygen), "debt does not stop production");
 

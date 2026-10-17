@@ -47,6 +47,10 @@ namespace Unruled.Core.Economy
             if (tick % _balance.CycleTicks != 0)
                 return;
 
+            long cycle = tick / _balance.CycleTicks;
+            long idleCents = _balance.UpkeepCents(cycle, idle: true);
+            long activeCents = _balance.UpkeepCents(cycle, idle: false);
+
             for (int i = 0; i < _refineries.Count; i++)
             {
                 ref var refinery = ref _refineries.At(i);
@@ -55,7 +59,7 @@ namespace Unruled.Core.Economy
                 if (refinery.StockCap > 0 && stock.Get(refinery.Output) >= refinery.StockCap)
                 {
                     refinery.State = RefineryState.IdleFull;
-                    refinery.AccruedUpkeepCents += _balance.IdleUpkeepCentsPerCycle;
+                    refinery.AccruedUpkeepCents += idleCents;
                     PayUpkeep(ref refinery);
                     continue;
                 }
@@ -65,7 +69,7 @@ namespace Unruled.Core.Economy
                 if (batches <= 0)
                 {
                     refinery.State = RefineryState.IdleStarved;
-                    refinery.AccruedUpkeepCents += _balance.IdleUpkeepCentsPerCycle;
+                    refinery.AccruedUpkeepCents += idleCents;
                     PayUpkeep(ref refinery);
                     continue;
                 }
@@ -77,7 +81,7 @@ namespace Unruled.Core.Economy
                     if (!stock.Has(ItemId.ItemBattery, _balance.BatteryPerBrownoutCycle))
                     {
                         refinery.State = RefineryState.GridBrownout;
-                        refinery.AccruedUpkeepCents += _balance.IdleUpkeepCentsPerCycle;
+                        refinery.AccruedUpkeepCents += idleCents;
                         PayUpkeep(ref refinery);
                         continue;
                     }
@@ -88,7 +92,7 @@ namespace Unruled.Core.Economy
                 stock.Add(recipe.Input2, -recipe.Qty2 * batches);
                 stock.Add(recipe.Output, recipe.OutputQty * batches);
                 refinery.State = RefineryState.ActiveProduction;
-                refinery.AccruedUpkeepCents += _balance.BaseUpkeepCentsPerCycle;
+                refinery.AccruedUpkeepCents += activeCents;
                 PayUpkeep(ref refinery);
             }
         }
