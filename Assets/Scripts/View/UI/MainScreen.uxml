@@ -344,6 +344,16 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
+                            <ui:Label class="gauge__label" text="SYSTEM LOAN" />
+                            <ui:Label name="loan-status" class="section-meta" text="NO DEBT" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-borrow" class="u-btn" text="Borrow 1,000" />
+                            <ui:Button name="do-repay" class="u-btn u-btn--secondary" text="Repay 1,000" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
                             <ui:Label class="gauge__label" text="JUMP GATE" />
                             <ui:Label name="gate-status" class="section-meta" text="DORMANT" />
                         </ui:VisualElement>

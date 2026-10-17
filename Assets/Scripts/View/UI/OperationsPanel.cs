@@ -10,7 +10,8 @@ namespace Unruled.View.UI
 {
     /// <summary>
     /// The side column's tabs (MARKET, BASE, SITE) and the two operations panels. BASE: research and the stress test,
-    /// the audit, the shipyard (class x count at the research tier, retrofit of the selected fleet) and the jump gate.
+    /// the audit, THE SYSTEM's loan (debt, due date, borrow and repay in steps), the shipyard (class x count at the
+    /// research tier, retrofit of the selected fleet) and the jump gate.
     /// SITE (the selected site, the core base until one is picked): claim, an item picker, drills (rig, pause/resume,
     /// retract), refineries (build, output cap) and the selected fleet's cargo and convoy route. Buttons only forward
     /// commands through <see cref="CommandIssuer"/>; the feedback line says when an order lands or why it was refused.
@@ -19,6 +20,7 @@ namespace Unruled.View.UI
     {
         private const string OnClass = "seg__item--on";
         private const int CargoStep = 100;
+        private const int LoanStep = 1_000; // credits per borrow or repay click
         private const long Unset = long.MinValue;
         private static readonly int[] ShipCounts = { 1, 5, 10 };
         private static readonly int[] Caps = { 0, 1_000, 5_000 };
@@ -28,9 +30,9 @@ namespace Unruled.View.UI
         private readonly Button[] _shipClass = new Button[4];
         private readonly Button[] _shipCount = new Button[3];
         private readonly Button[] _caps = new Button[3];
-        private readonly Label _research, _ships, _gate, _baseFeedback;
+        private readonly Label _research, _ships, _gate, _loan, _baseFeedback;
         private readonly Label _siteName, _siteOwner, _item, _drills, _refinery, _cargo, _siteFeedback;
-        private readonly Button _stressTest, _audit, _build, _retrofit, _openGate;
+        private readonly Button _stressTest, _audit, _borrow, _repay, _build, _retrofit, _openGate;
         private readonly Button _claim, _rig, _pause, _retract, _buildRefinery, _load, _unload, _route;
 
         private SimulationWorld _sim;
@@ -43,7 +45,7 @@ namespace Unruled.View.UI
         private int _countIndex;
         private int _itemSlot;
         private bool _drillsPaused;
-        private readonly long[] _cache = new long[9];
+        private readonly long[] _cache = new long[10];
 
         public OperationsPanel(VisualElement root)
         {
@@ -78,6 +80,7 @@ namespace Unruled.View.UI
             _research = TopTelemetryHud.Require<Label>(root, "research-status");
             _ships = TopTelemetryHud.Require<Label>(root, "ship-status");
             _gate = TopTelemetryHud.Require<Label>(root, "gate-status");
+            _loan = TopTelemetryHud.Require<Label>(root, "loan-status");
             _baseFeedback = TopTelemetryHud.Require<Label>(root, "base-feedback");
             _siteName = TopTelemetryHud.Require<Label>(root, "site-name");
             _siteOwner = TopTelemetryHud.Require<Label>(root, "site-owner");
@@ -89,6 +92,8 @@ namespace Unruled.View.UI
 
             _stressTest = TopTelemetryHud.Require<Button>(root, "do-stress-test");
             _audit = TopTelemetryHud.Require<Button>(root, "do-audit");
+            _borrow = TopTelemetryHud.Require<Button>(root, "do-borrow");
+            _repay = TopTelemetryHud.Require<Button>(root, "do-repay");
             _build = TopTelemetryHud.Require<Button>(root, "do-build-ships");
             _retrofit = TopTelemetryHud.Require<Button>(root, "do-retrofit");
             _openGate = TopTelemetryHud.Require<Button>(root, "do-open-gate");
@@ -105,6 +110,8 @@ namespace Unruled.View.UI
 
             _stressTest.clicked += () => SendBase(CommandType.StressTest, CoreBase, 0);
             _audit.clicked += () => SendBase(CommandType.AuditOptIn, CoreBase, IsAudited ? 0 : 1);
+            _borrow.clicked += () => SendBase(CommandType.Borrow, CoreBase, LoanStep);
+            _repay.clicked += () => SendBase(CommandType.Repay, CoreBase, LoanStep);
             _build.clicked += IssueBuild;
             _retrofit.clicked += () => SendBase(CommandType.Retrofit, _fleet, 0);
             _openGate.clicked += IssueOpenGate;
@@ -211,6 +218,7 @@ namespace Unruled.View.UI
                 _stressTest.SetEnabled(progress.Stage == ResearchStage.StressTest);
             }
             _audit.text = IsAudited ? "Leave audit" : "Join audit";
+            RefreshLoan(tick);
 
             int queued = 0;
             for (int i = 0; i < _sim.ShipOrders.Count; i++)
@@ -228,6 +236,32 @@ namespace Unruled.View.UI
             if (gateKey != _cache[2])
                 UiFormat.Set(_gate, ref _cache[2], gateKey, GateText(gateKey));
             _openGate.SetEnabled(hasGate && !gate.IsOpen && unlocked);
+        }
+
+        private void RefreshLoan(long tick)
+        {
+            if (!_sim.Loans.Has(_hq))
+                return;
+            ref var loan = ref _sim.Loans.Get(_hq);
+            bool overdue = LoanSystem.IsOverdue(in loan, tick);
+            long left = loan.DebtCents == 0 ? 0 : (loan.DueTick - tick) / SimTick.TicksPerMinute;
+            long key = (loan.DebtCents << 20) ^ left ^ (overdue ? 1L << 62 : 0);
+            if (key != _cache[9])
+                UiFormat.Set(_loan, ref _cache[9], key, LoanText(in loan, overdue, tick));
+            _borrow.SetEnabled(_sim.Lending.HeadroomCents(_hq, tick) > 0);
+            _repay.SetEnabled(loan.DebtCents > 0 && _sim.Ledger.Balance(_hq) > 0);
+        }
+
+        private string LoanText(in Loan loan, bool overdue, long tick)
+        {
+            long limit = _sim.Balance.Ledger.CreditLimitCents / Wallet.CentsPerCredit;
+            if (loan.DebtCents == 0)
+                return "NO DEBT · LIMIT " + UiFormat.Thousands(limit) + " CR";
+            string debt = "OWES " + UiFormat.Price(loan.DebtCents) + " CR";
+            if (overdue)
+                return debt + " · OVERDUE · GOODS SEIZED DAILY";
+            string free = tick < _sim.Balance.Ledger.InterestFreeTicks ? " · INTEREST-FREE" : "";
+            return debt + " · DUE IN " + UiFormat.Duration(loan.DueTick - tick) + free;
         }
 
         private string ResearchText(in TechProgress progress, long value)
