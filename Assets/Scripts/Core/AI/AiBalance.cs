@@ -79,6 +79,7 @@ namespace Unruled.Core.AI
         public readonly int HomeSettleWeight; // presets with no conquest weight still claim neutral home-system sites at this weight
         public readonly int BattleLineShips; // line ships the shipyard builds up to, at the research tier
         public readonly int CoreOreLowReserve; // a core-base deposit with less ore left than this no longer counts as a source: it settles another
+        public readonly int FlankMinLineShips; // a fleet splits for a two-lane attack only with at least this many line ships
         private readonly AiPreset[] _presets;
 
         public AiBalance(
@@ -87,7 +88,7 @@ namespace Unruled.Core.AI
             int rawStockCap, int loadUpkeepIntervals, byte citadelAssaultTier, int sellAbove, int fillAbove, int sellBatch,
             int tradePricePercent, int tradeOrderTicks, int bidBudgetPercent, int homeSettleWeight,
             int battleLineShips, int loadBatteryPerEwShip, long cashReserveCredits, long travelCashCredits, int scanBatteryReserve, int scanWindowTicks,
-            int coreOreLowReserve, AiPreset[] presets)
+            int coreOreLowReserve, int flankMinLineShips, AiPreset[] presets)
         {
             if (thinkIntervalTicks < 1) throw new ArgumentOutOfRangeException(nameof(thinkIntervalTicks));
             if (fullBatteryScans < 1) throw new ArgumentOutOfRangeException(nameof(fullBatteryScans));
@@ -117,6 +118,7 @@ namespace Unruled.Core.AI
             if (scanBatteryReserve < 0) throw new ArgumentOutOfRangeException(nameof(scanBatteryReserve));
             if (scanWindowTicks < 1 || scanWindowTicks > SimTick.TicksPerHour) throw new ArgumentOutOfRangeException(nameof(scanWindowTicks));
             if (coreOreLowReserve < 0) throw new ArgumentOutOfRangeException(nameof(coreOreLowReserve));
+            if (flankMinLineShips < 2) throw new ArgumentOutOfRangeException(nameof(flankMinLineShips));
             if (presets == null || presets.Length == 0) throw new ArgumentException("Presets required.", nameof(presets));
             for (int i = 0; i < presets.Length; i++)
             {
@@ -150,6 +152,7 @@ namespace Unruled.Core.AI
             HomeSettleWeight = homeSettleWeight;
             BattleLineShips = battleLineShips;
             CoreOreLowReserve = coreOreLowReserve;
+            FlankMinLineShips = flankMinLineShips;
             _presets = (AiPreset[])presets.Clone();
         }
 

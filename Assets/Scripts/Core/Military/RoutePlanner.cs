@@ -56,9 +56,15 @@ namespace Unruled.Core.Military
             TryPlan(from, to, techTier, tollFree: false, ref route);
 
         /// <summary>As <see cref="TryPlan(EntityId, EntityId, byte, ref FleetRoute)"/>; tollFree skips lanes that charge the STA toll.</summary>
-        public bool TryPlan(EntityId from, EntityId to, byte techTier, bool tollFree, ref FleetRoute route)
+        public bool TryPlan(EntityId from, EntityId to, byte techTier, bool tollFree, ref FleetRoute route) =>
+            TryPlan(from, to, techTier, tollFree, default, ref route);
+
+        /// <summary>As <see cref="TryPlan(EntityId, EntityId, byte, bool, ref FleetRoute)"/>, never passing through
+        /// <paramref name="avoid"/> (unless it is the destination; null avoids nothing).</summary>
+        public bool TryPlan(EntityId from, EntityId to, byte techTier, bool tollFree, EntityId avoid, ref FleetRoute route)
         {
             route.Clear();
+            int avoided = avoid.IsNull || avoid == to ? -1 : avoid.Index;
             int n = _graph.SiteCapacity;
             if (from == to || from.Index >= n || to.Index >= n)
                 return false;
@@ -91,6 +97,8 @@ namespace Unruled.Core.Military
                     if (techTier < rules.MinTechTier || (tollFree && rules.ChargesStaToll))
                         continue;
                     int next = _graph.NeighborAt(slot).Index;
+                    if (next == avoided)
+                        continue;
                     long cost = _cost[current] + TravelTicks(edge);
                     if (_done[next] || cost >= _cost[next])
                         continue;

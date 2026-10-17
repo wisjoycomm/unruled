@@ -277,7 +277,7 @@ namespace Unruled.Core.Simulation
             Ai = new UtilityAiEngine(
                 AiControllers, Players, Fleets, FleetMotions, FleetCombat, FleetReadiness, Stockpiles, Sites, Weather, Deposits,
                 Starlanes, RadarScans, TechProgress, JumpGates, ConvoyRoutes, ShipOrders, Refineries, Standings, Citadels, WtoOrders,
-                ItemMarkets, Loans, Sanctions, Ledger, WtoFeePool, Rates, Issuer, Routes, Tolls, TechGates, balance);
+                ItemMarkets, Loans, Sanctions, FleetRoutes, Ledger, WtoFeePool, Rates, Issuer, Routes, Tolls, TechGates, balance);
             Commands.Register(CommandType.SetStandingOrders, Ai);
         }
 

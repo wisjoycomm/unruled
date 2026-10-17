@@ -51,7 +51,9 @@ namespace Unruled.Core.AI
         BuyFeedstock = 32,
         BuyFromSystem = 33,
         MergeFleets = 34,
-        RaidConvoys = 35
+        RaidConvoys = 35,
+        FlankSplit = 36,
+        FlankMove = 37
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -96,6 +98,13 @@ namespace Unruled.Core.AI
     /// core base) while it carries the claim cost. Advantage reads 500 at even power up to 1000 when undefended. A
     /// siege first prefers the most deposits of ores the player mines nowhere yet; then the best advantage wins, then the
     /// fewest lanes.</item>
+    /// <item>Multi-lane flanking (GDD §2.5, PROVISIONAL): a raid or siege on a defended site goes in on two lanes whose
+    /// approach directions are at least 90° apart, as each extra lane cuts the defenders' point defence. With another own
+    /// fleet already bound for the target, the fleet heads for a staging site across an independent lane, on a route that
+    /// skirts the target (as far along it as a plain Move there does too); else one of at least FlankMinLineShips line
+    /// ships, whose half outguns the defenders and with no other own fleet docked beside it, splits in two first. A fleet
+    /// ready at a quiet site within two lanes of such a target carries on the same way while the two together outgun the
+    /// defenders, and from the staging site goes in along the flank lane.</item>
     /// <item>A fleet ready at a claimable site carrying the claim cost: claim it (Siege_Conquest). Ready at a site that is
     /// not its player's, with nothing to fight or claim: go home (Resupply_Logistics at half).</item>
     /// <item>A fleet ready at its own outpost (Siege_Conquest): rigs on each bare deposit with ore left, unloading the rig
@@ -119,6 +128,7 @@ namespace Unruled.Core.AI
         private readonly ComponentStore<PlayerHq> _players;
         private readonly ComponentStore<FleetUnit> _units;
         private readonly ComponentStore<FleetMotion> _motions;
+        private readonly ComponentStore<FleetRoute> _fleetRoutes;
         private readonly ComponentStore<FleetCombatState> _combat;
         private readonly ComponentStore<FleetReadiness> _readiness;
         private readonly ComponentStore<Stockpile> _stockpiles;
@@ -164,6 +174,7 @@ namespace Unruled.Core.AI
         private readonly SystemAuthorityBalance _authorityBalance;
 
         private FleetRoute _route;
+        private FleetRoute _detour;
 
         private AiOrder[] _orders = new AiOrder[16];
         private int _orderCount;
@@ -177,7 +188,7 @@ namespace Unruled.Core.AI
             ComponentStore<ConvoyRoute> convoyRoutes, ComponentStore<ShipBuildOrder> shipOrders,
             ComponentStore<Refinery> refineries, ComponentStore<PlayerStanding> standings, ComponentStore<SystemCitadel> citadels,
             ComponentStore<WtoOrder> wtoOrders, ComponentStore<ItemMarket> markets, ComponentStore<Loan> loans,
-            ComponentStore<SystemSanction> sanctions, Ledger ledger,
+            ComponentStore<SystemSanction> sanctions, ComponentStore<FleetRoute> fleetRoutes, Ledger ledger,
             EntityId systemStock, IMarketRates rates,
             CommandIssuer issuer,
             RoutePlanner routes, ITollGate tolls, ITechGates tech, GameBalanceConfig config)
@@ -206,6 +217,7 @@ namespace Unruled.Core.AI
             _markets = markets ?? throw new ArgumentNullException(nameof(markets));
             _loans = loans ?? throw new ArgumentNullException(nameof(loans));
             _sanctions = sanctions ?? throw new ArgumentNullException(nameof(sanctions));
+            _fleetRoutes = fleetRoutes ?? throw new ArgumentNullException(nameof(fleetRoutes));
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             if (systemStock.IsNull) throw new ArgumentException("THE SYSTEM's stock required.", nameof(systemStock));
             _systemStock = systemStock;
@@ -361,7 +373,7 @@ namespace Unruled.Core.AI
             bool docked = motion.Lane.IsNull && !motion.Site.IsNull && state.EngagedUntilTick <= tick;
             bool ready = docked && (!_readiness.Has(fleet) || _readiness.Get(fleet).CanAct(tick));
             EntityId raidTarget = default, siegeTarget = default, citadelTarget = default, developTarget = default,
-                rigDeposit = default;
+                rigDeposit = default, flankTo = default;
             var loadItem = ItemId.None;
             int loadQuantity = 0;
             if (docked && motion.Site == player.CoreBase)
@@ -403,6 +415,12 @@ namespace Unruled.Core.AI
                         Consider(AiAction.DevelopOutpost, Score(SettleWeight(preset), Full), ref best, ref bestScore);
                 }
             }
+            else if (ready && motion.Site != player.CoreBase && FlankWeight(preset) > 0 &&
+                     Power(motion.Site, player.PlayerId, mine: false) == 0 && !IsStandingCitadel(motion.Site) &&
+                     FindFlankStep(player.PlayerId, fleet, in unit, motion.Site, hold.Get(ItemId.ItemFuel), out flankTo))
+            {
+                Consider(AiAction.FlankMove, Score(FlankWeight(preset), Full), ref best, ref bestScore);
+            }
             // At a standing Citadel the fleet stays: its docked line ships bombard the shield until ammo runs low.
             else if (ready && IsAway(motion.Site, player.PlayerId) && Power(motion.Site, player.PlayerId, mine: false) == 0 &&
                      !IsStandingCitadel(motion.Site))
@@ -427,6 +445,10 @@ namespace Unruled.Core.AI
 
             if (bestScore == 0)
                 return;
+            if ((best == AiAction.StealthRaid || best == AiAction.Siege) &&
+                PlanFlank(player.PlayerId, fleet, in unit, motion.Site, best == AiAction.StealthRaid ? raidTarget : siegeTarget,
+                    hold.Get(ItemId.ItemFuel), out var flank, out flankTo))
+                best = flank;
             var command = new DelayedPlayerCommand { PlayerId = player.PlayerId, Target = fleet };
             switch (best)
             {
@@ -464,6 +486,17 @@ namespace Unruled.Core.AI
                     command.CommandType = CommandType.Move;
                     command.ParamEntity = developTarget;
                     command.ParamC = TollFreeFlag(motion.Site, developTarget, in unit, trips: 2);
+                    break;
+                case AiAction.FlankSplit:
+                    command.CommandType = CommandType.SplitFleet;
+                    command.ParamA = unit.LineShips / 2;
+                    command.ParamB = unit.EwShips / 2;
+                    command.ParamC = unit.SupplyTenders / 2;
+                    break;
+                case AiAction.FlankMove:
+                    command.CommandType = CommandType.Move;
+                    command.ParamEntity = flankTo;
+                    command.ParamC = _sites.Has(flankTo) ? TollFreeFlag(motion.Site, flankTo, in unit, trips: 2) : 0;
                     break;
                 case AiAction.ClaimSite:
                     command.CommandType = CommandType.ClaimSite;
@@ -1272,6 +1305,213 @@ namespace Unruled.Core.AI
                 bestLanes = _route.Count;
             }
             return !target.IsNull;
+        }
+
+        private static int FlankWeight(AiPreset preset) => Math.Max(preset.StealthRaidWeight, preset.SiegeConquestWeight);
+
+        // See the flanking item in the class summary. FlankSplit: split first; FlankMove: to the staging site (or straight down
+        // the flank lane when the fleet already sits at its far end).
+        private bool PlanFlank(int playerId, EntityId fleet, in FleetUnit unit, EntityId from, EntityId target, int fuel,
+            out AiAction action, out EntityId flankTo)
+        {
+            action = default;
+            flankTo = default;
+            long hostile = Power(target, playerId, mine: false);
+            if (hostile == 0)
+                return false;
+            if (FindPartnerArrival(playerId, fleet, target, out var partnerLane))
+            {
+                if (!FlankStep(in unit, from, target, partnerLane, fuel, playerId, out flankTo))
+                    return false;
+                action = AiAction.FlankMove;
+                return true;
+            }
+            var half = unit;
+            half.LineShips /= 2;
+            half.EwShips /= 2;
+            half.SupplyTenders /= 2;
+            if (unit.LineShips < _balance.FlankMinLineShips || FleetPower(in half) <= hostile ||
+                HasDockedPartner(playerId, fleet, from, unit.TechTier) || _issuer.IsInFlight(playerId, CommandType.SplitFleet, fleet) ||
+                !PlanTrip(from, target, in unit, trips: 2))
+                return false;
+            var arrival = _route.LaneAt(_route.Count - 1);
+            if (!FlankStep(in half, from, target, arrival, fuel / 2, playerId, out _))
+                return false;
+            action = AiAction.FlankSplit;
+            return true;
+        }
+
+        // Another own fleet with line ships at the target, on its way there, or with a Move there in flight; lane: the one it
+        // arrives (or arrived) through, null if unknown.
+        private bool FindPartnerArrival(int playerId, EntityId self, EntityId target, out EntityId lane)
+        {
+            for (int f = 0; f < _units.Count; f++)
+            {
+                ref var unit = ref _units.At(f);
+                var fleet = _units.EntityAt(f);
+                if (fleet == self || unit.OwnerPlayerId != playerId || unit.LineShips == 0 || unit.IsConvoyOnly)
+                    continue;
+                ref var motion = ref _motions.Get(fleet);
+                if (motion.Lane.IsNull)
+                {
+                    if (motion.Site != target)
+                        continue;
+                    lane = motion.ArrivalLane;
+                    return true;
+                }
+                if (Destination(fleet, in motion, out lane) == target)
+                    return true;
+            }
+            lane = default;
+            if (!_issuer.IsMoveInFlight(playerId, target, out var mover) || mover == self || !_motions.Has(mover) ||
+                !_units.Has(mover))
+                return false;
+            ref var at = ref _motions.Get(mover);
+            if (at.Lane.IsNull && PlanTrip(at.Site, target, in _units.Get(mover), trips: 2) && _route.Count > 0)
+                lane = _route.LaneAt(_route.Count - 1);
+            return true;
+        }
+
+        // Where a fleet on a lane ends its route, and the last lane it takes there.
+        private EntityId Destination(EntityId fleet, in FleetMotion motion, out EntityId lastLane)
+        {
+            lastLane = motion.Lane;
+            if (!_lanes.Has(lastLane))
+                return default;
+            var site = _lanes.Get(lastLane).OtherEnd(motion.FromSite);
+            if (!_fleetRoutes.Has(fleet))
+                return site;
+            ref var route = ref _fleetRoutes.Get(fleet);
+            for (int i = route.Next; i < route.Count; i++)
+            {
+                var lane = route.LaneAt(i);
+                if (!_lanes.Has(lane))
+                    return default;
+                site = _lanes.Get(lane).OtherEnd(site);
+                lastLane = lane;
+            }
+            return site;
+        }
+
+        private bool HasDockedPartner(int playerId, EntityId self, EntityId site, byte tier)
+        {
+            for (int f = 0; f < _units.Count; f++)
+            {
+                ref var unit = ref _units.At(f);
+                var fleet = _units.EntityAt(f);
+                if (fleet == self || unit.OwnerPlayerId != playerId || unit.LineShips == 0 || unit.IsConvoyOnly ||
+                    unit.TechTier != tier)
+                    continue;
+                ref var motion = ref _motions.Get(fleet);
+                if (motion.Lane.IsNull && motion.Site == site &&
+                    (!_readiness.Has(fleet) || !_readiness.Get(fleet).IsMothballed))
+                    return true;
+            }
+            return false;
+        }
+
+        // Whether two approaches into the target, from the far ends of these lanes, are at least 90° apart.
+        private bool IsIndependent(EntityId target, EntityId lane, EntityId other)
+        {
+            if (other.IsNull || !_lanes.Has(other))
+                return lane != other;
+            if (lane == other)
+                return false;
+            ref var at = ref _sites.Get(target);
+            ref var a = ref _sites.Get(_lanes.Get(lane).OtherEnd(target));
+            ref var b = ref _sites.Get(_lanes.Get(other).OtherEnd(target));
+            return ((long)at.PosX - a.PosX) * ((long)at.PosX - b.PosX) + ((long)at.PosY - a.PosY) * ((long)at.PosY - b.PosY) <= 0;
+        }
+
+        // The next step of a flank: towards the nearest quiet staging site at the far end of a lane into the target that is
+        // independent of the partner's, on a detour that skirts the target and fits a round trip of fuel. flankTo is the
+        // furthest site on the detour a plain Move also reaches without passing the target (else its first lane), or the
+        // flank lane itself once the fleet stands at the staging site.
+        private bool FlankStep(in FleetUnit unit, EntityId from, EntityId target, EntityId partnerLane, int fuel, int playerId,
+            out EntityId flankTo)
+        {
+            flankTo = default;
+            int bestLanes = int.MaxValue;
+            for (int l = 0; l < _lanes.Count; l++)
+            {
+                ref var edge = ref _lanes.At(l);
+                if (edge.SiteA != target && edge.SiteB != target)
+                    continue;
+                var lane = _lanes.EntityAt(l);
+                var site = edge.OtherEnd(target);
+                if (!_sites.Has(site) || !IsIndependent(target, lane, partnerLane) || Power(site, playerId, mine: false) > 0)
+                    continue;
+                if (site == from)
+                {
+                    flankTo = lane;
+                    return true;
+                }
+                if (!_routes.TryPlan(from, site, unit.TechTier, tollFree: false, target, ref _route) ||
+                    _route.Count >= bestLanes || 2L * RouteFuel(in unit) > fuel)
+                    continue;
+                _detour = _route;
+                bestLanes = _route.Count;
+            }
+            if (bestLanes == int.MaxValue)
+                return false;
+            var stop = from;
+            flankTo = _detour.LaneAt(0);
+            for (int i = 0; i < _detour.Count; i++)
+            {
+                stop = _lanes.Get(_detour.LaneAt(i)).OtherEnd(stop);
+                if (_routes.TryPlan(from, stop, unit.TechTier, ref _route) && !RouteTouches(target))
+                    flankTo = stop;
+            }
+            return true;
+        }
+
+        private bool RouteTouches(EntityId site)
+        {
+            for (int i = 0; i < _route.Count; i++)
+            {
+                ref var edge = ref _lanes.Get(_route.LaneAt(i));
+                if (edge.SiteA == site || edge.SiteB == site)
+                    return true;
+            }
+            return false;
+        }
+
+        // At a quiet site: the flank step towards a defended site (not a Citadel) within two lanes that another own fleet
+        // is bound for or at, when the two together outgun the defenders.
+        private bool FindFlankStep(int playerId, EntityId fleet, in FleetUnit unit, EntityId site, int fuel, out EntityId flankTo)
+        {
+            flankTo = default;
+            if (unit.LineShips == 0 || fuel == 0)
+                return false;
+            for (int l = 0; l < _lanes.Count; l++)
+            {
+                ref var edge = ref _lanes.At(l);
+                if (edge.SiteA != site && edge.SiteB != site)
+                    continue;
+                var near = edge.OtherEnd(site);
+                if (TryFlankStepAt(playerId, fleet, in unit, site, near, fuel, out flankTo))
+                    return true;
+                for (int k = 0; k < _lanes.Count; k++)
+                {
+                    ref var next = ref _lanes.At(k);
+                    if (k != l && (next.SiteA == near || next.SiteB == near) && next.OtherEnd(near) != site &&
+                        TryFlankStepAt(playerId, fleet, in unit, site, next.OtherEnd(near), fuel, out flankTo))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        private bool TryFlankStepAt(int playerId, EntityId fleet, in FleetUnit unit, EntityId site, EntityId target, int fuel,
+            out EntityId flankTo)
+        {
+            flankTo = default;
+            if (!_sites.Has(target) || IsStandingCitadel(target))
+                return false;
+            long hostile = Power(target, playerId, mine: false);
+            return hostile > 0 && FindPartnerArrival(playerId, fleet, target, out var partnerLane) &&
+                   FleetPower(in unit) + Power(target, playerId, mine: true) > hostile &&
+                   FlankStep(in unit, site, target, partnerLane, fuel, playerId, out flankTo);
         }
 
         // A standing Citadel whose garrison (if formed) the fleet outguns, within a round trip of fuel; edge as in FindTarget.

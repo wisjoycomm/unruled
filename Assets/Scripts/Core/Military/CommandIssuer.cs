@@ -117,6 +117,22 @@ namespace Unruled.Core.Military
             return false;
         }
 
+        /// <summary>True while a Move from the player to this destination site waits out its latency; gives its fleet.</summary>
+        public bool IsMoveInFlight(int playerId, EntityId destination, out EntityId fleet)
+        {
+            for (int i = 0; i < _clock.PendingCommandCount; i++)
+            {
+                var pending = _clock.PendingAt(i);
+                if (pending.PlayerId == playerId && pending.CommandType == CommandType.Move && pending.ParamEntity == destination)
+                {
+                    fleet = pending.Target;
+                    return true;
+                }
+            }
+            fleet = default;
+            return false;
+        }
+
         private bool IsParalysed(int playerId)
         {
             for (int i = 0; i < _players.Count; i++)
