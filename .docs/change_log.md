@@ -94,3 +94,4 @@
 - 2026-10-17 - Claude - Leaderboard net worth subtracts loan debt, so borrowed cash no longer ranks a player up; test.
 - 2026-10-17 - Claude - Mining balance doc comment matches its numbers (60-tick cycle, 30 ore).
 - 2026-10-17 - Claude - AI sell deposits again come only from cash above the travel cash (a broke AI now sells to THE SYSTEM instead); test. Soak: listings nobody bought had locked ~11,000 credits in escrow.
+- 2026-10-17 - Claude - A debt-free AI spends cash above twice its reserve on the cheapest rival listing of a raw its refineries take in; tests. Soak: one debt-free AI sat on 15,000 credits while the rest were stuck at their credit limit.

@@ -193,6 +193,45 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void IdleCash_BuysTheCheapestRivalListing_OfARawItFeeds_OnlyDebtFree()
+        {
+            var ai = _sim.Balance.Ai;
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.Complete; // retooling would finish and start the next research
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemRations });
+            _sim.Ledger.TryFindPlayerWallet(Me, out var wallet);
+            _sim.Ledger.Burn(wallet, _sim.Ledger.Balance(wallet));
+            _sim.Ledger.Grant(wallet, 3 * ai.CashReserveCredits * Wallet.CentsPerCredit);
+            long price = Price(ItemId.RawBiomass, -5);
+            foreach (long ask in new[] { price + 10, price })
+                _sim.WtoOrders.Add(_sim.World.Create(), new WtoOrder
+                {
+                    OwnerPlayerId = 2, Item = ItemId.RawBiomass, Side = OrderSide.Sell, PriceCents = ask, Remaining = 10,
+                    Site = _sim.World.Create()
+                });
+            _sim.Loans.Get(_hq).PrincipalCents = 1;
+            Assert.IsFalse(Find(AiAction.BuyFeedstock).HasValue, "idle cash repays debt first");
+
+            _sim.Loans.Get(_hq).PrincipalCents = 0;
+            _sim.Clock.Advance(1);
+            Assert.IsTrue(Find(AiAction.BuyFeedstock).HasValue);
+        }
+
+        [Test]
+        public void IdleCash_BuysNoFeedstock_ItAlreadyHolds()
+        {
+            var ai = _sim.Balance.Ai;
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.Complete;
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemRations });
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawBiomass, ai.SellAbove);
+            _sim.WtoOrders.Add(_sim.World.Create(), new WtoOrder
+            {
+                OwnerPlayerId = 2, Item = ItemId.RawBiomass, Side = OrderSide.Sell, PriceCents = Price(ItemId.RawBiomass, 0),
+                Remaining = 10, Site = _sim.World.Create()
+            });
+            Assert.IsFalse(Find(AiAction.BuyFeedstock).HasValue);
+        }
+
+        [Test]
         public void DoesNotBid_WithoutTheCredits()
         {
             _sim.TechProgress.Get(_hq).Stage = ResearchStage.StressTest;

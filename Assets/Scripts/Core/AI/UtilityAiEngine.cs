@@ -47,7 +47,8 @@ namespace Unruled.Core.AI
         Activate = 28,
         Borrow = 29,
         Repay = 30,
-        SellToSystem = 31
+        SellToSystem = 31,
+        BuyFeedstock = 32
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -730,9 +731,10 @@ namespace Unruled.Core.AI
 
         // WTO: cancels its orders open past the trade window; sells surplus into a rival's bid, or else, under the travel
         // cash, sells a batch to THE SYSTEM's standing bid, or else lists one batch under the reference price; bids over it
-        // for the first item the next stress test still lacks. Orders are sized to what the cash above the travel cash can
-        // lock: the seller's escrow deposit, the buyer's payment from its bid budget. One order of a kind in flight at a
-        // time.
+        // for the first item the next stress test still lacks, or else, debt-free with cash above twice its reserve (idle
+        // money, which would otherwise repay debt), buys the cheapest rival listing of a raw it feeds and holds under the
+        // sell threshold. Orders are sized to what the cash above the travel cash can lock: the seller's escrow deposit, the
+        // buyer's payment from its bid budget (of the idle cash, for feedstock). One order of a kind in flight at a time.
         private void ThinkTrade(in PlayerHq player, AiPreset preset, EntityId hq, long tick)
         {
             if (!_stockpiles.Has(player.CoreBase) || !_ledger.TryFindPlayerWallet(player.PlayerId, out var wallet))
@@ -772,9 +774,23 @@ namespace Unruled.Core.AI
             else if (!listing && FindSurplusToList(player.PlayerId, hq, ref stock, feeds, tick, out sellItem, out ask, out wanted))
                 IssueSell(player.PlayerId, player.CoreBase, sellItem, ask, wanted, spare, weight);
 
-            if (!_progress.Has(hq) || _progress.Get(hq).Stage > ResearchStage.StressTest ||
-                _issuer.IsInFlight(player.PlayerId, CommandType.PlaceBuyOrder, player.CoreBase))
+            if (_issuer.IsInFlight(player.PlayerId, CommandType.PlaceBuyOrder, player.CoreBase))
                 return;
+            if (!_progress.Has(hq) || _progress.Get(hq).Stage > ResearchStage.StressTest)
+            {
+                long idle = cash - 2 * _balance.CashReserveCredits * Wallet.CentsPerCredit;
+                if (idle <= 0 || (_loans.Has(hq) && _loans.Get(hq).DebtCents > 0) ||
+                    !FindListingToBuy(player.PlayerId, ref stock, feeds, out var feedItem, out long feedAsk, out int feedWanted))
+                    return;
+                long feedQuantity = Math.Min(feedWanted, idle * _balance.BidBudgetPercent / 100 / feedAsk);
+                if (feedQuantity > 0)
+                    Issue(new DelayedPlayerCommand
+                    {
+                        PlayerId = player.PlayerId, CommandType = CommandType.PlaceBuyOrder, Target = player.CoreBase,
+                        ParamA = (int)feedItem, ParamB = (int)feedQuantity, ParamC = (int)feedAsk
+                    }, AiAction.BuyFeedstock, Score(weight, Threshold));
+                return;
+            }
             var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
             for (int i = 0; i < cost.Length; i++)
             {
@@ -872,6 +888,28 @@ namespace Unruled.Core.AI
             }
             item = ItemId.None;
             return false;
+        }
+
+        // The cheapest rival listing of a raw the player feeds, holds under the sell threshold and isn't already bidding
+        // for: up to a batch of it at its price.
+        private bool FindListingToBuy(int playerId, ref Stockpile stock, int feeds, out ItemId item, out long price,
+            out int wanted)
+        {
+            item = ItemId.None;
+            price = 0;
+            wanted = 0;
+            for (int o = 0; o < _wtoOrders.Count; o++)
+            {
+                ref var ask = ref _wtoOrders.At(o);
+                if (ask.Side != OrderSide.Sell || ask.OwnerPlayerId == playerId || !Feeds(feeds, ask.Item) ||
+                    stock.Get(ask.Item) >= _balance.SellAbove || (wanted > 0 && ask.PriceCents >= price) ||
+                    HasOpenOrder(playerId, ask.Item, OrderSide.Buy))
+                    continue;
+                item = ask.Item;
+                price = ask.PriceCents;
+                wanted = Math.Min(ask.Remaining, _balance.SellBatch);
+            }
+            return wanted > 0;
         }
 
         private static readonly FleetUnit ContractConvoy = new FleetUnit { TechTier = WtoContractSystem.ConvoyTier, CargoConvoys = 1 };

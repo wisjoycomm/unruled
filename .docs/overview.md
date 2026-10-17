@@ -28,7 +28,7 @@ components, then rebuilds the graph. `CreatePlayer(playerId, coreBase)` creates 
 which adds every fleet component and an empty cargo hold. Orders enter through `CommandIssuer.Issue`, which stamps
 the signal latency and queues them; when due, `SimClock` sends them through `CommandRouter` to the owning system.
 `UtilityAiEngine` (`Ai`) is not on the clock: the host calls `Ai.Think(tick)` (every 10 ticks, Server 2), and it
-issues orders only through `CommandIssuer`. Per player it first borrows up to its cash reserve once under its travel cash (kept for tolls; WTO orders never lock it, and under it surplus goes to THE SYSTEM's bid instead of a listing) and repays debt above twice the reserve, or all it can once the debt falls due. Per fleet it vents, retreats, resupplies, loads up at the core base
+issues orders only through `CommandIssuer`. Per player it first borrows up to its cash reserve once under its travel cash (kept for tolls; WTO orders never lock it, and under it surplus goes to THE SYSTEM's bid instead of a listing); debt-free cash above twice the reserve buys rival listings of raws its refineries take in and repays debt above twice the reserve, or all it can once the debt falls due. Per fleet it vents, retreats, resupplies, loads up at the core base
 (fill-to transfers), then stealth-raids or besieges a site it outguns with round-trip fuel, claims it and rigs its
 deposits; convoy fleets get routes to unserved outposts. Per deposit it pauses drills in storms or at the raw stock
 cap, retracts them when outgunned and rebuilds bare ones; per player it joins the audit, builds convoys and refineries,
