@@ -142,7 +142,8 @@ methods, in this order (rule 4).
   `ComponentFormatters` holds one explicit formatter per component: an array indexed by key, so missing trailing
   keys read as defaults and unknown ones are skipped. `MsgPackWriter` / `MsgPackReader` are a small in-house codec.
   Balance is not saved (it comes from config); the starlane graph is rebuilt on load. A new store or component
-  field must be appended to `ComponentFormatters` / `SaveGame`, with `SchemaVersion` bumped.
+  field must be appended to `ComponentFormatters` / `SaveGame`, with `SchemaVersion` bumped. Schema 2 appended the
+  `Loan` store; a schema-1 save loads with an empty loan on every player.
   `GameSession` continues `persistentDataPath/unruled.save` at start-up and autosaves every sim hour and on
   pause/quit.
 

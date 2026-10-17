@@ -12,20 +12,25 @@ namespace Unruled.Core.Persistence
     public static class SaveGame
     {
         /// <summary>Bump when a saved shape changes, and add a migration test for the older version.</summary>
-        public const int SchemaVersion = 1;
+        public const int SchemaVersion = 2;
 
         private const int TopLevelKeys = 6;
-        private const int StoreCount = 37;
+        private const int StoreCount = 38;
 
         private delegate void Writer<T>(MsgPackWriter w, in T value);
         private delegate T Reader<T>(MsgPackReader r);
 
-        public static byte[] Write(SimulationWorld sim)
+        public static byte[] Write(SimulationWorld sim) => Write(sim, SchemaVersion, StoreCount);
+
+        /// <summary>Writes the first <paramref name="storeCount"/> stores under <paramref name="schemaVersion"/>: the
+        /// shape an older build saved, for migration tests.</summary>
+        internal static byte[] Write(SimulationWorld sim, int schemaVersion, int storeCount)
         {
             if (sim == null) throw new ArgumentNullException(nameof(sim));
+            if (storeCount < 0 || storeCount > StoreCount) throw new ArgumentOutOfRangeException(nameof(storeCount));
             var w = new MsgPackWriter(64 * 1024);
             w.WriteArrayHeader(TopLevelKeys);
-            w.Write(SchemaVersion);
+            w.Write(schemaVersion);
             w.Write(sim.WorldSeed);
             w.Write(sim.Clock.CurrentTick);
             WriteAllocator(w, sim.World);
@@ -34,44 +39,45 @@ namespace Unruled.Core.Persistence
             for (int i = 0; i < sim.Clock.PendingCommandCount; i++)
                 ComponentFormatters.Write(w, sim.Clock.PendingAt(i));
 
-            w.WriteArrayHeader(StoreCount);
-            WriteStore(w, sim.Sites, ComponentFormatters.Write);
-            WriteStore(w, sim.Starlanes, ComponentFormatters.Write);
-            WriteStore(w, sim.LaneWeather, ComponentFormatters.Write);
-            WriteStore(w, sim.StormFronts, ComponentFormatters.Write);
-            WriteStore(w, sim.Weather, ComponentFormatters.Write);
-            WriteStore(w, sim.Stockpiles, ComponentFormatters.Write);
-            WriteStore(w, sim.Deposits, ComponentFormatters.Write);
-            WriteStore(w, sim.Refineries, ComponentFormatters.Write);
-            WriteStore(w, sim.Quarantines, ComponentFormatters.Write);
-            WriteStore(w, sim.Players, ComponentFormatters.Write);
-            WriteStore(w, sim.Relays, ComponentFormatters.Write);
-            WriteStore(w, sim.Fleets, ComponentFormatters.Write);
-            WriteStore(w, sim.FleetMotions, ComponentFormatters.Write);
-            WriteStore(w, sim.FleetRoutes, ComponentFormatters.Write);
-            WriteStore(w, sim.FleetSensors, ComponentFormatters.Write);
-            WriteStore(w, sim.FleetReadiness, ComponentFormatters.Write);
-            WriteStore(w, sim.FleetCombat, ComponentFormatters.Write);
-            WriteStore(w, sim.Relocations, ComponentFormatters.Write);
-            WriteStore(w, sim.RadarScans, ComponentFormatters.Write);
-            WriteStore(w, sim.Wallets, ComponentFormatters.Write);
-            WriteStore(w, sim.Standings, ComponentFormatters.Write);
-            WriteStore(w, sim.WtoOrders, ComponentFormatters.Write);
-            WriteStore(w, sim.ItemMarkets, ComponentFormatters.Write);
-            WriteStore(w, sim.Contracts, ComponentFormatters.Write);
-            WriteStore(w, sim.ContractCargo, ComponentFormatters.Write);
-            WriteStore(w, sim.StolenGoods, ComponentFormatters.Write);
-            WriteStore(w, sim.Sanctions, ComponentFormatters.Write);
-            WriteStore(w, sim.Bulletins, ComponentFormatters.Write);
-            WriteStore(w, sim.AiControllers, ComponentFormatters.Write);
-            WriteStore(w, sim.TechProgress, ComponentFormatters.Write);
-            WriteStore(w, sim.ShipOrders, ComponentFormatters.Write);
-            WriteStore(w, sim.JumpGates, ComponentFormatters.Write);
-            WriteStore(w, sim.ConvoyRoutes, ComponentFormatters.Write);
-            WriteStore(w, sim.Citadels, ComponentFormatters.Write);
-            WriteStore(w, sim.CitadelAssaults, ComponentFormatters.Write);
-            WriteStore(w, sim.VictoryRecords, ComponentFormatters.Write);
-            WriteStore(w, sim.DirectorateSeats, ComponentFormatters.Write);
+            w.WriteArrayHeader(storeCount);
+            if (storeCount > 0) WriteStore(w, sim.Sites, ComponentFormatters.Write);
+            if (storeCount > 1) WriteStore(w, sim.Starlanes, ComponentFormatters.Write);
+            if (storeCount > 2) WriteStore(w, sim.LaneWeather, ComponentFormatters.Write);
+            if (storeCount > 3) WriteStore(w, sim.StormFronts, ComponentFormatters.Write);
+            if (storeCount > 4) WriteStore(w, sim.Weather, ComponentFormatters.Write);
+            if (storeCount > 5) WriteStore(w, sim.Stockpiles, ComponentFormatters.Write);
+            if (storeCount > 6) WriteStore(w, sim.Deposits, ComponentFormatters.Write);
+            if (storeCount > 7) WriteStore(w, sim.Refineries, ComponentFormatters.Write);
+            if (storeCount > 8) WriteStore(w, sim.Quarantines, ComponentFormatters.Write);
+            if (storeCount > 9) WriteStore(w, sim.Players, ComponentFormatters.Write);
+            if (storeCount > 10) WriteStore(w, sim.Relays, ComponentFormatters.Write);
+            if (storeCount > 11) WriteStore(w, sim.Fleets, ComponentFormatters.Write);
+            if (storeCount > 12) WriteStore(w, sim.FleetMotions, ComponentFormatters.Write);
+            if (storeCount > 13) WriteStore(w, sim.FleetRoutes, ComponentFormatters.Write);
+            if (storeCount > 14) WriteStore(w, sim.FleetSensors, ComponentFormatters.Write);
+            if (storeCount > 15) WriteStore(w, sim.FleetReadiness, ComponentFormatters.Write);
+            if (storeCount > 16) WriteStore(w, sim.FleetCombat, ComponentFormatters.Write);
+            if (storeCount > 17) WriteStore(w, sim.Relocations, ComponentFormatters.Write);
+            if (storeCount > 18) WriteStore(w, sim.RadarScans, ComponentFormatters.Write);
+            if (storeCount > 19) WriteStore(w, sim.Wallets, ComponentFormatters.Write);
+            if (storeCount > 20) WriteStore(w, sim.Standings, ComponentFormatters.Write);
+            if (storeCount > 21) WriteStore(w, sim.WtoOrders, ComponentFormatters.Write);
+            if (storeCount > 22) WriteStore(w, sim.ItemMarkets, ComponentFormatters.Write);
+            if (storeCount > 23) WriteStore(w, sim.Contracts, ComponentFormatters.Write);
+            if (storeCount > 24) WriteStore(w, sim.ContractCargo, ComponentFormatters.Write);
+            if (storeCount > 25) WriteStore(w, sim.StolenGoods, ComponentFormatters.Write);
+            if (storeCount > 26) WriteStore(w, sim.Sanctions, ComponentFormatters.Write);
+            if (storeCount > 27) WriteStore(w, sim.Bulletins, ComponentFormatters.Write);
+            if (storeCount > 28) WriteStore(w, sim.AiControllers, ComponentFormatters.Write);
+            if (storeCount > 29) WriteStore(w, sim.TechProgress, ComponentFormatters.Write);
+            if (storeCount > 30) WriteStore(w, sim.ShipOrders, ComponentFormatters.Write);
+            if (storeCount > 31) WriteStore(w, sim.JumpGates, ComponentFormatters.Write);
+            if (storeCount > 32) WriteStore(w, sim.ConvoyRoutes, ComponentFormatters.Write);
+            if (storeCount > 33) WriteStore(w, sim.Citadels, ComponentFormatters.Write);
+            if (storeCount > 34) WriteStore(w, sim.CitadelAssaults, ComponentFormatters.Write);
+            if (storeCount > 35) WriteStore(w, sim.VictoryRecords, ComponentFormatters.Write);
+            if (storeCount > 36) WriteStore(w, sim.DirectorateSeats, ComponentFormatters.Write);
+            if (storeCount > 37) WriteStore(w, sim.Loans, ComponentFormatters.Write);
             return w.ToArray();
         }
 
@@ -134,12 +140,22 @@ namespace Unruled.Core.Persistence
             if (stores > 34) ReadStore(r, sim.World, sim.CitadelAssaults, ComponentFormatters.ReadCitadelAssault);
             if (stores > 35) ReadStore(r, sim.World, sim.VictoryRecords, ComponentFormatters.ReadVictoryRecord);
             if (stores > 36) ReadStore(r, sim.World, sim.DirectorateSeats, ComponentFormatters.ReadDirectorateSeat);
+            if (stores > 37) ReadStore(r, sim.World, sim.Loans, ComponentFormatters.ReadLoan);
+            else
+                AddMissingLoans(sim); // schema 1: no loans yet, so every player owes nothing
             if (stores > StoreCount) r.Skip(stores - StoreCount);
             r.Skip(keys - TopLevelKeys);
             if (!r.End) throw new FormatException("Save has bytes after its end.");
 
             sim.Graph.Rebuild(sim.Starlanes);
             return sim;
+        }
+
+        private static void AddMissingLoans(SimulationWorld sim)
+        {
+            for (int i = 0; i < sim.Players.Count; i++)
+                if (!sim.Loans.Has(sim.Players.EntityAt(i)))
+                    sim.Loans.Add(sim.Players.EntityAt(i), default);
         }
 
         private static void WriteAllocator(MsgPackWriter w, World world)

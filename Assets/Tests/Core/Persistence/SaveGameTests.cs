@@ -1,5 +1,6 @@
 using System;
 using NUnit.Framework;
+using Unruled.Core.Economy;
 using Unruled.Core.Persistence;
 using Unruled.Core.Simulation;
 using Unruled.Core.SystemFactions;
@@ -112,6 +113,38 @@ namespace Unruled.Tests.Core.Persistence
             Assert.AreEqual(ulong.MaxValue, r.ReadUInt64());
             Assert.IsTrue(r.ReadBool());
             Assert.IsTrue(r.End);
+        }
+
+        [Test]
+        public void SavedLoan_KeepsItsDebt()
+        {
+            var balance = DefaultGameBalance.Create();
+            var sim = new SimulationWorld(balance, worldSeed: 9);
+            NewGameSetup.Create(sim, 1);
+            var hq = sim.Players.EntityAt(0);
+            sim.Loans.Get(hq) = new Loan { PrincipalCents = 500_000, InterestCents = 1_234, DueTick = 999 };
+
+            var loaded = SaveGame.Load(balance, SaveGame.Write(sim));
+            Assert.AreEqual(500_000, loaded.Loans.Get(hq).PrincipalCents);
+            Assert.AreEqual(1_234, loaded.Loans.Get(hq).InterestCents);
+            Assert.AreEqual(999, loaded.Loans.Get(hq).DueTick);
+        }
+
+        // Migration: schema 1 had 37 stores and no loans; its players load owing nothing.
+        [Test]
+        public void Schema1Save_LoadsEveryPlayerWithNoDebt()
+        {
+            var balance = DefaultGameBalance.Create();
+            var sim = new SimulationWorld(balance, worldSeed: 9);
+            NewGameSetup.Create(sim, 1);
+            sim.Loans.Get(sim.Players.EntityAt(0)).PrincipalCents = 500_000;
+
+            var loaded = SaveGame.Load(balance, SaveGame.Write(sim, schemaVersion: 1, storeCount: 37));
+            Assert.AreEqual(sim.Players.Count, loaded.Loans.Count);
+            for (int i = 0; i < loaded.Players.Count; i++)
+                Assert.AreEqual(0, loaded.Loans.Get(loaded.Players.EntityAt(i)).DebtCents);
+            CollectionAssert.AreEqual(SaveGame.Write(loaded), SaveGame.Write(SaveGame.Load(balance, SaveGame.Write(loaded))),
+                "resaved as schema 2");
         }
 
         [Test]

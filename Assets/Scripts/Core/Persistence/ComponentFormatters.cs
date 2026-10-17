@@ -434,6 +434,25 @@ namespace Unruled.Core.Persistence
             return v;
         }
 
+        internal static void Write(MsgPackWriter w, in Loan v)
+        {
+            w.WriteArrayHeader(3);
+            w.Write(v.PrincipalCents);
+            w.Write(v.InterestCents);
+            w.Write(v.DueTick);
+        }
+
+        internal static Loan ReadLoan(MsgPackReader r)
+        {
+            int n = r.ReadArrayHeader();
+            var v = new Loan();
+            if (n > 0) v.PrincipalCents = r.ReadInt64();
+            if (n > 1) v.InterestCents = r.ReadInt64();
+            if (n > 2) v.DueTick = r.ReadInt64();
+            SkipNewer(r, n, 3);
+            return v;
+        }
+
         internal static void Write(MsgPackWriter w, in PlayerStanding v)
         {
             w.WriteArrayHeader(4);
