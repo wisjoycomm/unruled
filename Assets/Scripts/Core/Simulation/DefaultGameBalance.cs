@@ -149,7 +149,7 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,
         /// barren husk -0.20 ESI, core fracture 4x (speed 100% per GDD §2.1 B); drills take 180 ticks to retract (§2.1 B).
-        /// PROVISIONAL: 10-tick cycle, 10 ore and 1 fuel + 1 coolant per rig per cycle; a rig costs 10 steel + 5 coolant,
+        /// PROVISIONAL: 60-tick cycle, 30 ore and 1 fuel + 1 coolant per rig per cycle; a rig costs 10 steel + 5 coolant,
         /// at most 10 rigs per deposit.
         /// </summary>
         public static MiningBalance CreateMiningBalance() => new MiningBalance(
