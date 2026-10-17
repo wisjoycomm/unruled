@@ -133,6 +133,18 @@ namespace Unruled.Core.Military
             return false;
         }
 
+        /// <summary>True while a command of this type from the player naming this entity (ParamEntity) waits out its latency.</summary>
+        public bool IsInFlightTo(int playerId, CommandType type, EntityId paramEntity)
+        {
+            for (int i = 0; i < _clock.PendingCommandCount; i++)
+            {
+                var pending = _clock.PendingAt(i);
+                if (pending.PlayerId == playerId && pending.CommandType == type && pending.ParamEntity == paramEntity)
+                    return true;
+            }
+            return false;
+        }
+
         private bool IsParalysed(int playerId)
         {
             for (int i = 0; i < _players.Count; i++)

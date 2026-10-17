@@ -122,16 +122,46 @@ namespace Unruled.Tests.Core.AI
             Ore(_target, ItemId.RawIron);
             var fleet = Fleet(Me, _home, 4, loaded: true);
             _sim.Fleets.Get(fleet).EwShips = 2;
-            Assert.IsFalse(Find(Warlord, AiAction.Siege).HasValue, "a fight on the way would burn the claim's batteries");
-
             _sim.Stockpiles.Get(_home).Add(ItemId.ItemBattery, 100);
-            _sim.Clock.Advance(_sim.Balance.Ai.ThinkIntervalTicks);
-            Assert.IsTrue(Find(Warlord, AiAction.LoadCargo).HasValue);
+            Assert.IsTrue(Find(Warlord, AiAction.LoadCargo).HasValue, "a fight on the way would burn the claim's batteries");
             RunPendingOrders();
             Assert.GreaterOrEqual(_sim.Stockpiles.Get(fleet).Get(ItemId.ItemBattery), 5 + 2 * _sim.Balance.Ai.LoadBatteryPerEwShip);
 
             _sim.Clock.Advance(_sim.Balance.Ai.ThinkIntervalTicks);
             Assert.IsTrue(Find(Warlord, AiAction.Siege).HasValue);
+        }
+
+        [Test]
+        public void ASiegeWithEwShips_SetsOutWithTheClaimCostAlone_WhenTheCoreHasNoBatteriesToGive()
+        {
+            Ore(_target, ItemId.RawIron);
+            var fleet = Fleet(Me, _home, 4, loaded: true);
+            _sim.Fleets.Get(fleet).EwShips = 2;
+
+            Assert.IsTrue(Find(Warlord, AiAction.Siege).HasValue);
+        }
+
+        [Test]
+        public void TheOreSteelIsMadeOf_OutranksMoreNewOresElsewhere()
+        {
+            var silicon = Site(-200, 0);
+            var lane = _sim.World.Create();
+            _sim.Starlanes.Add(lane, new StarlaneEdge { SiteA = _home, SiteB = silicon, Tier = StarlaneTier.StaHighway, Length = 150 });
+            _sim.LaneWeather.Add(lane, default);
+            _sim.Graph.Rebuild(_sim.Starlanes);
+            Ore(silicon, ItemId.RawSilicon);
+            Ore(silicon, ItemId.RawTitanium);
+            Ore(silicon, ItemId.RawCopper);
+            Ore(_target, ItemId.RawIron);
+            Fleet(Me, _home, 4, loaded: true);
+
+            var order = Find(Warlord, AiAction.Siege);
+            Assert.IsTrue(order.HasValue);
+            DelayedPlayerCommand move = default;
+            for (int i = 0; i < _sim.Clock.PendingCommandCount; i++)
+                if (_sim.Clock.PendingAt(i).CommandType == CommandType.Move)
+                    move = _sim.Clock.PendingAt(i);
+            Assert.AreEqual(_target, move.ParamEntity, "every later claim and rig is paid in steel");
         }
 
         [Test]
@@ -313,6 +343,48 @@ namespace Unruled.Tests.Core.AI
 
             _sim.TechProgress.Get(_hq).TechTier = 2;
             Assert.IsTrue(Find(Sentinel, AiAction.OpenGate).HasValue, "contract convoys need the lane too");
+        }
+
+        // A convoy docked at the core base on a route to a copper outpost (the core holds a batch of copper); the core's
+        // steel refinery wants iron, mined at the unserved outpost T.
+        private EntityId ConvoyOnCopperRoute(out EntityId copperOutpost)
+        {
+            copperOutpost = Site(-200, Me);
+            var lane = _sim.World.Create();
+            _sim.Starlanes.Add(lane, new StarlaneEdge { SiteA = _home, SiteB = copperOutpost, Tier = StarlaneTier.StaHighway, Length = 200 });
+            _sim.LaneWeather.Add(lane, default);
+            _sim.Graph.Rebuild(_sim.Starlanes);
+            _sim.Sites.Get(_target).OwnerPlayerId = Me;
+            Ore(copperOutpost, ItemId.RawCopper);
+            Ore(_target, ItemId.RawIron);
+            for (int d = 0; d < _sim.Deposits.Count; d++)
+                _sim.Deposits.At(d).RigCount = 1;
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemSteel });
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawCopper, _sim.Balance.Ai.ConvoyBatch);
+            var convoy = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Me, TechTier = 1, CargoConvoys = 2 }, _home);
+            _sim.ConvoyRoutes.Add(convoy, new ConvoyRoute { Hub = _home, Outpost = copperOutpost, Batch = _sim.Balance.Ai.ConvoyBatch });
+            return convoy;
+        }
+
+        [Test]
+        public void AConvoyDockedAtTheCore_SwitchesToAnUnservedOutpost_MiningARawTheCoreIsShortOf()
+        {
+            var convoy = ConvoyOnCopperRoute(out _);
+
+            var order = Find(Sentinel, AiAction.SetConvoyRoute);
+            Assert.IsTrue(order.HasValue);
+            Assert.AreEqual(convoy, order.Value.Subject);
+            RunPendingOrders();
+            Assert.AreEqual(_target, _sim.ConvoyRoutes.Get(convoy).Outpost);
+        }
+
+        [Test]
+        public void AConvoy_KeepsItsRoute_WhileItsOutpostMinesARawTheCoreIsShortOf()
+        {
+            ConvoyOnCopperRoute(out _);
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawCopper, -1);
+
+            Assert.IsFalse(Find(Sentinel, AiAction.SetConvoyRoute).HasValue);
         }
 
         private ItemId PendingRefinery()

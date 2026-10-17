@@ -112,6 +112,7 @@ namespace Unruled.Tests.Core.Military
             Outpost.Add(ItemId.ItemOxygen, batch);
             Outpost.Add(ItemId.ItemRations, batch);
             Outpost.Add(ItemId.RawWater, batch);
+            Hub.Add(ItemId.RawWater, batch);
             SetRoute(_fleet, _outpost, batch);
 
             Run(2_000);
@@ -121,6 +122,23 @@ namespace Unruled.Tests.Core.Military
             Outpost.Add(ItemId.RawTungsten, batch);
             Run(2_000);
             Assert.Greater(Hub.Get(ItemId.RawTungsten) + Hub.Get(ItemId.RawWater), 0, "with tungsten in the mix it is");
+        }
+
+        [Test]
+        public void Route_HaulsCheapGoods_WhenTheHubIsShortOfThem()
+        {
+            const int batch = 20;
+            Outpost.Add(ItemId.ItemFuel, batch);
+            Outpost.Add(ItemId.ItemCoolant, batch);
+            Outpost.Add(ItemId.ItemOxygen, batch);
+            Outpost.Add(ItemId.ItemRations, batch);
+            Outpost.Add(ItemId.RawWater, batch);
+            Hub.Add(ItemId.RawWater, batch - 1);
+            SetRoute(_fleet, _outpost, batch);
+
+            Run(2_000);
+            Assert.AreEqual(0, Outpost.Get(ItemId.RawWater), "a hub short of water needs it, whatever its price");
+            Assert.AreEqual(2 * batch - 1, Hub.Get(ItemId.RawWater));
         }
 
         [Test]

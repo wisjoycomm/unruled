@@ -215,6 +215,7 @@ namespace Unruled.Tests.Core.AI
             var ai = _sim.Balance.Ai;
             _sim.TechProgress.Get(_hq).Stage = ResearchStage.Complete; // retooling would finish and start the next research
             _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemRations });
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawBiomass, ai.SellBatch); // under SellAbove, not short (see the next test)
             _sim.Ledger.TryFindPlayerWallet(Me, out var wallet);
             _sim.Ledger.Burn(wallet, _sim.Ledger.Balance(wallet));
             _sim.Ledger.Grant(wallet, 3 * ai.CashReserveCredits * Wallet.CentsPerCredit);
@@ -231,6 +232,31 @@ namespace Unruled.Tests.Core.AI
             _sim.Loans.Get(_hq).PrincipalCents = 0;
             _sim.Clock.Advance(1);
             Assert.IsTrue(Find(AiAction.BuyFeedstock).HasValue);
+        }
+
+        [Test]
+        public void ARawItFeeds_ShortOfABatch_IsBoughtOffTheCheapestRivalListing_EvenInDebt()
+        {
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.Complete;
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemRations });
+            long price = Price(ItemId.RawBiomass, -5);
+            foreach (long ask in new[] { price + 10, price })
+                _sim.WtoOrders.Add(_sim.World.Create(), new WtoOrder
+                {
+                    OwnerPlayerId = 2, Item = ItemId.RawBiomass, Side = OrderSide.Sell, PriceCents = ask, Remaining = 10,
+                    Site = _sim.World.Create()
+                });
+            _sim.Loans.Get(_hq).PrincipalCents = 1;
+
+            var order = Find(AiAction.BuyFeedstock);
+            Assert.IsTrue(order.HasValue, "THE SYSTEM has none, so a rival's listing");
+            DelayedPlayerCommand bid = default;
+            for (int i = 0; i < _sim.Clock.PendingCommandCount; i++)
+                if (_sim.Clock.PendingAt(i).CommandType == CommandType.PlaceBuyOrder)
+                    bid = _sim.Clock.PendingAt(i);
+            Assert.AreEqual((int)ItemId.RawBiomass, bid.ParamA);
+            Assert.AreEqual(10, bid.ParamB);
+            Assert.AreEqual(price, bid.ParamC, "at the cheapest ask");
         }
 
         [Test]

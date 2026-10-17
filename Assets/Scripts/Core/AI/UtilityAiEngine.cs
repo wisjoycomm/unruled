@@ -178,6 +178,7 @@ namespace Unruled.Core.AI
 
         private AiOrder[] _orders = new AiOrder[16];
         private int _orderCount;
+        private readonly int _expansionRaws; // bit per raw slot of the outpost currency (see OutpostCurrency)
 
         public UtilityAiEngine(
             ComponentStore<AiController> controllers, ComponentStore<PlayerHq> players, ComponentStore<FleetUnit> units,
@@ -243,6 +244,32 @@ namespace Unruled.Core.AI
             _ledgerBalance = config.Ledger;
             _citadelBalance = config.Citadel;
             _authorityBalance = config.Authority;
+            var currency = OutpostCurrency();
+            if (currency != ItemId.None)
+                _expansionRaws = ItemIds.IsRaw(currency) ? 1 << ItemIds.ToSlot(currency) : RecipeRaws(currency);
+        }
+
+        // The item a new outpost takes most of: its claim cost plus the rigs on one deposit (steel).
+        private ItemId OutpostCurrency()
+        {
+            var best = ItemId.None;
+            long most = 0;
+            for (int slot = 0; slot < ItemIds.Count; slot++)
+            {
+                var item = ItemIds.FromSlot(slot);
+                long quantity = 0;
+                for (int i = 0; i < _claimBalance.ClaimCostCount; i++)
+                    if (_claimBalance.ClaimCost(i).Item == item)
+                        quantity += _claimBalance.ClaimCost(i).Quantity;
+                for (int i = 0; i < _miningBalance.RigCostCount; i++)
+                    if (_miningBalance.RigCost(i).Item == item)
+                        quantity += (long)_miningBalance.RigCost(i).Quantity * _balance.OutpostRigs;
+                if (quantity <= most)
+                    continue;
+                most = quantity;
+                best = item;
+            }
+            return best;
         }
 
         /// <summary>The orders tried by the last think that ran, in decision order.</summary>
@@ -407,7 +434,10 @@ namespace Unruled.Core.AI
                     if (preset.StealthRaidWeight > 0 &&
                         FindTarget(player, in unit, fuel, raid: true, homeOnly: false, out raidTarget, out int raidEdge))
                         Consider(AiAction.StealthRaid, Score(preset.StealthRaidWeight, raidEdge), ref best, ref bestScore);
-                    if (SettleWeight(preset) > 0 && CarriesClaimCost(ref hold, EwBatteries(in unit)) &&
+                    // EW batteries ride along only while the core has batteries to give: a core out of them (no silicon to
+                    // make more) still sends the claim kit, or the empire never reaches the ore it lacks.
+                    int ewBatteries = _stockpiles.Get(player.CoreBase).Get(ItemId.ItemBattery) > 0 ? EwBatteries(in unit) : 0;
+                    if (SettleWeight(preset) > 0 && CarriesClaimCost(ref hold, ewBatteries) &&
                         FindTarget(player, in unit, fuel, raid: false, homeOnly: IsHomeSettler(preset), out siegeTarget,
                             out int siegeEdge))
                         Consider(AiAction.Siege, Score(SettleWeight(preset), siegeEdge), ref best, ref bestScore);
@@ -669,15 +699,32 @@ namespace Unruled.Core.AI
             return AiAction.BuildRig;
         }
 
-        // A convoy-only fleet without a route: at the core base, take an outpost no convoy serves; elsewhere go home.
+        // A convoy-only fleet without a route: at the core base, take an outpost no convoy serves (one mining a starved raw
+        // first); elsewhere go home. One docked at the core base on a route whose outpost mines nothing starved switches to
+        // an unserved outpost that does, so a lone convoy never leaves the core short of the ore its next convoy is built from.
         private void ThinkConvoy(in PlayerHq player, AiPreset preset, EntityId fleet, long tick)
         {
-            if (_convoyRoutes.Has(fleet))
-                return;
             ref var motion = ref _motions.Get(fleet);
             if (!motion.Lane.IsNull || motion.Site.IsNull || _combat.Get(fleet).EngagedUntilTick > tick)
                 return;
             var command = new DelayedPlayerCommand { PlayerId = player.PlayerId, Target = fleet };
+            if (_convoyRoutes.Has(fleet))
+            {
+                ref var route = ref _convoyRoutes.Get(fleet);
+                if (motion.Site != player.CoreBase || route.Hub != player.CoreBase)
+                    return;
+                int starved = StarvedRaws(in player);
+                if (starved == 0 || (OutpostRaws(route.Outpost) & starved) != 0)
+                    return;
+                var needed = FindUnservedOutpost(in player, _units.Get(fleet).TechTier, starved);
+                if (needed.IsNull)
+                    return;
+                command.CommandType = CommandType.SetConvoyRoute;
+                command.ParamEntity = needed;
+                command.ParamC = route.Batch;
+                Issue(command, AiAction.SetConvoyRoute, Score(preset.ResupplyLogisticsWeight, Full), fleet);
+                return;
+            }
             if (motion.Site != player.CoreBase)
             {
                 if (_readiness.Has(fleet) && !_readiness.Get(fleet).CanAct(tick))
@@ -687,7 +734,10 @@ namespace Unruled.Core.AI
                 Issue(command, AiAction.ReturnHome, Score(preset.ResupplyLogisticsWeight, Threshold), fleet);
                 return;
             }
-            var outpost = FindUnservedOutpost(in player, _units.Get(fleet).TechTier);
+            byte tier = _units.Get(fleet).TechTier;
+            var outpost = FindUnservedOutpost(in player, tier, StarvedRaws(in player));
+            if (outpost.IsNull)
+                outpost = FindUnservedOutpost(in player, tier, 0);
             if (outpost.IsNull)
                 return;
             command.CommandType = CommandType.SetConvoyRoute;
@@ -696,14 +746,16 @@ namespace Unruled.Core.AI
             Issue(command, AiAction.SetConvoyRoute, Score(preset.ResupplyLogisticsWeight, Full), fleet);
         }
 
-        // The first own site (not the core base) with a rigged deposit, a route from the core base and no convoy route.
-        private EntityId FindUnservedOutpost(in PlayerHq player, byte tier)
+        // The first own site (not the core base) with a rigged deposit, a route from the core base and no convoy route;
+        // with raws set, only one whose rigs mine one of them.
+        private EntityId FindUnservedOutpost(in PlayerHq player, byte tier, int raws)
         {
             for (int i = 0; i < _sites.Count; i++)
             {
                 var site = _sites.EntityAt(i);
                 if (_sites.At(i).OwnerPlayerId != player.PlayerId || site == player.CoreBase || !HasRigs(site) ||
-                    IsServed(site) || !_routes.TryPlan(player.CoreBase, site, tier, ref _route))
+                    (raws != 0 && (OutpostRaws(site) & raws) == 0) || IsServed(player.PlayerId, site) ||
+                    !_routes.TryPlan(player.CoreBase, site, tier, ref _route))
                     continue;
                 return site;
             }
@@ -718,12 +770,43 @@ namespace Unruled.Core.AI
             return false;
         }
 
-        private bool IsServed(EntityId outpost)
+        // Bit per raw item slot the rigs at the site mine (with ore left).
+        private int OutpostRaws(EntityId site)
+        {
+            int mask = 0;
+            for (int d = 0; d < _deposits.Count; d++)
+            {
+                ref var deposit = ref _deposits.At(d);
+                if (deposit.Site == site && deposit.RigCount > 0 && HasOre(in deposit))
+                    mask |= 1 << ItemIds.ToSlot(deposit.RawItem);
+            }
+            return mask;
+        }
+
+        // Bit per needed raw (see NeededRaws) the core base holds less than a convoy batch of.
+        private int StarvedRaws(in PlayerHq player)
+        {
+            int feeds = NeededRaws(in player);
+            if (feeds == 0 || !_stockpiles.Has(player.CoreBase))
+                return 0;
+            ref var stock = ref _stockpiles.Get(player.CoreBase);
+            int mask = 0;
+            for (int slot = 0; slot < ItemIds.Count; slot++)
+            {
+                var item = ItemIds.FromSlot(slot);
+                if (ItemIds.IsRaw(item) && (feeds & (1 << slot)) != 0 && stock.Get(item) < _balance.ConvoyBatch)
+                    mask |= 1 << slot;
+            }
+            return mask;
+        }
+
+        // A convoy route runs to the outpost, or a SetConvoyRoute there waits out its latency.
+        private bool IsServed(int playerId, EntityId outpost)
         {
             for (int r = 0; r < _convoyRoutes.Count; r++)
                 if (_convoyRoutes.At(r).Outpost == outpost)
                     return true;
-            return false;
+            return _issuer.IsInFlightTo(playerId, CommandType.SetConvoyRoute, outpost);
         }
 
         // Player economy (Resupply_Logistics): a convoy fleet for an unserved outpost, then refineries for new items.
@@ -738,7 +821,7 @@ namespace Unruled.Core.AI
                 }, AiAction.AuditOptIn, Score(preset.ResupplyLogisticsWeight, Threshold));
             ref var stock = ref _stockpiles.Get(player.CoreBase);
             const byte convoyTier = 1;
-            if (!FindUnservedOutpost(in player, convoyTier).IsNull && !HasIdleConvoy(player.PlayerId) &&
+            if (!FindUnservedOutpost(in player, convoyTier, 0).IsNull && !HasIdleConvoy(player.PlayerId) &&
                 !HasShipOrder(player.PlayerId, TargetFocusClass.CargoConvoys) &&
                 Affordable(ref stock, hq, convoyTier, 100) >= _balance.ConvoyShips)
             {
@@ -898,13 +981,15 @@ namespace Unruled.Core.AI
                 }
             }
 
-            // A raw it feeds, down to under a batch (its deposits mined out), is bought from THE SYSTEM even in debt, from
-            // the cash above the travel cash: without it the core's fuel, coolant and oxygen refineries stop.
+            // A raw it feeds, down to under a batch (its deposits mined out, or none it can reach), is bought even in debt,
+            // from the cash above the travel cash: from THE SYSTEM, else off the cheapest rival listing. Without it the
+            // core's refineries stop.
             for (int slot = 0; slot < ItemIds.Count; slot++)
             {
                 var raw = ItemIds.FromSlot(slot);
                 if (Feeds(feeds, raw) && stock.Get(raw) < _balance.SellBatch &&
-                    BuyFromSystem(player.PlayerId, player.CoreBase, raw, _balance.SellBatch, spare, tick, weight))
+                    (BuyFromSystem(player.PlayerId, player.CoreBase, raw, _balance.SellBatch, spare, tick, weight) ||
+                     LiftListing(player.PlayerId, player.CoreBase, raw, spare, weight)))
                     return;
             }
 
@@ -929,6 +1014,34 @@ namespace Unruled.Core.AI
                     PlayerId = player.PlayerId, CommandType = CommandType.PlaceBuyOrder, Target = player.CoreBase,
                     ParamA = (int)feedItem, ParamB = (int)feedQuantity, ParamC = (int)feedAsk
                 }, AiAction.BuyFeedstock, Score(weight, Threshold));
+        }
+
+        // A bid at the cheapest rival ask for the item, for up to a sell batch of it, from the bid budget of the cash given;
+        // none while the player already bids for it.
+        private bool LiftListing(int playerId, EntityId coreBase, ItemId item, long cash, int weight)
+        {
+            if (HasOpenOrder(playerId, item, OrderSide.Buy))
+                return false;
+            long price = 0;
+            int remaining = 0;
+            for (int o = 0; o < _wtoOrders.Count; o++)
+            {
+                ref var ask = ref _wtoOrders.At(o);
+                if (ask.Side != OrderSide.Sell || ask.OwnerPlayerId == playerId || ask.Item != item ||
+                    (remaining > 0 && ask.PriceCents >= price))
+                    continue;
+                price = ask.PriceCents;
+                remaining = ask.Remaining;
+            }
+            long quantity = remaining == 0 ? 0 : Math.Min(Math.Min(remaining, _balance.SellBatch), cash * _balance.BidBudgetPercent / 100 / price);
+            if (quantity <= 0)
+                return false;
+            Issue(new DelayedPlayerCommand
+            {
+                PlayerId = playerId, CommandType = CommandType.PlaceBuyOrder, Target = coreBase, ParamA = (int)item,
+                ParamB = (int)quantity, ParamC = (int)price
+            }, AiAction.BuyFeedstock, Score(weight, Threshold));
+            return true;
         }
 
         // Up to wanted from THE SYSTEM's stock at its ask, from the bid budget of the cash given; one such order in flight.
@@ -1558,7 +1671,9 @@ namespace Unruled.Core.AI
             return mask;
         }
 
-        // Deposits at the site with ore left of a raw item outside the mined mask; one a core refinery needs counts double.
+        // Deposits at the site with ore left of a raw item outside the mined mask; one a core refinery needs counts double,
+        // and one the outpost currency is made of (steel's iron) more than all the others together: every later outpost is
+        // paid in it, so a player who settles elsewhere first can spend its starting steel and never claim the ore to make more.
         private int NewOres(EntityId site, int mined, int feeds)
         {
             int count = 0;
@@ -1567,7 +1682,7 @@ namespace Unruled.Core.AI
                 ref var deposit = ref _deposits.At(d);
                 int bit = 1 << ItemIds.ToSlot(deposit.RawItem);
                 if (deposit.Site == site && HasOre(in deposit) && (mined & bit) == 0)
-                    count += (feeds & bit) != 0 ? 2 : 1;
+                    count += (_expansionRaws & bit) != 0 ? 2 * ItemIds.Count : (feeds & bit) != 0 ? 2 : 1;
             }
             return count;
         }

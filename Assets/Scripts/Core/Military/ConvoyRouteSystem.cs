@@ -25,7 +25,8 @@ namespace Unruled.Core.Military
     /// upkeep) from what the hub holds above its supply reserve, and leaves, once it can act, when it carries half a batch of a supply above its reserve for an outpost below half a batch of it (so a run never
     /// burns more fuel than it hauls), or the
     /// outpost holds a batch of goods and what a run would load there is worth more than the fuel of the round trip (base
-    /// WTO prices: hauling cheap ore down a long route would burn more value than it brings home). At the outpost it tops each supply up to the batch from what it carries above
+    /// WTO prices: hauling cheap ore down a long route would burn more value than it brings home), or the hub is short of
+    /// one (holds less than a batch of a good the outpost has a batch of: it is needed whatever its price). At the outpost it tops each supply up to the batch from what it carries above
     /// its reserve, loads up to a batch of every other item there and heads home. Docked anywhere else (its route was cut
     /// short) it heads back to the hub; moving or engaged, the route waits; it ends when either site is lost. Each run takes the fastest route whose STA tolls the owner's wallet
     /// covers there and back, else the toll-free one (bypass lanes: 0 credits, more fuel); the fuel reserve follows the
@@ -159,7 +160,8 @@ namespace Unruled.Core.Military
                 return;
             ref var outpost = ref _stockpiles.Get(route.Outpost);
             bool run = Goods(ref outpost) >= route.Batch &&
-                       GoodsWorth(ref outpost, route.Batch) > roundTrip * _recipes.GetItem(ItemId.ItemFuel).BaseWtoPrice;
+                       (GoodsWorth(ref outpost, route.Batch) > roundTrip * _recipes.GetItem(ItemId.ItemFuel).BaseWtoPrice ||
+                        IsShort(ref _stockpiles.Get(route.Hub), ref outpost, route.Batch));
             for (int s = 0; s < Supplies.Length && !run; s++)
                 run = outpost.Get(Supplies[s]) < route.Batch / 2 &&
                       hold.Get(Supplies[s]) - Reserve(fleet, Supplies[s], roundTrip) >= route.Batch / 2;
@@ -245,6 +247,18 @@ namespace Unruled.Core.Military
                     worth += (long)Math.Min(stock.Get(item), batch) * _recipes.GetItem(item).BaseWtoPrice;
             }
             return worth;
+        }
+
+        // Whether the hub holds less than a batch of a good the outpost holds a batch of.
+        private static bool IsShort(ref Stockpile hub, ref Stockpile outpost, int batch)
+        {
+            for (int slot = 0; slot < ItemIds.Count; slot++)
+            {
+                var item = ItemIds.FromSlot(slot);
+                if (!IsSupply(item) && outpost.Get(item) >= batch && hub.Get(item) < batch)
+                    return true;
+            }
+            return false;
         }
 
         private static long Goods(ref Stockpile stock)
