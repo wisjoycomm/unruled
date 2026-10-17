@@ -162,7 +162,8 @@ namespace Unruled.Tests.Core.AI
             _sim.TechProgress.Get(_hq).Stage = ResearchStage.StressTest;
             _sim.Ledger.TryFindPlayerWallet(Me, out var wallet);
             _sim.Ledger.Burn(wallet, _sim.Ledger.Balance(wallet));
-            Assert.IsFalse(Find(AiAction.BuyShortfall).HasValue);
+            _sim.Ledger.Grant(wallet, _sim.Balance.Ai.TravelCashCredits * Wallet.CentsPerCredit);
+            Assert.IsFalse(Find(AiAction.BuyShortfall).HasValue, "the travel cash is kept for tolls");
         }
     }
 }

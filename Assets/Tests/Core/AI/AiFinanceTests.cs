@@ -62,6 +62,15 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void HoldingTheTravelCash_ItDoesNotBorrow()
+        {
+            _sim.Ledger.Grant(_hq, _sim.Balance.Ai.TravelCashCredits * Wallet.CentsPerCredit);
+            Assert.IsFalse(Think(AiAction.Borrow).HasValue, "money locked in orders isn't topped up from loans");
+            _sim.Ledger.Burn(_hq, 1);
+            Assert.IsTrue(Think(AiAction.Borrow).HasValue);
+        }
+
+        [Test]
         public void RepaysTheDebt_FromCashAboveTwiceTheReserve()
         {
             _sim.Lending.Handle(new DelayedPlayerCommand { PlayerId = Me, CommandType = CommandType.Borrow, ParamA = 5_000 }, 0);

@@ -701,8 +701,8 @@ namespace Unruled.Core.AI
             }
         }
 
-        // THE SYSTEM's credit line: borrows up to the cash reserve, repays from cash above twice it, and once the debt falls
-        // due (or is about to, within an AI think of it) repays all it can, so its goods aren't seized.
+        // THE SYSTEM's credit line: below the travel cash it borrows up to the cash reserve, repays from cash above twice it,
+        // and once the debt falls due (or is about to, within an AI think of it) repays all it can, so its goods aren't seized.
         private void ThinkFinance(in PlayerHq player, AiPreset preset, EntityId hq, long tick)
         {
             if (!_loans.Has(hq))
@@ -713,7 +713,7 @@ namespace Unruled.Core.AI
             long repay = 0, borrow = 0;
             if (loan.DebtCents > 0 && tick + _balance.ThinkIntervalTicks >= loan.DueTick)
                 repay = Math.Min(cash, loan.DebtCents);
-            else if (cash < reserve)
+            else if (cash < _balance.TravelCashCredits * Wallet.CentsPerCredit)
                 borrow = Math.Min(reserve - cash, Math.Max(0, _ledgerBalance.CreditLimitCents - loan.DebtCents));
             else if (cash > 2 * reserve)
                 repay = Math.Min(cash - reserve, loan.DebtCents);
@@ -729,8 +729,8 @@ namespace Unruled.Core.AI
 
         // WTO: cancels its orders open past the trade window; sells surplus into a rival's bid, or else lists one batch
         // under the reference price; bids over it for the first item the next stress test still lacks. Orders are sized
-        // to what the wallet can lock (the seller's escrow deposit; the buyer's payment, from its bid budget). One
-        // order of a kind in flight at a time.
+        // to what the wallet can lock above the travel cash (the seller's escrow deposit; the buyer's payment, from its
+        // bid budget). One order of a kind in flight at a time.
         private void ThinkTrade(in PlayerHq player, AiPreset preset, EntityId hq, long tick)
         {
             if (!_stockpiles.Has(player.CoreBase) || !_ledger.TryFindPlayerWallet(player.PlayerId, out var wallet))
@@ -751,7 +751,7 @@ namespace Unruled.Core.AI
             }
 
             ref var stock = ref _stockpiles.Get(player.CoreBase);
-            long cash = _ledger.Balance(wallet);
+            long cash = Math.Max(0, _ledger.Balance(wallet) - _balance.TravelCashCredits * Wallet.CentsPerCredit);
             int feeds = NeededRaws(in player);
             if (!_issuer.IsInFlight(player.PlayerId, CommandType.PlaceSellOrder, player.CoreBase) &&
                 (FindBidToFill(player, hq, ref stock, feeds, out var sellItem, out long ask, out long wanted) ||

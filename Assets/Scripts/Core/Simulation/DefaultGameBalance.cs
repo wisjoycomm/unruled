@@ -293,7 +293,8 @@ namespace Unruled.Core.Simulation
         /// conquer still settle neutral sites of their home system at weight 1.0; from Tier 3 the shipyard refits docked battle
         /// fleets to the research tier and builds line ships of it up to 60 (outgunning the Citadel garrison of 30 line + 10 EW); a full
         /// battle line that can't take the Citadel yet waits mothballed. It borrows from THE SYSTEM up to 2,000 credits in
-        /// hand, repays debt from cash above 4,000, and repays all it can once the debt falls due.
+        /// hand once it holds under 1,000 (kept for tolls, never locked in WTO orders), repays debt from cash above 4,000,
+        /// and repays all it can once the debt falls due.
         /// </summary>
         public static AiBalance CreateAiBalance() => new AiBalance(
             thinkIntervalTicks: 10, fullBatteryScans: 10, resupplyAmmoPerLineShip: 5, loadAmmoPerLineShip: 20, loadFuel: 1_500,
@@ -301,7 +302,7 @@ namespace Unruled.Core.Simulation
             coreSupplyReserve: 500, rawStockCap: 5_000, loadUpkeepIntervals: 6, citadelAssaultTier: 3,
             sellAbove: 3_000, fillAbove: 20, sellBatch: 500, tradePricePercent: 5, tradeOrderTicks: 3_600, bidBudgetPercent: 50,
             homeSettleWeight: 1_000, battleLineShips: 60, loadBatteryPerEwShip: 5, cashReserveCredits: 2_000,
-            scanBatteryReserve: 1_000, scanWindowTicks: 600,
+            travelCashCredits: 1_000, scanBatteryReserve: 1_000, scanWindowTicks: 600,
             presets: new[]
             {
                 new AiPreset(1, "Sentinel_Defender", 1_800, 1_700, 1_500, 1_400, 0, 0, 75_000, 650, 30, 3),

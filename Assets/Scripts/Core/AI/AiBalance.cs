@@ -59,6 +59,7 @@ namespace Unruled.Core.AI
         public readonly int LoadFuel; // and fuel up to this
         public readonly int LoadBatteryPerEwShip; // batteries per EW ship a fleet carries for combat, on top of a claim cost
         public readonly long CashReserveCredits; // borrows up to this cash, repays debt from cash above twice it
+        public readonly long TravelCashCredits; // kept for tolls: WTO orders never lock it, and it borrows only below it
         public readonly int ScanBatteryReserve; // core batteries radar scans leave for fleets to load
         public readonly int ScanWindowTicks; // radar scans start only in this many ticks at the top of each hour
         public readonly int OutpostRigs; // rigs a fleet builds on each bare deposit of a site it claimed
@@ -84,7 +85,7 @@ namespace Unruled.Core.AI
             int outpostRigs, int convoyShips, int convoyBatch, int refineryInputStock, int coreSupplyReserve,
             int rawStockCap, int loadUpkeepIntervals, byte citadelAssaultTier, int sellAbove, int fillAbove, int sellBatch,
             int tradePricePercent, int tradeOrderTicks, int bidBudgetPercent, int homeSettleWeight,
-            int battleLineShips, int loadBatteryPerEwShip, long cashReserveCredits, int scanBatteryReserve, int scanWindowTicks,
+            int battleLineShips, int loadBatteryPerEwShip, long cashReserveCredits, long travelCashCredits, int scanBatteryReserve, int scanWindowTicks,
             AiPreset[] presets)
         {
             if (thinkIntervalTicks < 1) throw new ArgumentOutOfRangeException(nameof(thinkIntervalTicks));
@@ -110,6 +111,8 @@ namespace Unruled.Core.AI
             if (battleLineShips < 0) throw new ArgumentOutOfRangeException(nameof(battleLineShips));
             if (loadBatteryPerEwShip < 0) throw new ArgumentOutOfRangeException(nameof(loadBatteryPerEwShip));
             if (cashReserveCredits < 0) throw new ArgumentOutOfRangeException(nameof(cashReserveCredits));
+            if (travelCashCredits < 0 || travelCashCredits > cashReserveCredits)
+                throw new ArgumentOutOfRangeException(nameof(travelCashCredits));
             if (scanBatteryReserve < 0) throw new ArgumentOutOfRangeException(nameof(scanBatteryReserve));
             if (scanWindowTicks < 1 || scanWindowTicks > SimTick.TicksPerHour) throw new ArgumentOutOfRangeException(nameof(scanWindowTicks));
             if (presets == null || presets.Length == 0) throw new ArgumentException("Presets required.", nameof(presets));
@@ -125,6 +128,7 @@ namespace Unruled.Core.AI
             LoadFuel = loadFuel;
             LoadBatteryPerEwShip = loadBatteryPerEwShip;
             CashReserveCredits = cashReserveCredits;
+            TravelCashCredits = travelCashCredits;
             ScanBatteryReserve = scanBatteryReserve;
             ScanWindowTicks = scanWindowTicks;
             OutpostRigs = outpostRigs;
