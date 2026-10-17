@@ -730,9 +730,9 @@ namespace Unruled.Core.AI
 
         // WTO: cancels its orders open past the trade window; sells surplus into a rival's bid, or else, under the travel
         // cash, sells a batch to THE SYSTEM's standing bid, or else lists one batch under the reference price; bids over it
-        // for the first item the next stress test still lacks. Orders are sized to what the wallet can lock: the seller's
-        // escrow deposit, the buyer's payment from its bid budget of the cash above the travel cash. One order of a kind in
-        // flight at a time.
+        // for the first item the next stress test still lacks. Orders are sized to what the cash above the travel cash can
+        // lock: the seller's escrow deposit, the buyer's payment from its bid budget. One order of a kind in flight at a
+        // time.
         private void ThinkTrade(in PlayerHq player, AiPreset preset, EntityId hq, long tick)
         {
             if (!_stockpiles.Has(player.CoreBase) || !_ledger.TryFindPlayerWallet(player.PlayerId, out var wallet))
@@ -754,10 +754,11 @@ namespace Unruled.Core.AI
 
             ref var stock = ref _stockpiles.Get(player.CoreBase);
             long cash = _ledger.Balance(wallet);
+            long spare = Math.Max(0, cash - _balance.TravelCashCredits * Wallet.CentsPerCredit);
             int feeds = NeededRaws(in player);
             bool listing = _issuer.IsInFlight(player.PlayerId, CommandType.PlaceSellOrder, player.CoreBase);
             if (!listing && FindBidToFill(player, hq, ref stock, feeds, out var sellItem, out long ask, out long wanted))
-                IssueSell(player.PlayerId, player.CoreBase, sellItem, ask, wanted, cash, weight);
+                IssueSell(player.PlayerId, player.CoreBase, sellItem, ask, wanted, spare, weight);
             else if (cash < _balance.TravelCashCredits * Wallet.CentsPerCredit)
             {
                 if (!_issuer.IsInFlight(player.PlayerId, CommandType.SellToSystem, player.CoreBase) &&
@@ -769,7 +770,7 @@ namespace Unruled.Core.AI
                     }, AiAction.SellToSystem, Score(weight, Threshold));
             }
             else if (!listing && FindSurplusToList(player.PlayerId, hq, ref stock, feeds, tick, out sellItem, out ask, out wanted))
-                IssueSell(player.PlayerId, player.CoreBase, sellItem, ask, wanted, cash, weight);
+                IssueSell(player.PlayerId, player.CoreBase, sellItem, ask, wanted, spare, weight);
 
             if (!_progress.Has(hq) || _progress.Get(hq).Stage > ResearchStage.StressTest ||
                 _issuer.IsInFlight(player.PlayerId, CommandType.PlaceBuyOrder, player.CoreBase))
@@ -781,7 +782,6 @@ namespace Unruled.Core.AI
                 if (missing <= 0 || HasOpenOrder(player.PlayerId, cost[i].Item, OrderSide.Buy))
                     continue;
                 long price = TradePrice(cost[i].Item, tick, _balance.TradePricePercent);
-                long spare = Math.Max(0, cash - _balance.TravelCashCredits * Wallet.CentsPerCredit);
                 long quantity = Math.Min(missing, spare * _balance.BidBudgetPercent / 100 / price);
                 if (quantity == 0)
                     return;
@@ -794,12 +794,12 @@ namespace Unruled.Core.AI
             }
         }
 
-        // A sell order sized to the escrow deposit the cash can lock (the engine rounds the whole deposit down, so the cap
-        // is priced the same way).
-        private void IssueSell(int playerId, EntityId coreBase, ItemId item, long ask, long wanted, long cash, int weight)
+        // A sell order sized to the escrow deposit the spare cash can lock (the engine rounds the whole deposit down, so
+        // the cap is priced the same way).
+        private void IssueSell(int playerId, EntityId coreBase, ItemId item, long ask, long wanted, long spare, int weight)
         {
             long depositPercent = ask * _rates.EscrowRatePercent(playerId);
-            long quantity = depositPercent > 0 ? Math.Min(wanted, cash * 100 / depositPercent) : wanted;
+            long quantity = depositPercent > 0 ? Math.Min(wanted, spare * 100 / depositPercent) : wanted;
             if (quantity > 0)
                 Issue(new DelayedPlayerCommand
                 {

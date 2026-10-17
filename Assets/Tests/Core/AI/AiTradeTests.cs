@@ -174,6 +174,25 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void AListing_NeverLocksTheTravelCash()
+        {
+            var ai = _sim.Balance.Ai;
+            long travel = ai.TravelCashCredits * Wallet.CentsPerCredit;
+            _sim.Ledger.TryFindPlayerWallet(Me, out var wallet);
+            _sim.Ledger.Burn(wallet, _sim.Ledger.Balance(wallet));
+            _sim.Ledger.Grant(wallet, travel);
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawBiomass, ai.SellAbove + ai.SellBatch);
+            Assert.IsFalse(Find(AiAction.SellSurplus).HasValue, "no cash above the travel cash for a deposit");
+
+            _sim.Ledger.Grant(wallet, 100 * Wallet.CentsPerCredit);
+            _sim.Clock.Advance(1);
+            Assert.IsTrue(Find(AiAction.SellSurplus).HasValue);
+            RunPendingOrders();
+            Assert.AreEqual(1, Orders(OrderSide.Sell));
+            Assert.GreaterOrEqual(_sim.Ledger.Balance(wallet), travel);
+        }
+
+        [Test]
         public void DoesNotBid_WithoutTheCredits()
         {
             _sim.TechProgress.Get(_hq).Stage = ResearchStage.StressTest;

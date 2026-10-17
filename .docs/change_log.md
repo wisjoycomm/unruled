@@ -93,3 +93,4 @@
 - 2026-10-17 - Claude - THE SYSTEM's standing bid: SellToSystem sells clean goods at 70% of the reference price, paid from the WTO fee and STA toll pools; an AI under its travel cash sells surplus there instead of listing it; tests.
 - 2026-10-17 - Claude - Leaderboard net worth subtracts loan debt, so borrowed cash no longer ranks a player up; test.
 - 2026-10-17 - Claude - Mining balance doc comment matches its numbers (60-tick cycle, 30 ore).
+- 2026-10-17 - Claude - AI sell deposits again come only from cash above the travel cash (a broke AI now sells to THE SYSTEM instead); test. Soak: listings nobody bought had locked ~11,000 credits in escrow.
