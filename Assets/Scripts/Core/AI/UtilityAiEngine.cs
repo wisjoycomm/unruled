@@ -44,7 +44,9 @@ namespace Unruled.Core.AI
         Retrofit = 25,
         BuildWarships = 26,
         Mothball = 27,
-        Activate = 28
+        Activate = 28,
+        Borrow = 29,
+        Repay = 30
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -127,6 +129,7 @@ namespace Unruled.Core.AI
         private readonly ComponentStore<SystemCitadel> _citadels;
         private readonly ComponentStore<WtoOrder> _wtoOrders;
         private readonly ComponentStore<ItemMarket> _markets;
+        private readonly ComponentStore<Loan> _loans;
         private readonly Ledger _ledger;
         private readonly ITollGate _tolls;
         private readonly IMarketRates _rates;
@@ -147,6 +150,7 @@ namespace Unruled.Core.AI
         private readonly NewGameBalance _newGame;
         private readonly FleetBalance _fleetBalance;
         private readonly WtoBalance _wtoBalance;
+        private readonly LedgerBalance _ledgerBalance;
 
         private FleetRoute _route;
 
@@ -161,7 +165,8 @@ namespace Unruled.Core.AI
             ComponentStore<RadarScan> scans, ComponentStore<TechProgress> progress, ComponentStore<JumpGate> gates,
             ComponentStore<ConvoyRoute> convoyRoutes, ComponentStore<ShipBuildOrder> shipOrders,
             ComponentStore<Refinery> refineries, ComponentStore<PlayerStanding> standings, ComponentStore<SystemCitadel> citadels,
-            ComponentStore<WtoOrder> wtoOrders, ComponentStore<ItemMarket> markets, Ledger ledger, IMarketRates rates,
+            ComponentStore<WtoOrder> wtoOrders, ComponentStore<ItemMarket> markets, ComponentStore<Loan> loans, Ledger ledger,
+            IMarketRates rates,
             CommandIssuer issuer,
             RoutePlanner routes, ITollGate tolls, ITechGates tech, GameBalanceConfig config)
         {
@@ -187,6 +192,7 @@ namespace Unruled.Core.AI
             _citadels = citadels ?? throw new ArgumentNullException(nameof(citadels));
             _wtoOrders = wtoOrders ?? throw new ArgumentNullException(nameof(wtoOrders));
             _markets = markets ?? throw new ArgumentNullException(nameof(markets));
+            _loans = loans ?? throw new ArgumentNullException(nameof(loans));
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             _rates = rates ?? throw new ArgumentNullException(nameof(rates));
             _issuer = issuer ?? throw new ArgumentNullException(nameof(issuer));
@@ -207,6 +213,7 @@ namespace Unruled.Core.AI
             _newGame = config.NewGame;
             _fleetBalance = config.Fleets;
             _wtoBalance = config.Wto;
+            _ledgerBalance = config.Ledger;
         }
 
         /// <summary>The orders tried by the last think that ran, in decision order.</summary>
@@ -257,6 +264,7 @@ namespace Unruled.Core.AI
                 ThinkProgress(player, preset, _controllers.EntityAt(c));
                 ThinkEconomy(player, preset, _controllers.EntityAt(c));
                 ThinkShipyard(player, preset, _controllers.EntityAt(c));
+                ThinkFinance(player, preset, _controllers.EntityAt(c), tick);
                 ThinkTrade(player, preset, _controllers.EntityAt(c), tick);
             }
             return _orderCount;
@@ -690,6 +698,32 @@ namespace Unruled.Core.AI
                 }, AiAction.BuildRefinery, Score(preset.ResupplyLogisticsWeight, Full));
                 return;
             }
+        }
+
+        // THE SYSTEM's credit line: borrows up to the cash reserve, repays from cash above twice it, and once the debt falls
+        // due (or is about to, within an AI think of it) repays all it can, so its goods aren't seized.
+        private void ThinkFinance(in PlayerHq player, AiPreset preset, EntityId hq, long tick)
+        {
+            if (!_loans.Has(hq))
+                return;
+            ref var loan = ref _loans.Get(hq);
+            long cash = _ledger.Balance(hq);
+            long reserve = _balance.CashReserveCredits * Wallet.CentsPerCredit;
+            long repay = 0, borrow = 0;
+            if (loan.DebtCents > 0 && tick + _balance.ThinkIntervalTicks >= loan.DueTick)
+                repay = Math.Min(cash, loan.DebtCents);
+            else if (cash < reserve)
+                borrow = Math.Min(reserve - cash, Math.Max(0, _ledgerBalance.CreditLimitCents - loan.DebtCents));
+            else if (cash > 2 * reserve)
+                repay = Math.Min(cash - reserve, loan.DebtCents);
+            // Commands carry whole credits: borrow rounds up, repay down.
+            int credits = (int)Math.Min(int.MaxValue,
+                borrow > 0 ? (borrow + Wallet.CentsPerCredit - 1) / Wallet.CentsPerCredit : repay / Wallet.CentsPerCredit);
+            if (credits <= 0)
+                return;
+            var type = borrow > 0 ? CommandType.Borrow : CommandType.Repay;
+            Issue(new DelayedPlayerCommand { PlayerId = player.PlayerId, CommandType = type, Target = player.CoreBase, ParamA = credits },
+                borrow > 0 ? AiAction.Borrow : AiAction.Repay, Score(preset.ResupplyLogisticsWeight, Threshold));
         }
 
         // WTO: cancels its orders open past the trade window; sells surplus into a rival's bid, or else lists one batch

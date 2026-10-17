@@ -79,3 +79,4 @@
 - 2026-10-17 - Claude - AI sieges carry 5 batteries per EW ship on top of the claim cost (a fight on the way burned the claim's batteries and the fleet turned back).
 - 2026-10-17 - Claude - Loans (L1): players start at 0 credits; Borrow/Repay commands, LoanSystem (interest-free month, daily interest to the WTO pool, overdue debt seizes credits then core goods); FundedBalance for money-dependent tests; tests.
 - 2026-10-17 - Claude - Loans (L2): Loan store appended to the save, SchemaVersion 2; schema-1 saves load with no debt; round-trip and migration tests.
+- 2026-10-17 - Claude - Loans (L3): AI borrows up to a 2,000-credit cash reserve, repays above twice the reserve or all it can when due; tests. Soak: AIs draw the full limit by day 3, refinery upkeep spends it.

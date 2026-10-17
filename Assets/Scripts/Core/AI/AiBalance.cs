@@ -57,6 +57,7 @@ namespace Unruled.Core.AI
         public readonly int LoadAmmoPerLineShip; // at the core base a fleet loads ammo up to this per line ship
         public readonly int LoadFuel; // and fuel up to this
         public readonly int LoadBatteryPerEwShip; // batteries per EW ship a fleet carries for combat, on top of a claim cost
+        public readonly long CashReserveCredits; // borrows up to this cash, repays debt from cash above twice it
         public readonly int OutpostRigs; // rigs a fleet builds on each bare deposit of a site it claimed
         public readonly int ConvoyShips; // cargo convoys per convoy fleet it builds for an outpost
         public readonly int ConvoyBatch; // the batch its convoy routes run, within the fleet's capacity
@@ -80,7 +81,7 @@ namespace Unruled.Core.AI
             int outpostRigs, int convoyShips, int convoyBatch, int refineryInputStock, int coreSupplyReserve,
             int rawStockCap, int loadUpkeepIntervals, byte citadelAssaultTier, int sellAbove, int fillAbove, int sellBatch,
             int tradePricePercent, int tradeOrderTicks, int bidBudgetPercent, int homeSettleWeight,
-            int battleLineShips, int loadBatteryPerEwShip, AiPreset[] presets)
+            int battleLineShips, int loadBatteryPerEwShip, long cashReserveCredits, AiPreset[] presets)
         {
             if (thinkIntervalTicks < 1) throw new ArgumentOutOfRangeException(nameof(thinkIntervalTicks));
             if (fullBatteryScans < 1) throw new ArgumentOutOfRangeException(nameof(fullBatteryScans));
@@ -104,6 +105,7 @@ namespace Unruled.Core.AI
             if (homeSettleWeight < 0) throw new ArgumentOutOfRangeException(nameof(homeSettleWeight));
             if (battleLineShips < 0) throw new ArgumentOutOfRangeException(nameof(battleLineShips));
             if (loadBatteryPerEwShip < 0) throw new ArgumentOutOfRangeException(nameof(loadBatteryPerEwShip));
+            if (cashReserveCredits < 0) throw new ArgumentOutOfRangeException(nameof(cashReserveCredits));
             if (presets == null || presets.Length == 0) throw new ArgumentException("Presets required.", nameof(presets));
             for (int i = 0; i < presets.Length; i++)
             {
@@ -116,6 +118,7 @@ namespace Unruled.Core.AI
             LoadAmmoPerLineShip = loadAmmoPerLineShip;
             LoadFuel = loadFuel;
             LoadBatteryPerEwShip = loadBatteryPerEwShip;
+            CashReserveCredits = cashReserveCredits;
             OutpostRigs = outpostRigs;
             ConvoyShips = convoyShips;
             ConvoyBatch = convoyBatch;
