@@ -8,16 +8,19 @@ namespace Unruled.Core.Economy
         public readonly int VwapWindowTicks;
         public readonly int PriceBandPercent; // orders must be within +/- this of the reference price
         public readonly int SystemBidPercent; // THE SYSTEM buys any item at this share of the reference price
+        public readonly int SystemAskPercent; // and resells what it holds at this share
 
-        public WtoBalance(int vwapWindowTicks, int priceBandPercent, int systemBidPercent)
+        public WtoBalance(int vwapWindowTicks, int priceBandPercent, int systemBidPercent, int systemAskPercent)
         {
             if (vwapWindowTicks <= 0 || vwapWindowTicks > ItemMarket.MaxWindowTicks)
                 throw new ArgumentOutOfRangeException(nameof(vwapWindowTicks));
             if (priceBandPercent < 0 || priceBandPercent >= 100) throw new ArgumentOutOfRangeException(nameof(priceBandPercent));
             VwapWindowTicks = vwapWindowTicks;
             if (systemBidPercent < 1 || systemBidPercent > 100) throw new ArgumentOutOfRangeException(nameof(systemBidPercent));
+            if (systemAskPercent < systemBidPercent) throw new ArgumentOutOfRangeException(nameof(systemAskPercent));
             PriceBandPercent = priceBandPercent;
             SystemBidPercent = systemBidPercent;
+            SystemAskPercent = systemAskPercent;
         }
     }
 

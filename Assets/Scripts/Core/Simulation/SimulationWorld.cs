@@ -138,6 +138,7 @@ namespace Unruled.Core.Simulation
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
             Wallets.Add(WtoFeePool, new Wallet { Pool = TaxPoolKind.WtoMarketFees });
+            Stockpiles.Add(WtoFeePool, default); // THE SYSTEM's stock: what it bought and resells (see WtoMarketEngine)
             StaTollPool = World.Create();
             Wallets.Add(StaTollPool, new Wallet { Pool = TaxPoolKind.StaTollGates });
             WtoEscrow = World.Create();
@@ -192,6 +193,7 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.PlaceSellOrder, Market);
             Commands.Register(CommandType.CancelOrder, Market);
             Commands.Register(CommandType.SellToSystem, Market);
+            Commands.Register(CommandType.BuyFromSystem, Market);
             Clock.Register(new WhoQuarantineSystem(Quarantines, Stockpiles, balance.SystemFactions));
 
             var upkeep = new FleetUpkeepSystem(Fleets, FleetReadiness, FleetMotions, Stockpiles, balance.Fleets);
@@ -273,7 +275,7 @@ namespace Unruled.Core.Simulation
             Ai = new UtilityAiEngine(
                 AiControllers, Players, Fleets, FleetMotions, FleetCombat, FleetReadiness, Stockpiles, Sites, Weather, Deposits,
                 Starlanes, RadarScans, TechProgress, JumpGates, ConvoyRoutes, ShipOrders, Refineries, Standings, Citadels, WtoOrders,
-                ItemMarkets, Loans, Ledger, Rates, Issuer, Routes, Tolls, TechGates, balance);
+                ItemMarkets, Loans, Ledger, WtoFeePool, Rates, Issuer, Routes, Tolls, TechGates, balance);
         }
 
         /// <summary>

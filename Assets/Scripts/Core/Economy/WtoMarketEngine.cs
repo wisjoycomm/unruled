@@ -19,9 +19,12 @@ namespace Unruled.Core.Economy
     /// difference to their limit, and the goods, value and the matched share of the deposit go to
     /// <see cref="ITradeSettlement"/>.
     /// SellToSystem (target: own site; ParamA item, ParamB quantity) is THE SYSTEM's standing bid for any item: clean
-    /// goods leave the site at once for the system bid share of the reference price, paid from the WTO fee pool, then
-    /// the STA toll pool, for as many units as they cover. No fee, deposit, convoy or VWAP record: what the system
-    /// collects goes back round to players who sell their surplus at a loss.
+    /// goods move at once into THE SYSTEM's stock (a stockpile on the WTO fee pool) for the system bid share of the
+    /// reference price, paid from the WTO fee pool, then the STA toll pool, for as many units as they cover.
+    /// BuyFromSystem (same parameters) is its standing ask: goods from its stock move at once to the site for the system
+    /// ask share, paid into the WTO fee pool, as many as the stock and the buyer's wallet cover. No fee, deposit, convoy
+    /// or VWAP record: money and goods both go round, from players who buy what they lack to players who sell their
+    /// surplus at a loss.
     /// </summary>
     public sealed class WtoMarketEngine : ISimSystem, ICommandHandler
     {
@@ -70,6 +73,12 @@ namespace Unruled.Core.Economy
         public long SystemBidCents(ItemId item, long tick) =>
             Math.Max(1, ReferencePriceCents(item, tick) * _balance.SystemBidPercent / 100);
 
+        public long SystemAskCents(ItemId item, long tick) =>
+            Math.Max(1, ReferencePriceCents(item, tick) * _balance.SystemAskPercent / 100);
+
+        /// <summary>How many of an item THE SYSTEM holds to resell.</summary>
+        public int SystemStock(ItemId item) => _stockpiles.Get(_feePool).Get(item);
+
         public bool IsInBand(ItemId item, long priceCents, long tick)
         {
             long reference = ReferencePriceCents(item, tick);
@@ -92,6 +101,9 @@ namespace Unruled.Core.Economy
                     break;
                 case CommandType.SellToSystem:
                     SellToSystem(command, tick);
+                    break;
+                case CommandType.BuyFromSystem:
+                    BuyFromSystem(command, tick);
                     break;
                 default:
                     throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
@@ -166,6 +178,27 @@ namespace Unruled.Core.Economy
             Pay(_feePool, wallet, Math.Min(due, fees));
             Pay(_tollPool, wallet, due - Math.Min(due, fees));
             stock.Add(item, -quantity);
+            _stockpiles.Get(_feePool).Add(item, quantity);
+        }
+
+        private void BuyFromSystem(in DelayedPlayerCommand command, long tick)
+        {
+            var item = (ItemId)command.ParamA;
+            var site = command.Target;
+            if (!ItemIds.IsValid(item) || command.ParamB <= 0 || !_access.MayTrade(command.PlayerId, tick))
+                return;
+            if (!_sites.Has(site) || _sites.Get(site).OwnerPlayerId != command.PlayerId || !_stockpiles.Has(site) ||
+                !_ledger.TryFindPlayerWallet(command.PlayerId, out var wallet))
+                return;
+
+            ref var stock = ref _stockpiles.Get(_feePool);
+            long price = SystemAskCents(item, tick);
+            int quantity = (int)Math.Min(Math.Min(command.ParamB, stock.Get(item)), _ledger.Balance(wallet) / price);
+            if (quantity <= 0)
+                return;
+            Pay(wallet, _feePool, quantity * price);
+            stock.Add(item, -quantity);
+            _stockpiles.Get(site).Add(item, quantity);
         }
 
         private void Cancel(int playerId, EntityId order)

@@ -36,7 +36,8 @@ namespace Unruled.Core.Simulation
         Borrow = 30,
         Repay = 31,
         RaidConvoys = 32,
-        SellToSystem = 33
+        SellToSystem = 33,
+        BuyFromSystem = 34
     }
 
     /// <summary>A player or AI command that takes effect after signal latency. Shared by players and the Server 2 AI.</summary>

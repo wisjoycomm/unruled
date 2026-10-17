@@ -48,7 +48,8 @@ namespace Unruled.Core.AI
         Borrow = 29,
         Repay = 30,
         SellToSystem = 31,
-        BuyFeedstock = 32
+        BuyFeedstock = 32,
+        BuyFromSystem = 33
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -133,6 +134,7 @@ namespace Unruled.Core.AI
         private readonly ComponentStore<ItemMarket> _markets;
         private readonly ComponentStore<Loan> _loans;
         private readonly Ledger _ledger;
+        private readonly EntityId _systemStock;
         private readonly ITollGate _tolls;
         private readonly IMarketRates _rates;
         private readonly CommandIssuer _issuer;
@@ -168,7 +170,7 @@ namespace Unruled.Core.AI
             ComponentStore<ConvoyRoute> convoyRoutes, ComponentStore<ShipBuildOrder> shipOrders,
             ComponentStore<Refinery> refineries, ComponentStore<PlayerStanding> standings, ComponentStore<SystemCitadel> citadels,
             ComponentStore<WtoOrder> wtoOrders, ComponentStore<ItemMarket> markets, ComponentStore<Loan> loans, Ledger ledger,
-            IMarketRates rates,
+            EntityId systemStock, IMarketRates rates,
             CommandIssuer issuer,
             RoutePlanner routes, ITollGate tolls, ITechGates tech, GameBalanceConfig config)
         {
@@ -196,6 +198,8 @@ namespace Unruled.Core.AI
             _markets = markets ?? throw new ArgumentNullException(nameof(markets));
             _loans = loans ?? throw new ArgumentNullException(nameof(loans));
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
+            if (systemStock.IsNull) throw new ArgumentException("THE SYSTEM's stock required.", nameof(systemStock));
+            _systemStock = systemStock;
             _rates = rates ?? throw new ArgumentNullException(nameof(rates));
             _issuer = issuer ?? throw new ArgumentNullException(nameof(issuer));
             _routes = routes ?? throw new ArgumentNullException(nameof(routes));
@@ -732,8 +736,9 @@ namespace Unruled.Core.AI
         // WTO: cancels its orders open past the trade window; sells surplus into a rival's bid, or else, under the travel
         // cash, sells a batch to THE SYSTEM's standing bid, or else lists one batch under the reference price; bids over it
         // for the first item the next stress test still lacks, or else (nothing to bid for), debt-free with cash above
-        // twice its reserve (idle money, which would otherwise repay debt), buys the cheapest rival listing of a raw it feeds and holds under the
-        // sell threshold. Orders are sized to what the cash above the travel cash can lock: the seller's escrow deposit, the
+        // twice its reserve (idle money, which would otherwise repay debt), buys the cheapest rival listing of a raw it feeds
+        // and holds under the sell threshold, or else a batch of one from THE SYSTEM's stock. A stress-test shortfall THE
+        // SYSTEM holds is bought from it at once rather than bid for. Orders are sized to what the cash above the travel cash can lock: the seller's escrow deposit, the
         // buyer's payment from its bid budget (of the idle cash, for feedstock). One order of a kind in flight at a time.
         private void ThinkTrade(in PlayerHq player, AiPreset preset, EntityId hq, long tick)
         {
@@ -784,6 +789,8 @@ namespace Unruled.Core.AI
                     int missing = cost[i].Quantity - stock.Get(cost[i].Item);
                     if (missing <= 0 || HasOpenOrder(player.PlayerId, cost[i].Item, OrderSide.Buy))
                         continue;
+                    if (BuyFromSystem(player.PlayerId, player.CoreBase, cost[i].Item, missing, spare, tick, weight))
+                        return;
                     long price = TradePrice(cost[i].Item, tick, _balance.TradePricePercent);
                     long quantity = Math.Min(missing, spare * _balance.BidBudgetPercent / 100 / price);
                     if (quantity == 0)
@@ -798,9 +805,19 @@ namespace Unruled.Core.AI
             }
 
             long idle = cash - 2 * _balance.CashReserveCredits * Wallet.CentsPerCredit;
-            if (idle <= 0 || (_loans.Has(hq) && _loans.Get(hq).DebtCents > 0) ||
-                !FindListingToBuy(player.PlayerId, ref stock, feeds, out var feedItem, out long feedAsk, out int feedWanted))
+            if (idle <= 0 || (_loans.Has(hq) && _loans.Get(hq).DebtCents > 0))
                 return;
+            if (!FindListingToBuy(player.PlayerId, ref stock, feeds, out var feedItem, out long feedAsk, out int feedWanted))
+            {
+                for (int slot = 0; slot < ItemIds.Count; slot++)
+                {
+                    var raw = ItemIds.FromSlot(slot);
+                    if (Feeds(feeds, raw) && stock.Get(raw) < _balance.SellAbove &&
+                        BuyFromSystem(player.PlayerId, player.CoreBase, raw, _balance.SellBatch, idle, tick, weight))
+                        return;
+                }
+                return;
+            }
             long feedQuantity = Math.Min(feedWanted, idle * _balance.BidBudgetPercent / 100 / feedAsk);
             if (feedQuantity > 0)
                 Issue(new DelayedPlayerCommand
@@ -808,6 +825,24 @@ namespace Unruled.Core.AI
                     PlayerId = player.PlayerId, CommandType = CommandType.PlaceBuyOrder, Target = player.CoreBase,
                     ParamA = (int)feedItem, ParamB = (int)feedQuantity, ParamC = (int)feedAsk
                 }, AiAction.BuyFeedstock, Score(weight, Threshold));
+        }
+
+        // Up to wanted from THE SYSTEM's stock at its ask, from the bid budget of the cash given; one such order in flight.
+        private bool BuyFromSystem(int playerId, EntityId coreBase, ItemId item, long wanted, long cash, long tick, int weight)
+        {
+            if (_issuer.IsInFlight(playerId, CommandType.BuyFromSystem, coreBase))
+                return false;
+            long price = TradePrice(item, tick, _wtoBalance.SystemAskPercent - 100);
+            long quantity = Math.Min(Math.Min(wanted, _stockpiles.Get(_systemStock).Get(item)),
+                cash * _balance.BidBudgetPercent / 100 / price);
+            if (quantity <= 0)
+                return false;
+            Issue(new DelayedPlayerCommand
+            {
+                PlayerId = playerId, CommandType = CommandType.BuyFromSystem, Target = coreBase, ParamA = (int)item,
+                ParamB = (int)quantity
+            }, AiAction.BuyFromSystem, Score(weight, Threshold));
+            return true;
         }
 
         // A sell order sized to the escrow deposit the spare cash can lock (the engine rounds the whole deposit down, so

@@ -147,6 +147,8 @@ namespace Unruled.Core.Persistence
             r.Skip(keys - TopLevelKeys);
             if (!r.End) throw new FormatException("Save has bytes after its end.");
 
+            if (!sim.Stockpiles.Has(sim.WtoFeePool))
+                sim.Stockpiles.Add(sim.WtoFeePool, default); // schema 3 and older: THE SYSTEM held no stock yet
             sim.Graph.Rebuild(sim.Starlanes);
             return sim;
         }

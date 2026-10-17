@@ -234,6 +234,36 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void AStressTestShortfall_TheSystemHolds_IsBoughtFromIt()
+        {
+            ref var progress = ref _sim.TechProgress.Get(_hq);
+            progress.Stage = ResearchStage.StressTest;
+            var cost = _sim.Balance.Research.Tier((byte)(progress.TechTier + 1)).StressTestCost;
+            _sim.Stockpiles.Get(_sim.WtoFeePool).Add(cost[0].Item, cost[0].Quantity);
+
+            Assert.IsTrue(Find(AiAction.BuyFromSystem).HasValue);
+            RunPendingOrders();
+            Assert.AreEqual(cost[0].Quantity, _sim.Stockpiles.Get(_home).Get(cost[0].Item));
+            Assert.AreEqual(0, Orders(OrderSide.Buy), "no bid for what was bought");
+        }
+
+        [Test]
+        public void IdleCash_BuysFeedstock_FromTheSystem_WhenNoRivalListsIt()
+        {
+            var ai = _sim.Balance.Ai;
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.Complete;
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemRations });
+            _sim.Stockpiles.Get(_sim.WtoFeePool).Add(ItemId.RawBiomass, 2 * ai.SellBatch);
+
+            Assert.IsTrue(Find(AiAction.BuyFromSystem).HasValue);
+            RunPendingOrders();
+            long ask = _sim.Market.SystemAskCents(ItemId.RawBiomass, _sim.Clock.CurrentTick);
+            long budget = (FundedBalance.StartingCredits - 2 * ai.CashReserveCredits) * Wallet.CentsPerCredit * ai.BidBudgetPercent / 100;
+            Assert.AreEqual(2 * ai.SellBatch - System.Math.Min(ai.SellBatch, budget / ask), _sim.Market.SystemStock(ItemId.RawBiomass),
+                "up to a batch, from the bid budget of the idle cash");
+        }
+
+        [Test]
         public void IdleCash_BuysNoFeedstock_ItAlreadyHolds()
         {
             var ai = _sim.Balance.Ai;

@@ -75,6 +75,21 @@ namespace Unruled.Tests.Core.Persistence
 
         // Migration: schema 2 saved fleet combat state with 12 keys; those fleets load not raiding convoys.
         [Test]
+        public void ASaveWithoutTheSystemStock_LoadsWithAnEmptyOne_AndTheStockRoundTrips()
+        {
+            var balance = DefaultGameBalance.Create();
+            var sim = new SimulationWorld(balance, worldSeed: 7);
+            sim.Stockpiles.Remove(sim.WtoFeePool);
+            var loaded = SaveGame.Load(balance, SaveGame.Write(sim));
+            Assert.IsTrue(loaded.Stockpiles.Has(loaded.WtoFeePool), "schema 3 and older held no stock");
+            Assert.AreEqual(0, loaded.Market.SystemStock(ItemId.ItemSteel));
+
+            loaded.Stockpiles.Get(loaded.WtoFeePool).Add(ItemId.ItemSteel, 12);
+            var again = SaveGame.Load(balance, SaveGame.Write(loaded));
+            Assert.AreEqual(12, again.Market.SystemStock(ItemId.ItemSteel));
+        }
+
+        [Test]
         public void Schema2FleetCombatState_LoadsNotRaidingConvoys()
         {
             var w = new MsgPackWriter();

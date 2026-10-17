@@ -267,7 +267,8 @@ namespace Unruled.Core.Simulation
         public static StaBalance CreateStaBalance() => new StaBalance(tollCentsPerShipPer100Units: 20);
 
         /// <summary>GDD §2.2 B: VWAP over the last 100 ticks, price band 0.8x-1.2x.</summary>
-        public static WtoBalance CreateWtoBalance() => new WtoBalance(vwapWindowTicks: 100, priceBandPercent: 20, systemBidPercent: 70);
+        public static WtoBalance CreateWtoBalance() => new WtoBalance(vwapWindowTicks: 100, priceBandPercent: 20, systemBidPercent: 70,
+            systemAskPercent: 130);
 
         /// <summary>PROVISIONAL: a contract convoy has twice its planned travel time plus 10 minutes to deliver.</summary>
         public static WtoContractBalance CreateWtoContractBalance() =>

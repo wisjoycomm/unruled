@@ -184,6 +184,7 @@ namespace Unruled.Tests.Core.Economy
             SellToSystem(Seller, _sellerSite, 5);
             Step();
             Assert.AreEqual(95, Held(_sellerSite));
+            Assert.AreEqual(5, _sim.Market.SystemStock(Steel), "into THE SYSTEM's stock");
             Assert.AreEqual(Start + 5 * bid, Cash(_sellerHq));
             Assert.AreEqual(0, Cash(_sim.WtoFeePool), "fees spent first");
             Assert.AreEqual(8 * bid, Cash(_sim.StaTollPool));
@@ -217,6 +218,42 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(bid / 2, Cash(_sim.StaTollPool));
             Assert.AreEqual(Start + 4 * bid, Cash(_sellerHq));
         }
+
+        [Test]
+        public void BuyFromSystem_SellsItsStock_AtTheAsk_IntoTheFeePool_AsFarAsStockAndWalletGo()
+        {
+            long ask = 5_000 * _sim.Balance.Wto.SystemAskPercent / 100;
+            Assert.AreEqual(ask, _sim.Market.SystemAskCents(Steel, _sim.Clock.CurrentTick));
+            BuyFromSystem(Buyer, _buyerSite, 5);
+            Step();
+            Assert.AreEqual(0, Held(_buyerSite), "THE SYSTEM holds no steel yet");
+
+            _sim.Stockpiles.Get(_sim.WtoFeePool).Add(Steel, 8);
+            BuyFromSystem(Buyer, _sellerSite, 5);
+            Step();
+            Assert.AreEqual(8, _sim.Market.SystemStock(Steel), "not the buyer's site");
+
+            BuyFromSystem(Buyer, _buyerSite, 50);
+            Step();
+            Assert.AreEqual(8, Held(_buyerSite), "all THE SYSTEM held");
+            Assert.AreEqual(0, _sim.Market.SystemStock(Steel));
+            Assert.AreEqual(Start - 8 * ask, Cash(_buyerHq));
+            Assert.AreEqual(8 * ask, Cash(_sim.WtoFeePool));
+
+            _sim.Stockpiles.Get(_sim.WtoFeePool).Add(Steel, 10);
+            _sim.Ledger.Burn(_buyerHq, Cash(_buyerHq) - 3 * ask - ask / 2);
+            BuyFromSystem(Buyer, _buyerSite, 10);
+            Step();
+            Assert.AreEqual(11, Held(_buyerSite), "three more, all the wallet covers");
+            Assert.AreEqual(ask / 2, Cash(_buyerHq));
+        }
+
+        private void BuyFromSystem(int player, EntityId site, int quantity) =>
+            _sim.Clock.Enqueue(new DelayedPlayerCommand
+            {
+                ExecuteAtTick = _sim.Clock.CurrentTick + 1, PlayerId = player, CommandType = CommandType.BuyFromSystem,
+                Target = site, ParamA = (int)Steel, ParamB = quantity
+            });
 
         [Test]
         public void Vwap_WeighsTradesInTheWindow_AndHoldsAfterIt()
