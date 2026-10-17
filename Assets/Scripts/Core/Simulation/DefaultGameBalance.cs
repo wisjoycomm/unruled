@@ -252,8 +252,14 @@ namespace Unruled.Core.Simulation
         /// PROVISIONAL: costs 20 alloy + 50 fuel + 20 battery (teardown) and 20 coolant + 20 battery (bootstrap), all
         /// paid from the old core base when ordered; durations rolled uniformly inside each range.
         /// </summary>
-        /// <summary>PROVISIONAL: every player starts with 10,000 credits (the GDD gives no starting money).</summary>
-        public static LedgerBalance CreateLedgerBalance() => new LedgerBalance(startingCents: 10_000 * Wallet.CentsPerCredit);
+        /// <summary>
+        /// Players start with no credits, only goods, and borrow from THE SYSTEM (user decision 2026-10-17). PROVISIONAL:
+        /// a 10,000-credit limit, no interest in the first 30 days, then 1% of the principal a day, due 30 days after
+        /// interest starts on it.
+        /// </summary>
+        public static LedgerBalance CreateLedgerBalance() => new LedgerBalance(
+            startingCents: 0, creditLimitCents: 10_000 * Wallet.CentsPerCredit, interestFreeTicks: 30 * SimTick.TicksPerDay,
+            dailyInterestBasisPoints: 100, loanTermTicks: 30 * SimTick.TicksPerDay);
 
         /// <summary>PROVISIONAL: the STA toll is 0.2 credits per ship per 100 units of highway (tab 04 names no amount).</summary>
         public static StaBalance CreateStaBalance() => new StaBalance(tollCentsPerShipPer100Units: 20);

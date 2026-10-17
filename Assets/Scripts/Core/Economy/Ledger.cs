@@ -5,8 +5,8 @@ namespace Unruled.Core.Economy
 {
     /// <summary>
     /// Owns <see cref="Wallet"/>: the only code that changes a balance. Every move is all-or-nothing, no balance goes
-    /// negative, and money is never created during play: <see cref="Transfer"/> moves it, <see cref="Burn"/> removes it
-    /// (upkeep sinks). Only <see cref="Grant"/>, for world setup, adds money.
+    /// negative. <see cref="Transfer"/> moves money, <see cref="Burn"/> removes it (upkeep sinks, repaid loans). Money
+    /// is created only by <see cref="Grant"/>, for world setup, and <see cref="Lend"/>, THE SYSTEM's loans.
     /// </summary>
     public sealed class Ledger
     {
@@ -26,6 +26,9 @@ namespace Unruled.Core.Economy
             ref var w = ref _wallets.Get(wallet);
             w.Cents = checked(w.Cents + cents);
         }
+
+        /// <summary>A loan from THE SYSTEM (see <see cref="LoanSystem"/>): adds credits the borrower now owes.</summary>
+        public void Lend(EntityId wallet, long cents) => Grant(wallet, cents);
 
         public bool Transfer(EntityId from, EntityId to, long cents)
         {

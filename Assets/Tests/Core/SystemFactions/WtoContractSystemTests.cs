@@ -4,6 +4,7 @@ using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
 using Unruled.Core.Simulation;
+using Unruled.Tests.Core.Simulation;
 
 namespace Unruled.Tests.Core.SystemFactions
 {
@@ -26,7 +27,7 @@ namespace Unruled.Tests.Core.SystemFactions
         [SetUp]
         public void SetUp()
         {
-            _sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 9);
+            _sim = new SimulationWorld(FundedBalance.Create(), worldSeed: 9);
             _sellerSite = Site(Seller);
             _buyerSite = Site(Buyer);
             _island = Site(Buyer);

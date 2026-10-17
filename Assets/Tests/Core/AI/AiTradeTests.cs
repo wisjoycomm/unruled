@@ -6,6 +6,7 @@ using Unruled.Core.Economy;
 using Unruled.Core.Military;
 using Unruled.Core.Research;
 using Unruled.Core.Simulation;
+using Unruled.Tests.Core.Simulation;
 
 namespace Unruled.Tests.Core.AI
 {
@@ -21,7 +22,7 @@ namespace Unruled.Tests.Core.AI
         [SetUp]
         public void SetUp()
         {
-            _sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 3);
+            _sim = new SimulationWorld(FundedBalance.Create(), worldSeed: 3);
             _home = _sim.World.Create();
             _sim.Sites.Add(_home, new SiteInfo { OwnerPlayerId = Me });
             _sim.Stockpiles.Add(_home, default);

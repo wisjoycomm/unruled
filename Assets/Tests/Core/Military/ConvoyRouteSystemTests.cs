@@ -4,6 +4,7 @@ using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
 using Unruled.Core.Simulation;
+using Unruled.Tests.Core.Simulation;
 
 namespace Unruled.Tests.Core.Military
 {
@@ -19,7 +20,7 @@ namespace Unruled.Tests.Core.Military
         [SetUp]
         public void SetUp()
         {
-            _sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 3);
+            _sim = new SimulationWorld(FundedBalance.Create(), worldSeed: 3);
             _hub = Site(0);
             _outpost = Site(200);
             var lane = _sim.World.Create();

@@ -3,6 +3,7 @@ using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Simulation;
+using Unruled.Tests.Core.Simulation;
 
 namespace Unruled.Tests.Core.Economy
 {
@@ -20,7 +21,7 @@ namespace Unruled.Tests.Core.Economy
         [SetUp]
         public void SetUp()
         {
-            _sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 5);
+            _sim = new SimulationWorld(FundedBalance.Create(), worldSeed: 5);
             _sellerSite = Site(Seller);
             _seller2Site = Site(Seller2);
             _buyerSite = Site(Buyer);

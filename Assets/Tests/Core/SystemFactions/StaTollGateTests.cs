@@ -3,6 +3,7 @@ using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Military;
 using Unruled.Core.Simulation;
+using Unruled.Tests.Core.Simulation;
 using Unruled.Core.SystemFactions;
 
 namespace Unruled.Tests.Core.SystemFactions
@@ -20,7 +21,7 @@ namespace Unruled.Tests.Core.SystemFactions
         [SetUp]
         public void SetUp()
         {
-            _sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 3);
+            _sim = new SimulationWorld(FundedBalance.Create(), worldSeed: 3);
             _hq = _sim.CreatePlayer(Me, default);
             _highway = new StarlaneEdge { Tier = StarlaneTier.StaHighway, Length = 250 };
             _bypass = new StarlaneEdge { Tier = StarlaneTier.OuterRimBypass, Length = 250 };

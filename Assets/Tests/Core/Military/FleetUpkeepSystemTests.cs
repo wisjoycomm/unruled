@@ -4,6 +4,7 @@ using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
 using Unruled.Core.Simulation;
+using Unruled.Tests.Core.Simulation;
 
 namespace Unruled.Tests.Core.Military
 {
@@ -20,7 +21,7 @@ namespace Unruled.Tests.Core.Military
         [SetUp]
         public void SetUp()
         {
-            _sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 1);
+            _sim = new SimulationWorld(FundedBalance.Create(), worldSeed: 1);
             _b = _sim.Balance.Fleets;
             _s0 = _sim.World.Create();
             _sim.Sites.Add(_s0, new SiteInfo());

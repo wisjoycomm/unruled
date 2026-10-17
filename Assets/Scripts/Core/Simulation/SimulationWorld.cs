@@ -43,6 +43,7 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<RadarScan> RadarScans;
         public readonly ComponentStore<Wallet> Wallets;
         public readonly ComponentStore<PlayerStanding> Standings;
+        public readonly ComponentStore<Loan> Loans;
         public readonly ComponentStore<WtoOrder> WtoOrders;
         public readonly ComponentStore<ItemMarket> ItemMarkets;
         public readonly ComponentStore<WtoContract> Contracts;
@@ -69,6 +70,7 @@ namespace Unruled.Core.Simulation
         public readonly WtoMarketEngine Market;
         public readonly WtoContractSystem ContractSystem;
         public readonly LeaderboardAuditSystem Audit;
+        public readonly LoanSystem Lending;
         public readonly SystemAuthorityManager Authority;
         public readonly NoaaForecast Forecast;
         public readonly UtilityAiEngine Ai; // not on the clock: the host calls Think (Server 2)
@@ -131,6 +133,7 @@ namespace Unruled.Core.Simulation
             CitadelAssaults = World.CreateStore<CitadelAssault>();
             VictoryRecords = World.CreateStore<VictoryRecord>();
             DirectorateSeats = World.CreateStore<DirectorateSeat>();
+            Loans = World.CreateStore<Loan>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -252,6 +255,10 @@ namespace Unruled.Core.Simulation
                 Standings, Wallets, Sites, Fleets, Stockpiles, Ledger, WtoFeePool, StaTollPool, Market, balance.Leaderboard);
             Clock.Register(Audit);
             Commands.Register(CommandType.AuditOptIn, Audit);
+            Lending = new LoanSystem(Loans, Players, Stockpiles, Ledger, WtoFeePool, Market, balance.Ledger);
+            Clock.Register(Lending);
+            Commands.Register(CommandType.Borrow, Lending);
+            Commands.Register(CommandType.Repay, Lending);
             Clock.Register(Authority);
             Defense = new SystemDefenseEvaluator(
                 World, Citadels, CitadelAssaults, Sites, Fleets, FleetMotions, FleetReadiness, Stockpiles, Ledger, FleetFactory,
@@ -279,6 +286,7 @@ namespace Unruled.Core.Simulation
             Players.Add(hq, new PlayerHq { PlayerId = playerId, CoreBase = coreBase });
             Wallets.Add(hq, new Wallet { OwnerPlayerId = playerId });
             Standings.Add(hq, new PlayerStanding { Bracket = LeaderboardBalance.Unrated });
+            Loans.Add(hq, default);
             TechProgress.Add(hq, new TechProgress { TechTier = 1 });
             Ledger.Grant(hq, Balance.Ledger.StartingCents);
             return hq;

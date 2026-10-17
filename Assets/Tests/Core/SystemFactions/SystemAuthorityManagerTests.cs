@@ -5,6 +5,7 @@ using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
 using Unruled.Core.Simulation;
+using Unruled.Tests.Core.Simulation;
 using Unruled.Core.SystemFactions;
 
 namespace Unruled.Tests.Core.SystemFactions
@@ -20,7 +21,7 @@ namespace Unruled.Tests.Core.SystemFactions
         [SetUp]
         public void SetUp()
         {
-            _sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 6);
+            _sim = new SimulationWorld(FundedBalance.Create(), worldSeed: 6);
             _pirateSite = Site(Pirate);
             _traderSite = Site(Trader);
             _sim.CreatePlayer(Pirate, _pirateSite);
@@ -146,7 +147,7 @@ namespace Unruled.Tests.Core.SystemFactions
         [Test]
         public void Forecast_ShowsTheFrontsThatForm_WithinTheBracketLead()
         {
-            var sim = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 3);
+            var sim = new SimulationWorld(FundedBalance.Create(), worldSeed: 3);
             sim.GenerateSystem(41, clusterId: 0);
             sim.GenerateSystem(42, clusterId: 1);
             var hq = sim.CreatePlayer(Pirate, sim.Sites.EntityAt(0));

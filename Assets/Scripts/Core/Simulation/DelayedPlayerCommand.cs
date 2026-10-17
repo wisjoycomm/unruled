@@ -32,7 +32,9 @@ namespace Unruled.Core.Simulation
         TransferCargo = 26,
         SetConvoyRoute = 27,
         SetRefineryCap = 28,
-        PauseDrills = 29
+        PauseDrills = 29,
+        Borrow = 30,
+        Repay = 31
     }
 
     /// <summary>A player or AI command that takes effect after signal latency. Shared by players and the Server 2 AI.</summary>
