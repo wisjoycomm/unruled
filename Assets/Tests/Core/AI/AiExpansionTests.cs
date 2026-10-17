@@ -372,6 +372,20 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void Shipyard_MergesASplitBattleLine_IntoItsLargerFleet_BeforeBuildingMore()
+        {
+            var main = Fleet(Me, _home, 40, loaded: true, tier: 3);
+            var extra = Fleet(Me, _home, 20, loaded: true, tier: 3);
+            _sim.TechProgress.Get(_hq).TechTier = 3;
+            StockShipCost(3, _sim.Balance.Ai.BattleLineShips);
+
+            Assert.IsTrue(Find(Warlord, AiAction.MergeFleets).HasValue);
+            RunPendingOrders();
+            Assert.AreEqual(60, _sim.Fleets.Get(main).LineShips, "one line outguns the garrison whole");
+            Assert.AreEqual(0, _sim.Fleets.Get(extra).TotalShips);
+        }
+
+        [Test]
         public void ABattleFleet_SetsOutForTheCitadel_OnlyWithTheAmmoAndTheTolls()
         {
             MakeTargetAnUnguardedCitadel();

@@ -33,7 +33,7 @@ issues orders only through `CommandIssuer`. Per player it first borrows up to it
 deposits; convoy fleets get routes to unserved outposts. Per deposit it pauses drills in storms or at the raw stock
 cap, retracts them when outgunned and rebuilds bare ones; per player it joins the audit, builds convoys and refineries,
 scans, stress-tests, opens its jump gate and trades on the WTO, keeping back the next stress test's cost; from the
-Citadel assault tier its shipyard refits and builds one battle fleet that only waits at home (mothballed once full) or
+Citadel assault tier its shipyard refits, merges and builds one battle fleet that only waits at home (mothballed once full) or
 assaults the Citadel with ammo aboard (every trip takes the toll-free route when the wallet can't cover the tolls), while lower-tier fleets settle and raid. An order still in signal
 latency is not sent again (`CommandIssuer.IsInFlight`). `NoaaForecast` (`Forecast`) is a read-only query for the views.
 `NewGameSetup.Create(sim, playerId)` lays out a new game from `NewGameBalance`: a home system per participant,
@@ -61,7 +61,7 @@ stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a s
 11. `CapitalRelocationSystem`: teardown → capital convoy → bootstrap; `RelocateBase`.
 12. `FocusedRadarSystem`: scan timelines and the Tier-5 IAEA reveal; `ScanBelt`, `CancelScan`, `EcmJam`.
 13. `ResearchSystem`: retooling ends, storm telemetry; `StressTest`.
-14. `ShipyardSystem`: delivers finished `ShipBuildOrder`s; `BuildShips`, `Retrofit`.
+14. `ShipyardSystem`: delivers finished `ShipBuildOrder`s; `BuildShips`, `Retrofit`, `MergeFleets`.
 15. `WtoContractSystem`: settles escrow contracts on delivery, convoy loss or deadline.
 16. `LeaderboardAuditSystem`: the daily Top-10K audit and pool payouts; `AuditOptIn`.
 17. `SystemAuthorityManager`: bulletins (IAEA strikes, Call-to-Arms, NOAA prototype blasts) and WTO defence fleets.
@@ -105,7 +105,7 @@ methods, in this order (rule 4).
   - `PlayerHq` (core base, capital convoy flag), `RelayStation`, `CapitalRelocation` (phase, convoy, cooldown,
     paralysis).
   - `ShipyardSystem` + `ShipyardBalance`: `ShipBuildOrder` queue at the core base and retrofits; it adds ships
-    (`FleetUnit.Gain`) and raises fleet tiers.
+    (`FleetUnit.Gain`), raises fleet tiers and merges two docked warship fleets of one tier (the Merge button).
   - `SiteControlSystem` + `SiteControlBalance`: the only writer of `SiteInfo.OwnerPlayerId` during play; a docked
     fleet unloads the claim cost to take a neutral site or an undefended rival site (never a core base).
   - `CargoTransferSystem`: loads or unloads a docked fleet's hold at an own site (or fills it up to a total);

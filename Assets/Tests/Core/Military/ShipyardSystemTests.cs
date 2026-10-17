@@ -36,12 +36,14 @@ namespace Unruled.Tests.Core.Military
                 _sim.Clock.Advance(1);
         }
 
-        private void Order(CommandType type, EntityId target, int a = 0, int b = 0, int c = 0)
+        private void Order(CommandType type, EntityId target, int a = 0, int b = 0, int c = 0, EntityId with = default)
         {
             var command = new DelayedPlayerCommand
             {
                 PlayerId = Player, CommandType = type, Target = target, ParamA = a, ParamB = b, ParamC = c
             };
+            if (!with.IsNull)
+                command.ParamEntity = with;
             Assert.AreEqual(IssueResult.Issued, _sim.Issuer.Issue(command, out long at));
             Run(at - _sim.Clock.CurrentTick);
         }
@@ -133,6 +135,45 @@ namespace Unruled.Tests.Core.Military
 
             Assert.AreEqual(1, _sim.Fleets.Get(away).TechTier);
             Assert.AreEqual(100, Core.Get(ItemId.ItemSteel));
+        }
+
+        [Test]
+        public void MergeFleets_TheTargetTakesInTheOthersShipsAndHold_StolenTagsIncluded()
+        {
+            var main = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 3, LineShips = 40 }, _core);
+            var extra = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 3, LineShips = 20, EwShips = 2 }, _core);
+            _sim.Stockpiles.Get(main).Add(ItemId.ItemAmmo, 100);
+            _sim.Stockpiles.Get(extra).Add(ItemId.ItemAmmo, 50);
+            _sim.StolenGoods.Add(extra, default);
+            _sim.StolenGoods.Get(extra).Add(ItemId.ItemAmmo, 10);
+
+            Order(CommandType.MergeFleets, main, with: extra);
+
+            Assert.AreEqual(60, _sim.Fleets.Get(main).LineShips);
+            Assert.AreEqual(2, _sim.Fleets.Get(main).EwShips);
+            Assert.AreEqual(0, _sim.Fleets.Get(extra).TotalShips, "left empty, like a fleet that lost every ship");
+            Assert.AreEqual(150, _sim.Stockpiles.Get(main).Get(ItemId.ItemAmmo));
+            Assert.AreEqual(0, _sim.Stockpiles.Get(extra).Get(ItemId.ItemAmmo));
+            Assert.AreEqual(10, _sim.StolenGoods.Get(main).Get(ItemId.ItemAmmo));
+        }
+
+        [Test]
+        public void MergeFleets_OfAnotherTier_AnotherSite_WithCargoConvoys_OrMothballed_DoesNothing()
+        {
+            var main = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 3, LineShips = 40 }, _core);
+            var tier = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 2, LineShips = 5 }, _core);
+            var away = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 3, LineShips = 5 }, _other);
+            var cargo = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 3, LineShips = 5, CargoConvoys = 1 }, _core);
+            var mothballed = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 3, LineShips = 5 }, _core);
+            _sim.FleetReadiness.Get(mothballed).IsMothballed = true;
+
+            Order(CommandType.MergeFleets, main, with: tier);
+            Order(CommandType.MergeFleets, main, with: away);
+            Order(CommandType.MergeFleets, main, with: cargo);
+            Order(CommandType.MergeFleets, main, with: mothballed);
+            Order(CommandType.MergeFleets, main, with: main);
+
+            Assert.AreEqual(40, _sim.Fleets.Get(main).LineShips);
         }
     }
 }

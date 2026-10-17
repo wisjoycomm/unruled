@@ -8,7 +8,8 @@ namespace Unruled.View.UI
 {
     /// <summary>
     /// The selected fleet's card: ship classes, gun temperature against the release/lock thresholds, the hold's
-    /// burnables, firepower (Ψ) and point defence (Ω), and its orders (Raid convoys toggles WTO piracy). Buttons only forward commands through
+    /// burnables, firepower (Ψ) and point defence (Ω), and its orders (Raid convoys toggles WTO piracy; Merge takes in
+    /// another own warship fleet of its tier docked at the same site). Buttons only forward commands through
     /// <see cref="CommandIssuer"/>; the order lands after signal latency and shows in the in-flight strip.
     /// </summary>
     public sealed class FleetCard
@@ -26,7 +27,7 @@ namespace Unruled.View.UI
         private readonly VisualElement _fill, _release, _lock;
         private readonly Label _ammo, _battery, _coolant, _fuel, _psi, _omega;
         private readonly Button[] _rof = new Button[3];
-        private readonly Button _move, _hold, _reverse, _vent, _raid;
+        private readonly Button _move, _hold, _reverse, _vent, _raid, _merge;
 
         private SimulationWorld _sim;
         private int _playerId;
@@ -69,6 +70,7 @@ namespace Unruled.View.UI
             _reverse = TopTelemetryHud.Require<Button>(root, "order-reverse");
             _vent = TopTelemetryHud.Require<Button>(root, "order-vent");
             _raid = TopTelemetryHud.Require<Button>(root, "order-raid");
+            _merge = TopTelemetryHud.Require<Button>(root, "order-merge");
 
             _rof[0].clicked += () => Issue(CommandType.SetRof, (int)RofStance.Conservation50);
             _rof[1].clicked += () => Issue(CommandType.SetRof, (int)RofStance.Standard100);
@@ -78,6 +80,7 @@ namespace Unruled.View.UI
             _reverse.clicked += () => Issue(CommandType.Reverse, 0);
             _vent.clicked += () => Issue(CommandType.VentCoolant, 0);
             _raid.clicked += () => Issue(CommandType.RaidConvoys, _raidShown == 1 ? 0 : 1);
+            _merge.clicked += IssueMerge;
         }
 
         public EntityId Fleet => _fleet;
@@ -204,6 +207,23 @@ namespace Unruled.View.UI
                 return;
             var command = NewCommand(CommandType.Move);
             command.ParamEntity = _moveTarget;
+            Send(command);
+        }
+
+        private void IssueMerge()
+        {
+            if (_sim == null || !_sim.Fleets.Has(_fleet))
+                return;
+            var other = HudQueries.FleetToMerge(_sim, _fleet);
+            if (other.IsNull)
+            {
+                _refusal = "REFUSED · NO FLEET TO MERGE";
+                _refusalUntil = _sim.Clock.CurrentTick + RefusalShowTicks;
+                _state.text = _refusal;
+                return;
+            }
+            var command = NewCommand(CommandType.MergeFleets);
+            command.ParamEntity = other;
             Send(command);
         }
 

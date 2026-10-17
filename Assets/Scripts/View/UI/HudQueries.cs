@@ -28,6 +28,27 @@ namespace Unruled.View.UI
             return default;
         }
 
+        /// <summary>Another fleet of the same owner and tier docked at the same site, with warships and no cargo convoys, for Merge.</summary>
+        public static EntityId FleetToMerge(SimulationWorld sim, EntityId fleet)
+        {
+            if (!sim.Fleets.Has(fleet) || !sim.FleetMotions.Has(fleet))
+                return default;
+            ref var unit = ref sim.Fleets.Get(fleet);
+            var site = sim.FleetMotions.Get(fleet).Site;
+            if (site.IsNull)
+                return default;
+            for (int i = 0; i < sim.Fleets.Count; i++)
+            {
+                var other = sim.Fleets.EntityAt(i);
+                ref var candidate = ref sim.Fleets.At(i);
+                if (other != fleet && candidate.OwnerPlayerId == unit.OwnerPlayerId && candidate.TechTier == unit.TechTier &&
+                    candidate.TotalShips > 0 && candidate.CargoConvoys == 0 && sim.FleetMotions.Has(other) &&
+                    sim.FleetMotions.Get(other).Site == site && sim.FleetMotions.Get(other).Lane.IsNull)
+                    return other;
+            }
+            return default;
+        }
+
         /// <summary>Position of a fleet among its owner's fleets (by entity index), for its A/B/C name.</summary>
         public static int FleetOrdinal(SimulationWorld sim, EntityId fleet)
         {

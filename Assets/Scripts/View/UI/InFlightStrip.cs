@@ -21,7 +21,8 @@ namespace Unruled.View.UI
             "Mothball", "Activate", "Set focus", "Vent coolant", "Retract drills", "Buy order", "Sell order",
             "Cancel order", "Audit opt-in", "Stress test",
             "Build ships", "Retrofit", "Claim site", "Build rig", "Build refinery", "Open jump gate", "Transfer cargo",
-            "Convoy route", "Refinery cap", "Pause drills", "Borrow", "Repay", "Raid convoys", "Sell to THE SYSTEM", "Buy from THE SYSTEM"
+            "Convoy route", "Refinery cap", "Pause drills", "Borrow", "Repay", "Raid convoys", "Sell to THE SYSTEM", "Buy from THE SYSTEM",
+            "Merge fleets"
         };
 
         internal static string CommandName(CommandType type) =>

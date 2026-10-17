@@ -49,7 +49,8 @@ namespace Unruled.Core.AI
         Repay = 30,
         SellToSystem = 31,
         BuyFeedstock = 32,
-        BuyFromSystem = 33
+        BuyFromSystem = 33,
+        MergeFleets = 34
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -1041,6 +1042,8 @@ namespace Unruled.Core.AI
                 }, AiAction.Retrofit, Score(weight, Full));
                 return;
             }
+            if (TryMergeBattleFleets(in player, tier, weight))
+                return;
             // New ships of a higher tier would form a second fleet; one battle line only outguns the garrison whole.
             if (behind || lineShips >= _balance.BattleLineShips || HasShipOrder(player.PlayerId, TargetFocusClass.LineShips))
                 return;
@@ -1052,6 +1055,41 @@ namespace Unruled.Core.AI
                     PlayerId = player.PlayerId, CommandType = CommandType.BuildShips, Target = player.CoreBase,
                     ParamA = (int)TargetFocusClass.LineShips, ParamB = ships, ParamC = tier
                 }, AiAction.BuildWarships, Score(weight, Threshold));
+        }
+
+        // Ships built while the battle line was away or mothballed form a second fleet: the larger of two current battle
+        // fleets docked active at the core base takes the other in, as one line only outguns the garrison whole.
+        private bool TryMergeBattleFleets(in PlayerHq player, byte tier, int weight)
+        {
+            EntityId largest = default, other = default;
+            for (int f = 0; f < _units.Count; f++)
+            {
+                ref var unit = ref _units.At(f);
+                var fleet = _units.EntityAt(f);
+                ref var motion = ref _motions.Get(fleet);
+                if (unit.OwnerPlayerId != player.PlayerId || unit.TechTier != tier || unit.LineShips == 0 ||
+                    unit.CargoConvoys > 0 || motion.Site != player.CoreBase || !motion.Lane.IsNull ||
+                    (_readiness.Has(fleet) && _readiness.Get(fleet).IsMothballed))
+                    continue;
+                if (largest.IsNull || unit.LineShips > _units.Get(largest).LineShips)
+                {
+                    other = largest;
+                    largest = fleet;
+                }
+                else if (other.IsNull)
+                {
+                    other = fleet;
+                }
+            }
+            if (other.IsNull || _issuer.IsInFlight(player.PlayerId, CommandType.MergeFleets, largest))
+                return false;
+            var command = new DelayedPlayerCommand
+            {
+                PlayerId = player.PlayerId, CommandType = CommandType.MergeFleets, Target = largest
+            };
+            command.ParamEntity = other;
+            Issue(command, AiAction.MergeFleets, Score(weight, Full));
+            return true;
         }
 
         private bool HasRefinery(EntityId site, ItemId output)

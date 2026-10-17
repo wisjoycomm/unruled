@@ -243,11 +243,12 @@ namespace Unruled.Core.Simulation
             Clock.Register(Research);
             Commands.Register(CommandType.StressTest, Research);
             var shipyard = new ShipyardSystem(
-                World, ShipOrders, Fleets, FleetMotions, FleetReadiness, FleetCombat, Players, Sites, Stockpiles,
+                World, ShipOrders, Fleets, FleetMotions, FleetReadiness, FleetCombat, Players, Sites, Stockpiles, StolenGoods,
                 FleetFactory, TechGates, balance.Shipyard);
             Clock.Register(shipyard);
             Commands.Register(CommandType.BuildShips, shipyard);
             Commands.Register(CommandType.Retrofit, shipyard);
+            Commands.Register(CommandType.MergeFleets, shipyard);
             Commands.Register(CommandType.ClaimSite, new SiteControlSystem(
                 Sites, Players, Fleets, FleetMotions, FleetReadiness, FleetCombat, Stockpiles, balance.SiteControl));
             Commands.Register(CommandType.TransferCargo, new CargoTransferSystem(
