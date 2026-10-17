@@ -281,6 +281,64 @@ namespace Unruled.Tests.Core.AI
             Assert.AreEqual(roundTrip, _sim.Stockpiles.Get(fleet).Get(ItemId.ItemFuel));
         }
 
+        private DelayedPlayerCommand? Pending(CommandType type)
+        {
+            for (int i = 0; i < _sim.Clock.PendingCommandCount; i++)
+                if (_sim.Clock.PendingAt(i).CommandType == type)
+                    return _sim.Clock.PendingAt(i);
+            return null;
+        }
+
+        private void StockShipCost(byte tier, int ships)
+        {
+            for (int i = 0; i < _sim.Balance.Shipyard.CostCount(tier); i++)
+                _sim.Stockpiles.Get(_home).Add(_sim.Balance.Shipyard.Cost(tier, i).Item,
+                    _sim.Balance.Shipyard.Cost(tier, i).Quantity * ships + 1_000);
+        }
+
+        [Test]
+        public void Shipyard_BuildsLineShipsOfTheResearchTier_OnlyFromTheAssaultTier()
+        {
+            StockShipCost(3, _sim.Balance.Ai.BattleLineShips);
+            _sim.TechProgress.Get(_hq).TechTier = 2;
+            Assert.IsFalse(Find(Warlord, AiAction.BuildWarships).HasValue, "below the assault tier ships would eat the steel");
+
+            _sim.TechProgress.Get(_hq).TechTier = 3;
+            Assert.IsTrue(Find(Warlord, AiAction.BuildWarships).HasValue);
+            var build = Pending(CommandType.BuildShips);
+            Assert.IsTrue(build.HasValue);
+            Assert.AreEqual((int)TargetFocusClass.LineShips, build.Value.ParamA);
+            Assert.AreEqual(System.Math.Min(_sim.Balance.Ai.BattleLineShips, _sim.Balance.Shipyard.MaxShipsPerOrder),
+                build.Value.ParamB);
+            Assert.AreEqual(3, build.Value.ParamC);
+        }
+
+        [Test]
+        public void Shipyard_RefitsADockedBattleFleet_ToTheResearchTier()
+        {
+            var fleet = Fleet(Me, _home, 4, loaded: true, tier: 3);
+            _sim.TechProgress.Get(_hq).TechTier = 4;
+            StockShipCost(4, 4);
+
+            var order = Find(Sentinel, AiAction.Retrofit);
+            Assert.IsTrue(order.HasValue);
+            RunPendingOrders();
+            Assert.AreEqual(4, _sim.Fleets.Get(fleet).TechTier);
+        }
+
+        [Test]
+        public void ABattleFleetNeverSettles_AndAFullLineThatCannotTakeTheCitadelMothballs()
+        {
+            Ore(_target, ItemId.RawIron);
+            var fleet = Fleet(Me, _home, _sim.Balance.Ai.BattleLineShips, loaded: true, tier: 3);
+
+            var order = Find(Warlord, AiAction.Mothball);
+            Assert.IsTrue(order.HasValue, "settling is left to the lower-tier fleets");
+            Assert.AreEqual(fleet, order.Value.Subject);
+            RunPendingOrders();
+            Assert.IsTrue(_sim.FleetReadiness.Get(fleet).IsMothballed);
+        }
+
         // The target becomes THE SYSTEM's Citadel; its garrison is struck down and not due back during the test.
         private void MakeTargetAnUnguardedCitadel()
         {

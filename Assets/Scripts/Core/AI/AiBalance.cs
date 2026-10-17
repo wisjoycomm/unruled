@@ -71,6 +71,7 @@ namespace Unruled.Core.AI
         public readonly int TradeOrderTicks; // its orders still open after this long are cancelled
         public readonly int BidBudgetPercent; // a bid spends at most this share of the wallet, leaving deposits for sales
         public readonly int HomeSettleWeight; // presets with no conquest weight still claim neutral home-system sites at this weight
+        public readonly int BattleLineShips; // line ships the shipyard builds up to, at the research tier
         private readonly AiPreset[] _presets;
 
         public AiBalance(
@@ -78,7 +79,7 @@ namespace Unruled.Core.AI
             int outpostRigs, int convoyShips, int convoyBatch, int refineryInputStock, int coreSupplyReserve,
             int rawStockCap, int loadUpkeepIntervals, byte citadelAssaultTier, int sellAbove, int fillAbove, int sellBatch,
             int tradePricePercent, int tradeOrderTicks, int bidBudgetPercent, int homeSettleWeight,
-            AiPreset[] presets)
+            int battleLineShips, AiPreset[] presets)
         {
             if (thinkIntervalTicks < 1) throw new ArgumentOutOfRangeException(nameof(thinkIntervalTicks));
             if (fullBatteryScans < 1) throw new ArgumentOutOfRangeException(nameof(fullBatteryScans));
@@ -100,6 +101,7 @@ namespace Unruled.Core.AI
             if (tradeOrderTicks < 1) throw new ArgumentOutOfRangeException(nameof(tradeOrderTicks));
             if (bidBudgetPercent < 1 || bidBudgetPercent > 100) throw new ArgumentOutOfRangeException(nameof(bidBudgetPercent));
             if (homeSettleWeight < 0) throw new ArgumentOutOfRangeException(nameof(homeSettleWeight));
+            if (battleLineShips < 0) throw new ArgumentOutOfRangeException(nameof(battleLineShips));
             if (presets == null || presets.Length == 0) throw new ArgumentException("Presets required.", nameof(presets));
             for (int i = 0; i < presets.Length; i++)
             {
@@ -126,6 +128,7 @@ namespace Unruled.Core.AI
             TradeOrderTicks = tradeOrderTicks;
             BidBudgetPercent = bidBudgetPercent;
             HomeSettleWeight = homeSettleWeight;
+            BattleLineShips = battleLineShips;
             _presets = (AiPreset[])presets.Clone();
         }
 

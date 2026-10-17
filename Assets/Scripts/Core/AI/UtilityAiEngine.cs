@@ -40,7 +40,11 @@ namespace Unruled.Core.AI
         SellSurplus = 21,
         BuyShortfall = 22,
         CancelOrder = 23,
-        DevelopOutpost = 24
+        DevelopOutpost = 24,
+        Retrofit = 25,
+        BuildWarships = 26,
+        Mothball = 27,
+        Activate = 28
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -250,6 +254,7 @@ namespace Unruled.Core.AI
                 ThinkRadar(player, preset, _controllers.EntityAt(c));
                 ThinkProgress(player, preset, _controllers.EntityAt(c));
                 ThinkEconomy(player, preset, _controllers.EntityAt(c));
+                ThinkShipyard(player, preset, _controllers.EntityAt(c));
                 ThinkTrade(player, preset, _controllers.EntityAt(c), tick);
             }
             return _orderCount;
@@ -311,6 +316,21 @@ namespace Unruled.Core.AI
                 {
                     Consider(AiAction.LoadCargo, Score(preset.ResupplyLogisticsWeight, shortage), ref best, ref bestScore);
                 }
+                else if (IsBattleFleet(in unit))
+                {
+                    // A full battle line that can't take the Citadel yet waits mothballed, at a fifth of the upkeep.
+                    bool mothballed = _readiness.Has(fleet) && _readiness.Get(fleet).IsMothballed;
+                    int citadelEdge = 0;
+                    bool canGo = preset.SiegeConquestWeight > 0 &&
+                                 FindCitadel(player, in unit, hold.Get(ItemId.ItemFuel), out citadelTarget, out citadelEdge);
+                    if (canGo && mothballed && !_issuer.IsInFlight(player.PlayerId, CommandType.Activate, fleet))
+                        Consider(AiAction.Activate, Score(preset.SiegeConquestWeight, citadelEdge), ref best, ref bestScore);
+                    else if (canGo && ready)
+                        Consider(AiAction.AssaultCitadel, Score(preset.SiegeConquestWeight, citadelEdge), ref best, ref bestScore);
+                    else if (!canGo && !mothballed && unit.LineShips >= _balance.BattleLineShips &&
+                             !_issuer.IsInFlight(player.PlayerId, CommandType.Mothball, fleet))
+                        Consider(AiAction.Mothball, Score(preset.ResupplyLogisticsWeight, Threshold), ref best, ref bestScore);
+                }
                 else if (ready)
                 {
                     int fuel = hold.Get(ItemId.ItemFuel);
@@ -323,8 +343,6 @@ namespace Unruled.Core.AI
                         Consider(AiAction.Siege, Score(SettleWeight(preset), siegeEdge), ref best, ref bestScore);
                     if (SettleWeight(preset) > 0 && FindOutpostToDevelop(player, in unit, fuel, ref hold, out developTarget))
                         Consider(AiAction.DevelopOutpost, Score(SettleWeight(preset), Full), ref best, ref bestScore);
-                    if (preset.SiegeConquestWeight > 0 && FindCitadel(player, in unit, fuel, out citadelTarget, out int citadelEdge))
-                        Consider(AiAction.AssaultCitadel, Score(preset.SiegeConquestWeight, citadelEdge), ref best, ref bestScore);
                 }
             }
             // At a standing Citadel the fleet stays: its docked line ships bombard the shield until ammo runs low.
@@ -356,6 +374,12 @@ namespace Unruled.Core.AI
             {
                 case AiAction.VentCoolant:
                     command.CommandType = CommandType.VentCoolant;
+                    break;
+                case AiAction.Mothball:
+                    command.CommandType = CommandType.Mothball;
+                    break;
+                case AiAction.Activate:
+                    command.CommandType = CommandType.Activate;
                     break;
                 case AiAction.LoadCargo:
                     command.CommandType = CommandType.TransferCargo;
@@ -449,13 +473,22 @@ namespace Unruled.Core.AI
             return false;
         }
 
-        // The standard fuel load, or a round trip to the site it would settle next if that is further.
+        // The standard fuel load, or a round trip to where the fleet goes next if that is further: the site it would
+        // settle, or for an assaulting preset's battle fleet the standing Citadel.
         private long FuelToLoad(in PlayerHq player, AiPreset preset, in FleetUnit unit)
         {
             long fuel = _balance.LoadFuel;
-            if (SettleWeight(preset) > 0 &&
-                FindTarget(player, in unit, int.MaxValue, raid: false, homeOnly: IsHomeSettler(preset), out var target, out _) &&
-                _routes.TryPlan(player.CoreBase, target, unit.TechTier, ref _route))
+            if (IsBattleFleet(in unit))
+            {
+                if (preset.SiegeConquestWeight > 0)
+                    for (int c = 0; c < _citadels.Count; c++)
+                        if (_citadels.At(c).FallenTick == 0 &&
+                            _routes.TryPlan(player.CoreBase, _citadels.EntityAt(c), unit.TechTier, ref _route))
+                            fuel = Math.Max(fuel, 2L * RouteFuel(in unit));
+            }
+            else if (SettleWeight(preset) > 0 &&
+                     FindTarget(player, in unit, int.MaxValue, raid: false, homeOnly: IsHomeSettler(preset), out var target, out _) &&
+                     _routes.TryPlan(player.CoreBase, target, unit.TechTier, ref _route))
                 fuel = Math.Max(fuel, 2L * RouteFuel(in unit));
             return fuel;
         }
@@ -586,7 +619,8 @@ namespace Unruled.Core.AI
             ref var stock = ref _stockpiles.Get(player.CoreBase);
             const byte convoyTier = 1;
             if (!FindUnservedOutpost(in player, convoyTier).IsNull && !HasIdleConvoy(player.PlayerId) &&
-                !HasConvoyOrder(player.PlayerId) && CanPay(ref stock, hq, convoyTier, _balance.ConvoyShips))
+                !HasShipOrder(player.PlayerId, TargetFocusClass.CargoConvoys) &&
+                Affordable(ref stock, hq, convoyTier, 100) >= _balance.ConvoyShips)
             {
                 Issue(new DelayedPlayerCommand
                 {
@@ -794,23 +828,72 @@ namespace Unruled.Core.AI
             return false;
         }
 
-        private bool HasConvoyOrder(int playerId)
+        private bool HasShipOrder(int playerId, TargetFocusClass shipClass)
         {
             for (int o = 0; o < _shipOrders.Count; o++)
-                if (_shipOrders.At(o).OwnerPlayerId == playerId && _shipOrders.At(o).ShipClass == TargetFocusClass.CargoConvoys)
+                if (_shipOrders.At(o).OwnerPlayerId == playerId && _shipOrders.At(o).ShipClass == shipClass)
                     return true;
             return false;
         }
 
-        private bool CanPay(ref Stockpile stock, EntityId hq, byte tier, int ships)
+        // Ships of the tier the core stock pays percent% of the build cost for, above what the next stress test needs.
+        private int Affordable(ref Stockpile stock, EntityId hq, byte tier, int percent)
         {
+            long ships = int.MaxValue;
             for (int i = 0; i < _shipyardBalance.CostCount(tier); i++)
             {
                 var cost = _shipyardBalance.Cost(tier, i);
-                if (stock.Get(cost.Item) < (long)cost.Quantity * ships + ProgressReserve(hq, cost.Item))
-                    return false;
+                long perShip = ((long)cost.Quantity * percent + 99) / 100;
+                if (perShip > 0)
+                    ships = Math.Min(ships, Math.Max(0, stock.Get(cost.Item) - ProgressReserve(hq, cost.Item)) / perShip);
             }
-            return true;
+            return (int)ships;
+        }
+
+        // A fleet of the Citadel assault tier or higher is a battle fleet: built by the shipyard, it stays at the core base
+        // until it can take the Citadel, leaving the fuel to the lower-tier fleets that settle and raid.
+        private bool IsBattleFleet(in FleetUnit unit) => unit.TechTier >= _balance.CitadelAssaultTier;
+
+        // Shipyard (Defense_Hold or Siege_Conquest), from the Citadel assault tier on (earlier, ships would eat the steel
+        // the economy grows on): refits a battle fleet docked at the core base to the research tier, else builds line
+        // ships of that tier up to the battle line. One shipyard order in flight at a time.
+        private void ThinkShipyard(in PlayerHq player, AiPreset preset, EntityId hq)
+        {
+            int weight = Math.Max(preset.DefenseHoldWeight, preset.SiegeConquestWeight);
+            byte tier = _tech.TechTierOf(player.PlayerId);
+            if (weight == 0 || tier < _balance.CitadelAssaultTier || !_stockpiles.Has(player.CoreBase) ||
+                _issuer.IsInFlight(player.PlayerId, CommandType.BuildShips, player.CoreBase))
+                return;
+            ref var stock = ref _stockpiles.Get(player.CoreBase);
+            int lineShips = 0;
+            for (int f = 0; f < _units.Count; f++)
+            {
+                ref var unit = ref _units.At(f);
+                if (unit.OwnerPlayerId != player.PlayerId || unit.IsConvoyOnly || !IsBattleFleet(in unit))
+                    continue;
+                lineShips += unit.LineShips;
+                var fleet = _units.EntityAt(f);
+                ref var motion = ref _motions.Get(fleet);
+                if (unit.TechTier >= tier || motion.Site != player.CoreBase || !motion.Lane.IsNull ||
+                    _issuer.IsInFlight(player.PlayerId, CommandType.Retrofit, fleet) ||
+                    Affordable(ref stock, hq, tier, _shipyardBalance.RetrofitCostPercent) < unit.TotalShips)
+                    continue;
+                Issue(new DelayedPlayerCommand
+                {
+                    PlayerId = player.PlayerId, CommandType = CommandType.Retrofit, Target = fleet
+                }, AiAction.Retrofit, Score(weight, Full));
+                return;
+            }
+            if (lineShips >= _balance.BattleLineShips || HasShipOrder(player.PlayerId, TargetFocusClass.LineShips))
+                return;
+            int ships = Math.Min(Math.Min(_balance.BattleLineShips - lineShips, _shipyardBalance.MaxShipsPerOrder),
+                Affordable(ref stock, hq, tier, 100));
+            if (ships > 0)
+                Issue(new DelayedPlayerCommand
+                {
+                    PlayerId = player.PlayerId, CommandType = CommandType.BuildShips, Target = player.CoreBase,
+                    ParamA = (int)TargetFocusClass.LineShips, ParamB = ships, ParamC = tier
+                }, AiAction.BuildWarships, Score(weight, Threshold));
         }
 
         private bool HasRefinery(EntityId site, ItemId output)

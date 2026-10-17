@@ -278,14 +278,16 @@ namespace Unruled.Core.Simulation
         /// besieging presets send Tier 3+ fleets at the Citadel; on the WTO it sells stock above 20 into rivals' bids,
         /// lists 500-unit batches of stock above 3,000 at 5% under the reference price, bids 5% over it (with at most half
         /// its credits) for what its next stress test lacks, and cancels orders still open after an hour; presets that never
-        /// conquer still settle neutral sites of their home system at weight 1.0.
+        /// conquer still settle neutral sites of their home system at weight 1.0; from Tier 3 the shipyard refits docked battle
+        /// fleets to the research tier and builds line ships of it up to 60 (outgunning the Citadel garrison of 30 line + 10 EW); a full
+        /// battle line that can't take the Citadel yet waits mothballed.
         /// </summary>
         public static AiBalance CreateAiBalance() => new AiBalance(
             thinkIntervalTicks: 10, fullBatteryScans: 10, resupplyAmmoPerLineShip: 5, loadAmmoPerLineShip: 20, loadFuel: 1_500,
             outpostRigs: 2, convoyShips: 2, convoyBatch: 100, refineryInputStock: 100,
             coreSupplyReserve: 500, rawStockCap: 5_000, loadUpkeepIntervals: 6, citadelAssaultTier: 3,
             sellAbove: 3_000, fillAbove: 20, sellBatch: 500, tradePricePercent: 5, tradeOrderTicks: 3_600, bidBudgetPercent: 50,
-            homeSettleWeight: 1_000,
+            homeSettleWeight: 1_000, battleLineShips: 60,
             presets: new[]
             {
                 new AiPreset(1, "Sentinel_Defender", 1_800, 1_700, 1_500, 1_400, 0, 0, 75_000, 650, 30, 3),

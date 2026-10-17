@@ -32,7 +32,9 @@ issues orders only through `CommandIssuer`. Per fleet it vents, retreats, resupp
 (fill-to transfers), then stealth-raids or besieges a site it outguns with round-trip fuel, claims it and rigs its
 deposits; convoy fleets get routes to unserved outposts. Per deposit it pauses drills in storms or at the raw stock
 cap, retracts them when outgunned and rebuilds bare ones; per player it joins the audit, builds convoys and refineries,
-scans, stress-tests and opens its jump gate, keeping back the next stress test's cost. An order still in signal
+scans, stress-tests, opens its jump gate and trades on the WTO, keeping back the next stress test's cost; from the
+Citadel assault tier its shipyard refits and builds a battle fleet that only waits at home (mothballed once full) or
+assaults the Citadel, while lower-tier fleets settle and raid. An order still in signal
 latency is not sent again (`CommandIssuer.IsInFlight`). `NoaaForecast` (`Forecast`) is a read-only query for the views.
 `NewGameSetup.Create(sim, playerId)` lays out a new game from `NewGameBalance`: a home system per participant,
 stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a starting fleet and AI rivals.

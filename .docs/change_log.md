@@ -73,3 +73,4 @@
 - 2026-10-17 - Claude - AI expansion: Sentinel settles its home system, needed-ore targeting, outpost development trips, upkeep reload hysteresis, 3,000 fuel loads, fuelled bid fills; soak now reaches Tier 4 with 3 gates open; tests.
 - 2026-10-17 - Claude - AI builds the stress-test refinery first, fuels far claims, every AI opens its gate, scans keep back gate and claim batteries; soak: 17 of 20 rivals reach Tier 4 over 5 seeds.
 - 2026-10-17 - Claude - World gen keeps every contested raw item outside the Citadel; refinery cap 10 per site; soak: first rival reaches Tier 5.
+- 2026-10-17 - Claude - AI shipyard: refits and builds a Tier-3+ battle fleet (60 line), which never settles, fuels for the Citadel and waits mothballed; tests. Known gap: AI can't supply its upkeep yet.
