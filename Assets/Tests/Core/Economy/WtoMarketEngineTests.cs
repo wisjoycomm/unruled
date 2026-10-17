@@ -166,6 +166,58 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(10 * 5_000 * 200 / 10_000, Cash(_sim.WtoFeePool));
         }
 
+        private void SellToSystem(int player, EntityId site, int quantity) =>
+            _sim.Clock.Enqueue(new DelayedPlayerCommand
+            {
+                ExecuteAtTick = _sim.Clock.CurrentTick + 1, PlayerId = player, CommandType = CommandType.SellToSystem,
+                Target = site, ParamA = (int)Steel, ParamB = quantity
+            });
+
+        [Test]
+        public void SellToSystem_PaysTheSystemBid_FromTheFeePoolThenTheTollPool()
+        {
+            long bid = 5_000 * _sim.Balance.Wto.SystemBidPercent / 100;
+            Assert.AreEqual(bid, _sim.Market.SystemBidCents(Steel, _sim.Clock.CurrentTick));
+            _sim.Ledger.Grant(_sim.WtoFeePool, 3 * bid);
+            _sim.Ledger.Grant(_sim.StaTollPool, 10 * bid);
+
+            SellToSystem(Seller, _sellerSite, 5);
+            Step();
+            Assert.AreEqual(95, Held(_sellerSite));
+            Assert.AreEqual(Start + 5 * bid, Cash(_sellerHq));
+            Assert.AreEqual(0, Cash(_sim.WtoFeePool), "fees spent first");
+            Assert.AreEqual(8 * bid, Cash(_sim.StaTollPool));
+            Assert.AreEqual(0, _sim.Contracts.Count, "no convoy: the goods leave at once");
+            Assert.AreEqual(5_000, _sim.Market.ReferencePriceCents(Steel, _sim.Clock.CurrentTick), "not a VWAP trade");
+        }
+
+        [Test]
+        public void SellToSystem_SellsOnlyWhatThePoolsCover_FromCleanStockAtOwnSite()
+        {
+            long bid = _sim.Market.SystemBidCents(Steel, _sim.Clock.CurrentTick);
+            SellToSystem(Seller, _sellerSite, 5);
+            Step();
+            Assert.AreEqual(100, Held(_sellerSite), "empty pools buy nothing");
+
+            _sim.Ledger.Grant(_sim.StaTollPool, 4 * bid + bid / 2);
+            SellToSystem(Seller, _buyerSite, 5);
+            Step();
+            Assert.AreEqual(4 * bid + bid / 2, Cash(_sim.StaTollPool), "not the seller's site");
+
+            _sim.StolenGoods.Add(_sellerSite, default);
+            _sim.StolenGoods.Get(_sellerSite).Add(Steel, 97);
+            SellToSystem(Seller, _sellerSite, 50);
+            Step();
+            Assert.AreEqual(97, Held(_sellerSite), "only the 3 clean units");
+
+            _sim.StolenGoods.Remove(_sellerSite);
+            SellToSystem(Seller, _sellerSite, 50);
+            Step();
+            Assert.AreEqual(96, Held(_sellerSite), "one more unit, then the pools ran dry");
+            Assert.AreEqual(bid / 2, Cash(_sim.StaTollPool));
+            Assert.AreEqual(Start + 4 * bid, Cash(_sellerHq));
+        }
+
         [Test]
         public void Vwap_WeighsTradesInTheWindow_AndHoldsAfterIt()
         {

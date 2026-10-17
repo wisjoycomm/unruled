@@ -185,12 +185,13 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.BuildRefinery, refineries);
             Commands.Register(CommandType.SetRefineryCap, refineries);
             Market = new WtoMarketEngine(
-                World, WtoOrders, ItemMarkets, Sites, Stockpiles, StolenGoods, Ledger, WtoEscrow, Rates, ContractSystem,
-                Authority, balance.Wto);
+                World, WtoOrders, ItemMarkets, Sites, Stockpiles, StolenGoods, Ledger, WtoEscrow, WtoFeePool, StaTollPool, Rates,
+                ContractSystem, Authority, balance.Wto);
             Clock.Register(Market);
             Commands.Register(CommandType.PlaceBuyOrder, Market);
             Commands.Register(CommandType.PlaceSellOrder, Market);
             Commands.Register(CommandType.CancelOrder, Market);
+            Commands.Register(CommandType.SellToSystem, Market);
             Clock.Register(new WhoQuarantineSystem(Quarantines, Stockpiles, balance.SystemFactions));
 
             var upkeep = new FleetUpkeepSystem(Fleets, FleetReadiness, FleetMotions, Stockpiles, balance.Fleets);

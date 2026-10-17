@@ -59,7 +59,7 @@ namespace Unruled.Core.AI
         public readonly int LoadFuel; // and fuel up to this
         public readonly int LoadBatteryPerEwShip; // batteries per EW ship a fleet carries for combat, on top of a claim cost
         public readonly long CashReserveCredits; // borrows up to this cash, repays debt from cash above twice it
-        public readonly long TravelCashCredits; // kept for tolls: WTO orders never lock it, and it borrows only below it
+        public readonly long TravelCashCredits; // kept for tolls: buy bids never spend it, and it borrows only below it
         public readonly int ScanBatteryReserve; // core batteries radar scans leave for fleets to load
         public readonly int ScanWindowTicks; // radar scans start only in this many ticks at the top of each hour
         public readonly int OutpostRigs; // rigs a fleet builds on each bare deposit of a site it claimed

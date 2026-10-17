@@ -157,6 +157,23 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void UnderTheTravelCash_ItSellsABatchToTheSystem_InsteadOfListingIt()
+        {
+            var ai = _sim.Balance.Ai;
+            _sim.Ledger.TryFindPlayerWallet(Me, out var wallet);
+            _sim.Ledger.Burn(wallet, _sim.Ledger.Balance(wallet));
+            _sim.Ledger.Grant(wallet, ai.TravelCashCredits * Wallet.CentsPerCredit / 2);
+            _sim.Ledger.Grant(_sim.StaTollPool, 1_000_000 * Wallet.CentsPerCredit);
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawBiomass, ai.SellAbove + ai.SellBatch);
+
+            Assert.IsTrue(Find(AiAction.SellToSystem).HasValue);
+            RunPendingOrders();
+            Assert.AreEqual(0, Orders(OrderSide.Sell), "no listing while short of the travel cash");
+            Assert.AreEqual(ai.SellAbove, _sim.Stockpiles.Get(_home).Get(ItemId.RawBiomass), "one batch sold");
+            Assert.Greater(_sim.Ledger.Balance(wallet), ai.TravelCashCredits * Wallet.CentsPerCredit / 2);
+        }
+
+        [Test]
         public void DoesNotBid_WithoutTheCredits()
         {
             _sim.TechProgress.Get(_hq).Stage = ResearchStage.StressTest;

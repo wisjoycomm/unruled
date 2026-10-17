@@ -46,7 +46,8 @@ namespace Unruled.Core.AI
         Mothball = 27,
         Activate = 28,
         Borrow = 29,
-        Repay = 30
+        Repay = 30,
+        SellToSystem = 31
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -727,10 +728,11 @@ namespace Unruled.Core.AI
                 borrow > 0 ? AiAction.Borrow : AiAction.Repay, Score(preset.ResupplyLogisticsWeight, Threshold));
         }
 
-        // WTO: cancels its orders open past the trade window; sells surplus into a rival's bid, or else lists one batch
-        // under the reference price; bids over it for the first item the next stress test still lacks. Orders are sized
-        // to what the wallet can lock above the travel cash (the seller's escrow deposit; the buyer's payment, from its
-        // bid budget). One order of a kind in flight at a time.
+        // WTO: cancels its orders open past the trade window; sells surplus into a rival's bid, or else, under the travel
+        // cash, sells a batch to THE SYSTEM's standing bid, or else lists one batch under the reference price; bids over it
+        // for the first item the next stress test still lacks. Orders are sized to what the wallet can lock: the seller's
+        // escrow deposit, the buyer's payment from its bid budget of the cash above the travel cash. One order of a kind in
+        // flight at a time.
         private void ThinkTrade(in PlayerHq player, AiPreset preset, EntityId hq, long tick)
         {
             if (!_stockpiles.Has(player.CoreBase) || !_ledger.TryFindPlayerWallet(player.PlayerId, out var wallet))
@@ -751,22 +753,23 @@ namespace Unruled.Core.AI
             }
 
             ref var stock = ref _stockpiles.Get(player.CoreBase);
-            long cash = Math.Max(0, _ledger.Balance(wallet) - _balance.TravelCashCredits * Wallet.CentsPerCredit);
+            long cash = _ledger.Balance(wallet);
             int feeds = NeededRaws(in player);
-            if (!_issuer.IsInFlight(player.PlayerId, CommandType.PlaceSellOrder, player.CoreBase) &&
-                (FindBidToFill(player, hq, ref stock, feeds, out var sellItem, out long ask, out long wanted) ||
-                 FindSurplusToList(player.PlayerId, hq, ref stock, feeds, tick, out sellItem, out ask, out wanted)))
+            bool listing = _issuer.IsInFlight(player.PlayerId, CommandType.PlaceSellOrder, player.CoreBase);
+            if (!listing && FindBidToFill(player, hq, ref stock, feeds, out var sellItem, out long ask, out long wanted))
+                IssueSell(player.PlayerId, player.CoreBase, sellItem, ask, wanted, cash, weight);
+            else if (cash < _balance.TravelCashCredits * Wallet.CentsPerCredit)
             {
-                // The engine rounds the whole deposit down, so price the cap the same way.
-                long depositPercent = ask * _rates.EscrowRatePercent(player.PlayerId);
-                long quantity = depositPercent > 0 ? Math.Min(wanted, cash * 100 / depositPercent) : wanted;
-                if (quantity > 0)
+                if (!_issuer.IsInFlight(player.PlayerId, CommandType.SellToSystem, player.CoreBase) &&
+                    FindSurplus(player.PlayerId, hq, ref stock, feeds, out var dumpItem))
                     Issue(new DelayedPlayerCommand
                     {
-                        PlayerId = player.PlayerId, CommandType = CommandType.PlaceSellOrder, Target = player.CoreBase,
-                        ParamA = (int)sellItem, ParamB = (int)quantity, ParamC = (int)ask
-                    }, AiAction.SellSurplus, Score(weight, Threshold));
+                        PlayerId = player.PlayerId, CommandType = CommandType.SellToSystem, Target = player.CoreBase,
+                        ParamA = (int)dumpItem, ParamB = _balance.SellBatch
+                    }, AiAction.SellToSystem, Score(weight, Threshold));
             }
+            else if (!listing && FindSurplusToList(player.PlayerId, hq, ref stock, feeds, tick, out sellItem, out ask, out wanted))
+                IssueSell(player.PlayerId, player.CoreBase, sellItem, ask, wanted, cash, weight);
 
             if (!_progress.Has(hq) || _progress.Get(hq).Stage > ResearchStage.StressTest ||
                 _issuer.IsInFlight(player.PlayerId, CommandType.PlaceBuyOrder, player.CoreBase))
@@ -778,7 +781,8 @@ namespace Unruled.Core.AI
                 if (missing <= 0 || HasOpenOrder(player.PlayerId, cost[i].Item, OrderSide.Buy))
                     continue;
                 long price = TradePrice(cost[i].Item, tick, _balance.TradePricePercent);
-                long quantity = Math.Min(missing, cash * _balance.BidBudgetPercent / 100 / price);
+                long spare = Math.Max(0, cash - _balance.TravelCashCredits * Wallet.CentsPerCredit);
+                long quantity = Math.Min(missing, spare * _balance.BidBudgetPercent / 100 / price);
                 if (quantity == 0)
                     return;
                 Issue(new DelayedPlayerCommand
@@ -788,6 +792,20 @@ namespace Unruled.Core.AI
                 }, AiAction.BuyShortfall, Score(weight, Full));
                 return;
             }
+        }
+
+        // A sell order sized to the escrow deposit the cash can lock (the engine rounds the whole deposit down, so the cap
+        // is priced the same way).
+        private void IssueSell(int playerId, EntityId coreBase, ItemId item, long ask, long wanted, long cash, int weight)
+        {
+            long depositPercent = ask * _rates.EscrowRatePercent(playerId);
+            long quantity = depositPercent > 0 ? Math.Min(wanted, cash * 100 / depositPercent) : wanted;
+            if (quantity > 0)
+                Issue(new DelayedPlayerCommand
+                {
+                    PlayerId = playerId, CommandType = CommandType.PlaceSellOrder, Target = coreBase,
+                    ParamA = (int)item, ParamB = (int)quantity, ParamC = (int)ask
+                }, AiAction.SellSurplus, Score(weight, Threshold));
         }
 
         // A raw a core refinery or the next stress test takes in: kept, since a deposit runs out and its fuel is made from it.
@@ -836,16 +854,23 @@ namespace Unruled.Core.AI
             for (int o = 0; o < _wtoOrders.Count; o++)
                 if (_wtoOrders.At(o).OwnerPlayerId == playerId && _wtoOrders.At(o).Side == OrderSide.Sell)
                     return false;
+            if (!FindSurplus(playerId, hq, ref stock, feeds, out item))
+                return false;
+            price = TradePrice(item, tick, -_balance.TradePricePercent);
+            wanted = _balance.SellBatch;
+            return true;
+        }
+
+        // The first item in surplus by a whole batch that it doesn't feed.
+        private bool FindSurplus(int playerId, EntityId hq, ref Stockpile stock, int feeds, out ItemId item)
+        {
             for (int slot = 0; slot < ItemIds.Count; slot++)
             {
-                var candidate = ItemIds.FromSlot(slot);
-                if (Feeds(feeds, candidate) || Surplus(playerId, hq, ref stock, candidate, _balance.SellAbove) < _balance.SellBatch)
-                    continue;
-                item = candidate;
-                price = TradePrice(candidate, tick, -_balance.TradePricePercent);
-                wanted = _balance.SellBatch;
-                return true;
+                item = ItemIds.FromSlot(slot);
+                if (!Feeds(feeds, item) && Surplus(playerId, hq, ref stock, item, _balance.SellAbove) >= _balance.SellBatch)
+                    return true;
             }
+            item = ItemId.None;
             return false;
         }
 

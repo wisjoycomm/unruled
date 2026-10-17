@@ -18,6 +18,10 @@ namespace Unruled.Core.Economy
     /// placement tick, then entity id. A match trades at the earlier order's price: the buyer gets back the
     /// difference to their limit, and the goods, value and the matched share of the deposit go to
     /// <see cref="ITradeSettlement"/>.
+    /// SellToSystem (target: own site; ParamA item, ParamB quantity) is THE SYSTEM's standing bid for any item: clean
+    /// goods leave the site at once for the system bid share of the reference price, paid from the WTO fee pool, then
+    /// the STA toll pool, for as many units as they cover. No fee, deposit, convoy or VWAP record: what the system
+    /// collects goes back round to players who sell their surplus at a loss.
     /// </summary>
     public sealed class WtoMarketEngine : ISimSystem, ICommandHandler
     {
@@ -29,6 +33,8 @@ namespace Unruled.Core.Economy
         private readonly ComponentStore<StolenGoods> _stolen;
         private readonly Ledger _ledger;
         private readonly EntityId _escrow;
+        private readonly EntityId _feePool;
+        private readonly EntityId _tollPool;
         private readonly IMarketRates _rates;
         private readonly ITradeSettlement _settlement;
         private readonly IMarketAccess _access;
@@ -37,7 +43,7 @@ namespace Unruled.Core.Economy
         public WtoMarketEngine(
             World world, ComponentStore<WtoOrder> orders, ComponentStore<ItemMarket> markets,
             ComponentStore<SiteInfo> sites, ComponentStore<Stockpile> stockpiles, ComponentStore<StolenGoods> stolen,
-            Ledger ledger, EntityId escrow, IMarketRates rates, ITradeSettlement settlement, IMarketAccess access,
+            Ledger ledger, EntityId escrow, EntityId feePool, EntityId tollPool, IMarketRates rates, ITradeSettlement settlement, IMarketAccess access,
             WtoBalance balance)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
@@ -49,6 +55,9 @@ namespace Unruled.Core.Economy
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             if (escrow.IsNull) throw new ArgumentException("WTO escrow wallet required.", nameof(escrow));
             _escrow = escrow;
+            if (feePool.IsNull || tollPool.IsNull) throw new ArgumentException("WTO fee and STA toll pools required.");
+            _feePool = feePool;
+            _tollPool = tollPool;
             _rates = rates ?? throw new ArgumentNullException(nameof(rates));
             _settlement = settlement ?? throw new ArgumentNullException(nameof(settlement));
             _access = access ?? throw new ArgumentNullException(nameof(access));
@@ -57,6 +66,9 @@ namespace Unruled.Core.Economy
 
         public long ReferencePriceCents(ItemId item, long tick) =>
             _markets.Get(Market(item)).ReferencePriceCents(tick, _balance.VwapWindowTicks);
+
+        public long SystemBidCents(ItemId item, long tick) =>
+            Math.Max(1, ReferencePriceCents(item, tick) * _balance.SystemBidPercent / 100);
 
         public bool IsInBand(ItemId item, long priceCents, long tick)
         {
@@ -77,6 +89,9 @@ namespace Unruled.Core.Economy
                     break;
                 case CommandType.CancelOrder:
                     Cancel(command.PlayerId, command.ParamEntity);
+                    break;
+                case CommandType.SellToSystem:
+                    SellToSystem(command, tick);
                     break;
                 default:
                     throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
@@ -128,6 +143,29 @@ namespace Unruled.Core.Economy
                 OwnerPlayerId = command.PlayerId, Item = item, Side = side, PriceCents = price, Remaining = quantity,
                 Site = site, PlacedTick = tick, DepositCents = deposit
             });
+        }
+
+        private void SellToSystem(in DelayedPlayerCommand command, long tick)
+        {
+            var item = (ItemId)command.ParamA;
+            var site = command.Target;
+            if (!ItemIds.IsValid(item) || command.ParamB <= 0 || !_access.MayTrade(command.PlayerId, tick))
+                return;
+            if (!_sites.Has(site) || _sites.Get(site).OwnerPlayerId != command.PlayerId || !_stockpiles.Has(site) ||
+                !_ledger.TryFindPlayerWallet(command.PlayerId, out var wallet))
+                return;
+
+            ref var stock = ref _stockpiles.Get(site);
+            int clean = _stolen.Has(site) ? _stolen.Get(site).Clean(stock, item) : stock.Get(item);
+            long price = SystemBidCents(item, tick);
+            long fees = _ledger.Balance(_feePool);
+            int quantity = (int)Math.Min(Math.Min(command.ParamB, clean), (fees + _ledger.Balance(_tollPool)) / price);
+            if (quantity <= 0)
+                return;
+            long due = quantity * price;
+            Pay(_feePool, wallet, Math.Min(due, fees));
+            Pay(_tollPool, wallet, due - Math.Min(due, fees));
+            stock.Add(item, -quantity);
         }
 
         private void Cancel(int playerId, EntityId order)
@@ -215,7 +253,7 @@ namespace Unruled.Core.Economy
         private void Pay(EntityId from, EntityId to, long cents)
         {
             if (!_ledger.Transfer(from, to, cents))
-                throw new InvalidOperationException("WTO escrow does not cover its orders.");
+                throw new InvalidOperationException("A WTO wallet does not cover its payment.");
         }
     }
 }

@@ -267,7 +267,7 @@ namespace Unruled.Core.Simulation
         public static StaBalance CreateStaBalance() => new StaBalance(tollCentsPerShipPer100Units: 20);
 
         /// <summary>GDD §2.2 B: VWAP over the last 100 ticks, price band 0.8x-1.2x.</summary>
-        public static WtoBalance CreateWtoBalance() => new WtoBalance(vwapWindowTicks: 100, priceBandPercent: 20);
+        public static WtoBalance CreateWtoBalance() => new WtoBalance(vwapWindowTicks: 100, priceBandPercent: 20, systemBidPercent: 70);
 
         /// <summary>PROVISIONAL: a contract convoy has twice its planned travel time plus 10 minutes to deliver.</summary>
         public static WtoContractBalance CreateWtoContractBalance() =>
@@ -293,7 +293,7 @@ namespace Unruled.Core.Simulation
         /// conquer still settle neutral sites of their home system at weight 1.0; from Tier 3 the shipyard refits docked battle
         /// fleets to the research tier and builds line ships of it up to 60 (outgunning the Citadel garrison of 30 line + 10 EW); a full
         /// battle line that can't take the Citadel yet waits mothballed. It borrows from THE SYSTEM up to 2,000 credits in
-        /// hand once it holds under 1,000 (kept for tolls, never locked in WTO orders), repays debt from cash above 4,000,
+        /// hand once it holds under 1,000 (kept for tolls, never spent on buy bids), repays debt from cash above 4,000,
         /// and repays all it can once the debt falls due.
         /// </summary>
         public static AiBalance CreateAiBalance() => new AiBalance(
