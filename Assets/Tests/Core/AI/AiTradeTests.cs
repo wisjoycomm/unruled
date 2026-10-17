@@ -217,6 +217,23 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void IdleCash_BuysFeedstock_InAStressTest_ThatLacksNothing()
+        {
+            ref var progress = ref _sim.TechProgress.Get(_hq);
+            progress.Stage = ResearchStage.StressTest;
+            var cost = _sim.Balance.Research.Tier((byte)(progress.TechTier + 1)).StressTestCost;
+            for (int i = 0; i < cost.Length; i++)
+                _sim.Stockpiles.Get(_home).Add(cost[i].Item, cost[i].Quantity);
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemRations });
+            _sim.WtoOrders.Add(_sim.World.Create(), new WtoOrder
+            {
+                OwnerPlayerId = 2, Item = ItemId.RawBiomass, Side = OrderSide.Sell, PriceCents = Price(ItemId.RawBiomass, 0),
+                Remaining = 10, Site = _sim.World.Create()
+            });
+            Assert.IsTrue(Find(AiAction.BuyFeedstock).HasValue);
+        }
+
+        [Test]
         public void IdleCash_BuysNoFeedstock_ItAlreadyHolds()
         {
             var ai = _sim.Balance.Ai;

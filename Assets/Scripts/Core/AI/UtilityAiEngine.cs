@@ -731,8 +731,8 @@ namespace Unruled.Core.AI
 
         // WTO: cancels its orders open past the trade window; sells surplus into a rival's bid, or else, under the travel
         // cash, sells a batch to THE SYSTEM's standing bid, or else lists one batch under the reference price; bids over it
-        // for the first item the next stress test still lacks, or else, debt-free with cash above twice its reserve (idle
-        // money, which would otherwise repay debt), buys the cheapest rival listing of a raw it feeds and holds under the
+        // for the first item the next stress test still lacks, or else (nothing to bid for), debt-free with cash above
+        // twice its reserve (idle money, which would otherwise repay debt), buys the cheapest rival listing of a raw it feeds and holds under the
         // sell threshold. Orders are sized to what the cash above the travel cash can lock: the seller's escrow deposit, the
         // buyer's payment from its bid budget (of the idle cash, for feedstock). One order of a kind in flight at a time.
         private void ThinkTrade(in PlayerHq player, AiPreset preset, EntityId hq, long tick)
@@ -776,38 +776,38 @@ namespace Unruled.Core.AI
 
             if (_issuer.IsInFlight(player.PlayerId, CommandType.PlaceBuyOrder, player.CoreBase))
                 return;
-            if (!_progress.Has(hq) || _progress.Get(hq).Stage > ResearchStage.StressTest)
+            if (_progress.Has(hq) && _progress.Get(hq).Stage <= ResearchStage.StressTest)
             {
-                long idle = cash - 2 * _balance.CashReserveCredits * Wallet.CentsPerCredit;
-                if (idle <= 0 || (_loans.Has(hq) && _loans.Get(hq).DebtCents > 0) ||
-                    !FindListingToBuy(player.PlayerId, ref stock, feeds, out var feedItem, out long feedAsk, out int feedWanted))
-                    return;
-                long feedQuantity = Math.Min(feedWanted, idle * _balance.BidBudgetPercent / 100 / feedAsk);
-                if (feedQuantity > 0)
+                var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
+                for (int i = 0; i < cost.Length; i++)
+                {
+                    int missing = cost[i].Quantity - stock.Get(cost[i].Item);
+                    if (missing <= 0 || HasOpenOrder(player.PlayerId, cost[i].Item, OrderSide.Buy))
+                        continue;
+                    long price = TradePrice(cost[i].Item, tick, _balance.TradePricePercent);
+                    long quantity = Math.Min(missing, spare * _balance.BidBudgetPercent / 100 / price);
+                    if (quantity == 0)
+                        return;
                     Issue(new DelayedPlayerCommand
                     {
                         PlayerId = player.PlayerId, CommandType = CommandType.PlaceBuyOrder, Target = player.CoreBase,
-                        ParamA = (int)feedItem, ParamB = (int)feedQuantity, ParamC = (int)feedAsk
-                    }, AiAction.BuyFeedstock, Score(weight, Threshold));
-                return;
-            }
-            var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
-            for (int i = 0; i < cost.Length; i++)
-            {
-                int missing = cost[i].Quantity - stock.Get(cost[i].Item);
-                if (missing <= 0 || HasOpenOrder(player.PlayerId, cost[i].Item, OrderSide.Buy))
-                    continue;
-                long price = TradePrice(cost[i].Item, tick, _balance.TradePricePercent);
-                long quantity = Math.Min(missing, spare * _balance.BidBudgetPercent / 100 / price);
-                if (quantity == 0)
+                        ParamA = (int)cost[i].Item, ParamB = (int)quantity, ParamC = (int)price
+                    }, AiAction.BuyShortfall, Score(weight, Full));
                     return;
+                }
+            }
+
+            long idle = cash - 2 * _balance.CashReserveCredits * Wallet.CentsPerCredit;
+            if (idle <= 0 || (_loans.Has(hq) && _loans.Get(hq).DebtCents > 0) ||
+                !FindListingToBuy(player.PlayerId, ref stock, feeds, out var feedItem, out long feedAsk, out int feedWanted))
+                return;
+            long feedQuantity = Math.Min(feedWanted, idle * _balance.BidBudgetPercent / 100 / feedAsk);
+            if (feedQuantity > 0)
                 Issue(new DelayedPlayerCommand
                 {
                     PlayerId = player.PlayerId, CommandType = CommandType.PlaceBuyOrder, Target = player.CoreBase,
-                    ParamA = (int)cost[i].Item, ParamB = (int)quantity, ParamC = (int)price
-                }, AiAction.BuyShortfall, Score(weight, Full));
-                return;
-            }
+                    ParamA = (int)feedItem, ParamB = (int)feedQuantity, ParamC = (int)feedAsk
+                }, AiAction.BuyFeedstock, Score(weight, Threshold));
         }
 
         // A sell order sized to the escrow deposit the spare cash can lock (the engine rounds the whole deposit down, so

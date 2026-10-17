@@ -96,3 +96,4 @@
 - 2026-10-17 - Claude - AI sell deposits again come only from cash above the travel cash (a broke AI now sells to THE SYSTEM instead); test. Soak: listings nobody bought had locked ~11,000 credits in escrow.
 - 2026-10-17 - Claude - A debt-free AI spends cash above twice its reserve on the cheapest rival listing of a raw its refineries take in; tests. Soak: one debt-free AI sat on 15,000 credits while the rest were stuck at their credit limit.
 - 2026-10-17 - Claude - Convoy routes set out with the fuel to come home by the toll-free bypass, so a convoy no longer strands at its outpost when the owner can't pay the tolls by then; test. Soak: p5's convoy sat at the tungsten site from day 3 with 458 fuel.
+- 2026-10-17 - Claude - AI idle-cash feedstock buying also runs in a stress test that has nothing left to bid for; test.
