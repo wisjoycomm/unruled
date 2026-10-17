@@ -205,7 +205,7 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
-        public void OpensTheGate_AtTier2_UnlessItStaysHome()
+        public void OpensTheGate_AtTier2_EvenTheSentinel_ForItsTrade()
         {
             _sim.JumpGates.Add(_sim.World.Create(), new JumpGate { OwnerPlayerId = Me, HomeSite = _home, FarSite = _target });
             ref var stock = ref _sim.Stockpiles.Get(_home);
@@ -214,8 +214,71 @@ namespace Unruled.Tests.Core.AI
             Assert.IsFalse(Find(Warlord, AiAction.OpenGate).HasValue, "tier 1");
 
             _sim.TechProgress.Get(_hq).TechTier = 2;
-            Assert.IsFalse(Find(Sentinel, AiAction.OpenGate).HasValue, "the Sentinel stays sealed");
-            Assert.IsTrue(Find(Warlord, AiAction.OpenGate).HasValue);
+            Assert.IsTrue(Find(Sentinel, AiAction.OpenGate).HasValue, "contract convoys need the lane too");
+        }
+
+        private ItemId PendingRefinery()
+        {
+            for (int i = 0; i < _sim.Clock.PendingCommandCount; i++)
+                if (_sim.Clock.PendingAt(i).CommandType == CommandType.BuildRefinery)
+                    return (ItemId)_sim.Clock.PendingAt(i).ParamA;
+            return ItemId.None;
+        }
+
+        [Test]
+        public void BuildsTheRefineryTheNextStressTestNeeds_First_OnceItMinesBothInputs()
+        {
+            _sim.TechProgress.Get(_hq).TechTier = 2;
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.StressTest; // Tier 3: alloy + ammo
+            ref var stock = ref _sim.Stockpiles.Get(_home);
+            for (int i = 0; i < _sim.Balance.Refinery.BuildCostCount; i++)
+                stock.Add(_sim.Balance.Refinery.BuildCost(i).Item, _sim.Balance.Refinery.BuildCost(i).Quantity);
+            stock.Add(ItemId.RawIron, 1_000);
+            stock.Add(ItemId.RawMethane, 1_000); // steel's inputs pile up first
+            var outpost = Site(400, Me);
+            Ore(outpost, ItemId.RawIron);
+            Ore(outpost, ItemId.RawTitanium);
+            for (int d = 0; d < _sim.Deposits.Count; d++)
+                _sim.Deposits.At(d).RigCount = 1;
+
+            Assert.IsTrue(Find(Sentinel, AiAction.BuildRefinery).HasValue);
+            Assert.AreEqual(ItemId.ItemAlloy, PendingRefinery(), "not the steel refinery that would eat the iron");
+        }
+
+        [Test]
+        public void BuildsByInputStock_WhileTheStressTestItemsInputsAreNotAllMined()
+        {
+            _sim.TechProgress.Get(_hq).TechTier = 2;
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.StressTest;
+            ref var stock = ref _sim.Stockpiles.Get(_home);
+            for (int i = 0; i < _sim.Balance.Refinery.BuildCostCount; i++)
+                stock.Add(_sim.Balance.Refinery.BuildCost(i).Item, _sim.Balance.Refinery.BuildCost(i).Quantity);
+            stock.Add(ItemId.RawIron, 1_000);
+            stock.Add(ItemId.RawMethane, 1_000);
+            var outpost = Site(400, Me);
+            Ore(outpost, ItemId.RawIron);
+            _sim.Deposits.At(0).RigCount = 1; // no titanium
+
+            Assert.IsTrue(Find(Sentinel, AiAction.BuildRefinery).HasValue);
+            Assert.AreEqual(ItemId.ItemSteel, PendingRefinery());
+        }
+
+        [Test]
+        public void LoadsTheFuel_ForARoundTripToAFarSettleTarget()
+        {
+            var lane = _sim.Starlanes.Get(_sim.Starlanes.EntityAt(0));
+            lane.Length = 20_000;
+            _sim.Starlanes.Get(_sim.Starlanes.EntityAt(0)) = lane;
+            Ore(_target, ItemId.RawIron);
+            var fleet = Fleet(Me, _home, 4, loaded: true);
+            _sim.Stockpiles.Get(_home).Add(ItemId.ItemFuel, 100_000);
+            var unit = _sim.Fleets.Get(fleet);
+            long roundTrip = 2L * _sim.Routes.FuelFor(unit, lane);
+            Assert.Greater(roundTrip, _sim.Balance.Ai.LoadFuel, "the test needs a far target");
+
+            Assert.IsTrue(Find(Warlord, AiAction.LoadCargo).HasValue);
+            RunPendingOrders();
+            Assert.AreEqual(roundTrip, _sim.Stockpiles.Get(fleet).Get(ItemId.ItemFuel));
         }
 
         // The target becomes THE SYSTEM's Citadel; its garrison is struck down and not due back during the test.

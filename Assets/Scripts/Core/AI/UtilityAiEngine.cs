@@ -306,7 +306,7 @@ namespace Unruled.Core.AI
             if (docked && motion.Site == player.CoreBase)
             {
                 bool telemetry = _progress.Has(hq) && _progress.Get(hq).Stage == ResearchStage.FieldTelemetry;
-                if (TryPickLoad(player.CoreBase, hq, preset, telemetry, in unit, ref hold, out loadItem, out loadQuantity,
+                if (TryPickLoad(in player, hq, preset, telemetry, in unit, ref hold, out loadItem, out loadQuantity,
                         out int shortage))
                 {
                     Consider(AiAction.LoadCargo, Score(preset.ResupplyLogisticsWeight, shortage), ref best, ref bestScore);
@@ -405,12 +405,13 @@ namespace Unruled.Core.AI
         // telemetry while researching, then the claim cost when the preset besieges. Shortage reads 500 for any gap,
         // 1000 for an empty hold.
         private bool TryPickLoad(
-            EntityId core, EntityId hq, AiPreset preset, bool telemetry, in FleetUnit unit, ref Stockpile hold, out ItemId item,
-            out int quantity, out int shortage)
+            in PlayerHq player, EntityId hq, AiPreset preset, bool telemetry, in FleetUnit unit, ref Stockpile hold,
+            out ItemId item, out int quantity, out int shortage)
         {
             item = ItemId.None;
             quantity = 0;
             shortage = 0;
+            var core = player.CoreBase;
             if (!_stockpiles.Has(core))
                 return false;
             ref var stock = ref _stockpiles.Get(core);
@@ -426,7 +427,8 @@ namespace Unruled.Core.AI
             }
             if (TryLoad(ref stock, hq, ref hold, ItemId.ItemAmmo, (long)unit.LineShips * _balance.LoadAmmoPerLineShip,
                     ref item, ref quantity, ref shortage) ||
-                TryLoad(ref stock, hq, ref hold, ItemId.ItemFuel, _balance.LoadFuel, ref item, ref quantity, ref shortage) ||
+                TryLoad(ref stock, hq, ref hold, ItemId.ItemFuel, FuelToLoad(in player, preset, in unit), ref item, ref quantity,
+                    ref shortage) ||
                 (telemetry && TryLoad(ref stock, hq, ref hold, ItemId.ItemMicrochip, _researchBalance.TelemetryMinMicrochips,
                     ref item, ref quantity, ref shortage)))
                 return true;
@@ -445,6 +447,17 @@ namespace Unruled.Core.AI
                     return true;
             }
             return false;
+        }
+
+        // The standard fuel load, or a round trip to the site it would settle next if that is further.
+        private long FuelToLoad(in PlayerHq player, AiPreset preset, in FleetUnit unit)
+        {
+            long fuel = _balance.LoadFuel;
+            if (SettleWeight(preset) > 0 &&
+                FindTarget(player, in unit, int.MaxValue, raid: false, homeOnly: IsHomeSettler(preset), out var target, out _) &&
+                _routes.TryPlan(player.CoreBase, target, unit.TechTier, ref _route))
+                fuel = Math.Max(fuel, 2L * RouteFuel(in unit));
+            return fuel;
         }
 
         // What a besieging fleet carries of an item: the claim cost plus the rigs for every deposit of a site.
@@ -592,8 +605,31 @@ namespace Unruled.Core.AI
             for (int i = 0; i < _refineryBalance.BuildCostCount; i++)
             {
                 var cost = _refineryBalance.BuildCost(i);
-                if (stock.Get(cost.Item) < cost.Quantity + ResearchReserve(hq, cost.Item))
+                if (stock.Get(cost.Item) < cost.Quantity + ProgressReserve(hq, cost.Item))
                     return;
+            }
+            // What the next stress test needs comes first, once the player mines both raw inputs: another refinery may
+            // eat a shared input before it piles up at the core.
+            if (_progress.Has(hq) && _progress.Get(hq).Stage <= ResearchStage.StressTest)
+            {
+                var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
+                int mined = MinedOres(player.PlayerId);
+                for (int i = 0; i < cost.Length; i++)
+                {
+                    var output = cost[i].Item;
+                    if (ItemIds.IsRaw(output) || HasRefinery(player.CoreBase, output) || stock.Has(output, cost[i].Quantity))
+                        continue;
+                    ref readonly var recipe = ref _recipes.GetRecipe(output);
+                    int raws = RecipeRaws(output);
+                    if (!ItemIds.IsRaw(recipe.Input1) || !ItemIds.IsRaw(recipe.Input2) || (raws & ~mined) != 0)
+                        continue;
+                    Issue(new DelayedPlayerCommand
+                    {
+                        PlayerId = player.PlayerId, CommandType = CommandType.BuildRefinery, Target = player.CoreBase,
+                        ParamA = (int)output
+                    }, AiAction.BuildRefinery, Score(preset.ResupplyLogisticsWeight, Full));
+                    return;
+                }
             }
             for (int slot = ItemIds.RawCount; slot < ItemIds.Count; slot++)
             {
@@ -672,9 +708,9 @@ namespace Unruled.Core.AI
             }
         }
 
-        // Core stock above a threshold and what the next stress test needs.
-        private int Surplus(EntityId hq, ref Stockpile stock, ItemId item, int keep) =>
-            stock.Get(item) - ResearchReserve(hq, item) - keep;
+        // Core stock above a threshold and what the next stress test and the gate opening need.
+        private int Surplus(int playerId, EntityId hq, ref Stockpile stock, ItemId item, int keep) =>
+            stock.Get(item) - ProgressReserve(hq, item) - GateReserve(playerId, item) - keep;
 
         // The best rival bid for an item the player has surplus of and isn't already selling, at a site a contract convoy
         // can reach from the core base (else the contract is void) on fuel the core holds above its reserve (else the
@@ -690,7 +726,7 @@ namespace Unruled.Core.AI
                 ref var bid = ref _wtoOrders.At(o);
                 if (bid.Side != OrderSide.Buy || bid.OwnerPlayerId == player.PlayerId || bid.PriceCents <= price)
                     continue;
-                int surplus = Surplus(hq, ref stock, bid.Item, _balance.FillAbove);
+                int surplus = Surplus(player.PlayerId, hq, ref stock, bid.Item, _balance.FillAbove);
                 if (surplus <= 0 || HasOpenOrder(player.PlayerId, bid.Item, OrderSide.Sell) ||
                     !_routes.TryPlan(player.CoreBase, bid.Site, WtoContractSystem.ConvoyTier, ref _route) ||
                     stock.Get(ItemId.ItemFuel) - _balance.CoreSupplyReserve < RouteFuel(in ContractConvoy))
@@ -715,7 +751,7 @@ namespace Unruled.Core.AI
             for (int slot = 0; slot < ItemIds.Count; slot++)
             {
                 var candidate = ItemIds.FromSlot(slot);
-                if (Surplus(hq, ref stock, candidate, _balance.SellAbove) < _balance.SellBatch)
+                if (Surplus(playerId, hq, ref stock, candidate, _balance.SellAbove) < _balance.SellBatch)
                     continue;
                 item = candidate;
                 price = TradePrice(candidate, tick, -_balance.TradePricePercent);
@@ -771,7 +807,7 @@ namespace Unruled.Core.AI
             for (int i = 0; i < _shipyardBalance.CostCount(tier); i++)
             {
                 var cost = _shipyardBalance.Cost(tier, i);
-                if (stock.Get(cost.Item) < (long)cost.Quantity * ships + ResearchReserve(hq, cost.Item))
+                if (stock.Get(cost.Item) < (long)cost.Quantity * ships + ProgressReserve(hq, cost.Item))
                     return false;
             }
             return true;
@@ -792,7 +828,7 @@ namespace Unruled.Core.AI
         {
             long gap = target - hold.Get(id);
             long reserve = id == ItemId.ItemFuel || id == ItemId.ItemCoolant ? _balance.CoreSupplyReserve : 0;
-            long available = stock.Get(id) - reserve - ResearchReserve(hq, id);
+            long available = stock.Get(id) - reserve - ProgressReserve(hq, id);
             if (gap <= 0 || available <= 0)
                 return false;
             item = id;
@@ -1005,7 +1041,8 @@ namespace Unruled.Core.AI
                     }, AiAction.StressTest, Score(preset.RadarBeltScanWeight, Full));
             }
 
-            int expand = Math.Max(preset.StealthRaidWeight, preset.SiegeConquestWeight);
+            // The gate carries the expansion fleets and the WTO contract convoys both ways, so traders open it too.
+            int expand = Math.Max(Math.Max(preset.StealthRaidWeight, preset.SiegeConquestWeight), preset.ResupplyLogisticsWeight);
             if (expand == 0 || !_tech.Unlocks(player.PlayerId, TechGate.JumpGate))
                 return;
             for (int g = 0; g < _gates.Count; g++)
@@ -1024,8 +1061,8 @@ namespace Unruled.Core.AI
             }
         }
 
-        // What the next stress test needs of an item, kept back from scans, loads and builds until it is passed.
-        private int ResearchReserve(EntityId hq, ItemId item)
+        // What the next stress test needs of an item, kept back from scans, loads, builds and sales until it is passed.
+        private int ProgressReserve(EntityId hq, ItemId item)
         {
             if (!_progress.Has(hq) || _progress.Get(hq).Stage > ResearchStage.StressTest)
                 return 0;
@@ -1035,6 +1072,28 @@ namespace Unruled.Core.AI
                 if (cost[i].Item == item)
                     reserve += cost[i].Quantity;
             return reserve;
+        }
+
+        // What opening the player's unlocked, closed jump gate needs of an item, kept back from scans and sales.
+        private int GateReserve(int playerId, ItemId item)
+        {
+            if (!HasClosedGate(playerId))
+                return 0;
+            int reserve = 0;
+            for (int i = 0; i < _gateBalance.OpenCostCount; i++)
+                if (_gateBalance.OpenCost(i).Item == item)
+                    reserve += _gateBalance.OpenCost(i).Quantity;
+            return reserve;
+        }
+
+        private bool HasClosedGate(int playerId)
+        {
+            if (!_tech.Unlocks(playerId, TechGate.JumpGate))
+                return false;
+            for (int g = 0; g < _gates.Count; g++)
+                if (_gates.At(g).OwnerPlayerId == playerId && !_gates.At(g).IsOpen)
+                    return true;
+            return false;
         }
 
         private bool CarriesClaimCost(ref Stockpile hold)
@@ -1159,7 +1218,10 @@ namespace Unruled.Core.AI
         {
             if (!_stockpiles.Has(player.CoreBase))
                 return;
-            int batteries = _stockpiles.Get(player.CoreBase).Get(ItemId.ItemBattery) - ResearchReserve(hq, ItemId.ItemBattery);
+            // Scans spend only what the next stress test, the gate opening and a settler's next claim leave over.
+            int batteries = _stockpiles.Get(player.CoreBase).Get(ItemId.ItemBattery) - ProgressReserve(hq, ItemId.ItemBattery) -
+                            GateReserve(player.PlayerId, ItemId.ItemBattery) -
+                            (SettleWeight(preset) > 0 ? (int)ExpansionLoad(ItemId.ItemBattery) : 0);
             long full = (long)_balance.FullBatteryScans * _radarBalance.StartupBatteries;
             long percent = Math.Min(100, batteries * 100L / full);
             if (percent <= preset.MinBatteryForScanPercent || batteries < _radarBalance.StartupBatteries)

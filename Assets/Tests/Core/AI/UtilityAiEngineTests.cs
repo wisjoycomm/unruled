@@ -195,6 +195,9 @@ namespace Unruled.Tests.Core.AI
             for (int i = 0; i < testCost.Length; i++)
                 if (testCost[i].Item == ItemId.ItemBattery)
                     core.Add(ItemId.ItemBattery, testCost[i].Quantity); // kept back for the next stress test
+            for (int i = 0; i < _sim.Balance.SiteControl.ClaimCostCount; i++)
+                if (_sim.Balance.SiteControl.ClaimCost(i).Item == ItemId.ItemBattery)
+                    core.Add(ItemId.ItemBattery, _sim.Balance.SiteControl.ClaimCost(i).Quantity); // and the next claim
             core.Add(ItemId.ItemBattery, 2 * startup); // 20%
             Assert.AreEqual(0, Think(Sentinel), "20% is below the Sentinel's 30%");
 
@@ -205,6 +208,32 @@ namespace Unruled.Tests.Core.AI
             RunPendingOrders();
             Assert.AreEqual(1, _sim.RadarScans.Count);
             Assert.AreEqual(0, _sim.Ai.Think(_sim.Clock.CurrentTick - _sim.Clock.CurrentTick % 10), "already scanning");
+        }
+
+        [Test]
+        public void ScansKeepBack_WhatOpeningAnUnlockedGateNeeds()
+        {
+            _sim.TechProgress.Get(_hq).TechTier = 2; // the gate unlocks; the next stress test takes no batteries
+            var gate = _sim.World.Create();
+            _sim.JumpGates.Add(gate, new JumpGate { OwnerPlayerId = Me, HomeSite = _home, FarSite = _field });
+            ref var core = ref _sim.Stockpiles.Get(_home);
+            for (int i = 0; i < _sim.Balance.SiteControl.ClaimCostCount; i++)
+                if (_sim.Balance.SiteControl.ClaimCost(i).Item == ItemId.ItemBattery)
+                    core.Add(ItemId.ItemBattery, _sim.Balance.SiteControl.ClaimCost(i).Quantity);
+            core.Add(ItemId.ItemBattery, 5 * _sim.Balance.Radar.StartupBatteries); // 50% over the claim
+            Assert.AreEqual(0, CountOrders(Sentinel, AiAction.RadarScan), "the gate opening comes first");
+
+            _sim.JumpGates.Get(gate).Lane = _lane; // opened
+            Assert.AreEqual(1, CountOrders(Sentinel, AiAction.RadarScan));
+        }
+
+        private int CountOrders(byte archetype, AiAction action)
+        {
+            int n = Think(archetype), count = 0;
+            for (int i = 0; i < n; i++)
+                if (_sim.Ai.OrderAt(i).Action == action)
+                    count++;
+            return count;
         }
 
         [Test]
