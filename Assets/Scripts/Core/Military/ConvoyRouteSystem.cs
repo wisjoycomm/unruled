@@ -27,7 +27,8 @@ namespace Unruled.Core.Military
     /// its reserve, loads up to a batch of every other item there and heads home. Docked anywhere else (its route was cut
     /// short) it heads back to the hub; moving or engaged, the route waits; it ends when either site is lost. Each run takes the fastest route whose STA tolls the owner's wallet
     /// covers there and back, else the toll-free one (bypass lanes: 0 credits, more fuel); the fuel reserve follows the
-    /// route taken. Contract convoys can't run a route. Stolen units keep their tags.
+    /// route taken, and a run out carries the fuel to come home by the toll-free route too, in case the owner can no longer
+    /// pay the tolls by then. Contract convoys can't run a route. Stolen units keep their tags.
     /// </summary>
     public sealed class ConvoyRouteSystem : ISimSystem, ICommandHandler
     {
@@ -141,9 +142,10 @@ namespace Unruled.Core.Military
                     CargoMover.Move(_stockpiles, _stolen, fleet, route.Hub, item, hold.Get(item));
             }
             long oneWay = OneWayFuel(fleet, route.Hub, route.Outpost, out bool tollFree);
-            if (oneWay < 0)
+            long back = HomeFuel(fleet, route.Outpost, route.Hub);
+            if (oneWay < 0 || back < 0)
                 return;
-            long roundTrip = 2 * oneWay;
+            long roundTrip = oneWay + back;
             for (int s = 0; s < Supplies.Length; s++)
                 Fill(fleet, route.Hub, Supplies[s], (int)Math.Min(route.Batch + Reserve(fleet, Supplies[s], roundTrip), int.MaxValue),
                     _balance.HubSupplyReserve);
@@ -210,6 +212,19 @@ namespace Unruled.Core.Military
             for (int i = 0; i < _scratch.Count; i++)
                 fuel += _planner.FuelFor(unit, _lanes.Get(_scratch.LaneAt(i)));
             return fuel;
+        }
+
+        // Fuel for the leg home on whichever route the wallet allows by then: the toll-free one when it takes more.
+        private long HomeFuel(EntityId fleet, EntityId from, EntityId to)
+        {
+            long fuel = OneWayFuel(fleet, from, to, out bool tollFree);
+            ref var unit = ref _units.Get(fleet);
+            if (fuel < 0 || tollFree || !_planner.TryPlan(from, to, unit.TechTier, tollFree: true, ref _scratch))
+                return fuel;
+            long bypass = 0;
+            for (int i = 0; i < _scratch.Count; i++)
+                bypass += _planner.FuelFor(unit, _lanes.Get(_scratch.LaneAt(i)));
+            return Math.Max(fuel, bypass);
         }
 
         private static long Goods(ref Stockpile stock)

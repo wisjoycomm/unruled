@@ -144,6 +144,29 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
+        public void Route_SetsOut_WithTheFuelToComeHomeByTheBypass_InCaseTheTollsCanNoLongerBePaid()
+        {
+            AddBypass();
+            long highway = 0, bypass = 0;
+            var unit = _sim.Fleets.Get(_fleet);
+            for (int i = 0; i < _sim.Starlanes.Count; i++)
+            {
+                int fuel = _sim.Routes.FuelFor(unit, _sim.Starlanes.At(i));
+                if (_sim.Starlanes.At(i).Tier == StarlaneTier.StaHighway)
+                    highway += fuel;
+                else
+                    bypass += fuel;
+            }
+            Assert.Greater(bypass, highway + 1, "the bypass home takes more than a highway leg's fuel");
+            Outpost.Add(ItemId.RawIron, 1);
+            SetRoute(_fleet, _outpost, 1);
+            for (int i = 0; i < 3_000 && _sim.FleetMotions.Get(_fleet).Lane.IsNull; i++)
+                Run(1);
+            Assert.AreEqual(StarlaneTier.StaHighway, _sim.Starlanes.Get(_sim.FleetMotions.Get(_fleet).Lane).Tier, "out on the highway");
+            Assert.GreaterOrEqual(_sim.Stockpiles.Get(_fleet).Get(ItemId.ItemFuel), bypass, "the bypass fuel home is aboard");
+        }
+
+        [Test]
         public void AtTheHub_ItUnloads_EvenWithNoRouteOutItCanPay()
         {
             SetRoute(_fleet, _outpost, Batch);
