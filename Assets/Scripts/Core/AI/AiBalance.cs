@@ -67,7 +67,7 @@ namespace Unruled.Core.AI
         public readonly int ConvoyBatch; // the batch its convoy routes run, within the fleet's capacity
         public readonly int RefineryInputStock; // both inputs in core stock at this level start a refinery for a new item
         public readonly int CoreSupplyReserve; // fuel and coolant fleets leave at the core base for its drills
-        public readonly int RawStockCap; // a site holding this much of a deposit's ore pauses its drills
+        public readonly int RawStockCap; // a site holding this much of a deposit's ore (an outpost counting its core's too) pauses its drills
         public readonly int LoadUpkeepIntervals; // upkeep intervals of oxygen and rations a fleet loads at the core base
         public readonly byte CitadelAssaultTier; // besieging presets send fleets of this tech tier or higher at the Citadel
         public readonly int SellAbove; // core stock above this (plus research needs) is surplus it lists on the WTO

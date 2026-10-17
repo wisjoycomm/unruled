@@ -265,7 +265,7 @@ namespace Unruled.Core.AI
                         ThinkFleet(player, preset, _controllers.EntityAt(c), _units.EntityAt(f), tick);
                 }
                 for (int d = 0; d < _deposits.Count; d++)
-                    ThinkDeposit(player.PlayerId, preset, d);
+                    ThinkDeposit(player.PlayerId, player.CoreBase, preset, d);
                 if (tick % SimTick.TicksPerHour < _balance.ScanWindowTicks)
                     ThinkRadar(player, preset, _controllers.EntityAt(c));
                 ThinkProgress(player, preset, _controllers.EntityAt(c));
@@ -1397,7 +1397,7 @@ namespace Unruled.Core.AI
         private long FleetPower(in FleetUnit unit) =>
             (long)unit.LineShips * _combatBalance.LineAlpha + (long)unit.EwShips * _combatBalance.EwBeta;
 
-        private void ThinkDeposit(int playerId, AiPreset preset, int denseIndex)
+        private void ThinkDeposit(int playerId, EntityId coreBase, AiPreset preset, int denseIndex)
         {
             ref var deposit = ref _deposits.At(denseIndex);
             if (deposit.RetractUntilTick > 0 || !_sites.Has(deposit.Site) || _sites.Get(deposit.Site).OwnerPlayerId != playerId)
@@ -1420,6 +1420,8 @@ namespace Unruled.Core.AI
                     threat = Severity(preset.RetreatForceRatioMilli - ratio, preset.RetreatForceRatioMilli);
             }
             int stocked = _stockpiles.Has(deposit.Site) ? _stockpiles.Get(deposit.Site).Get(deposit.RawItem) : 0;
+            if (deposit.Site != coreBase && _stockpiles.Has(coreBase))
+                stocked += _stockpiles.Get(coreBase).Get(deposit.RawItem); // an outpost's ore only goes to a core that lacks it
             if (deposit.RigCount == 0)
             {
                 if (storm == 0 && threat == 0 && stocked < _balance.RawStockCap / 2)

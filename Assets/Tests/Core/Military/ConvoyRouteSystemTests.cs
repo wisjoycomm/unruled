@@ -80,6 +80,24 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
+        public void Route_SetsOutToSupply_OnlyWithHalfABatchAboveItsReserve_SoARunNeverBurnsMoreFuelThanItHauls()
+        {
+            int hubReserve = _sim.Balance.Convoys.HubSupplyReserve;
+            int roundTrip = 2 * _sim.Movement.FuelFor(_sim.Fleets.Get(_fleet), _sim.Starlanes.At(0));
+            Hub.Add(ItemId.ItemCoolant, hubReserve - Hub.Get(ItemId.ItemCoolant));
+            Hub.Add(ItemId.ItemFuel, hubReserve + roundTrip + Batch / 2 - 1 - Hub.Get(ItemId.ItemFuel));
+            SetRoute(_fleet, _outpost, Batch);
+
+            Run(1_000);
+            Assert.AreEqual(_hub, _sim.FleetMotions.Get(_fleet).Site, "a dribble of fuel isn't worth the trip");
+            Assert.AreEqual(0, Outpost.Get(ItemId.ItemFuel));
+
+            Hub.Add(ItemId.ItemFuel, 1);
+            Run(1_000);
+            Assert.GreaterOrEqual(Outpost.Get(ItemId.ItemFuel), Batch / 2);
+        }
+
+        [Test]
         public void Route_CarriesLifeSupport_AndKeepsItsOwnUpkeep_EvenWhenGrounded()
         {
             Hub.Add(ItemId.ItemOxygen, 1_000);

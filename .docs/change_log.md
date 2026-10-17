@@ -101,3 +101,4 @@
 
 2026-10-17 - Claude - AI sells a raw its refineries take in once it holds a batch above the drill stock cap, so complementary hoards (p4 copper, p5 silicon in the soak) reach the market; test.
 2026-10-17 - Claude - Unity check: compiles clean, EditMode 1189/1197 pass (3 failures are KitWright's own editor tests, 5 skipped); Play Mode capture of the BASE/SITE operations panels and the Citadel tag, no console errors.
+2026-10-17 - Claude - AI pauses an outpost's drills while its core holds the raw stock cap; convoy routes only set out to supply with half a batch above their reserve, so runs never burn more fuel than they haul; tests. Soak: convoys had burned ~2/3 of all fuel, starving outposts; now p4 and p5 reach Tier 5 in 30 days.

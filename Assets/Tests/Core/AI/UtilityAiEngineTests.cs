@@ -175,6 +175,39 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void PausesAnOutpostsDrills_WhileTheCoreHoldsTheStockCap_AndResumesBelowHalf()
+        {
+            int cap = _sim.Balance.Ai.RawStockCap;
+            var deposit = _sim.World.Create();
+            _sim.Deposits.Add(deposit, new MineralDeposit { Site = _field, RawItem = ItemId.RawWater, SurfaceReserve = 1_000, RigCount = 1 });
+            ref var core = ref _sim.Stockpiles.Get(_home);
+            core.Add(ItemId.RawWater, cap - 1);
+            Assert.IsNull(Pause(), "the core is short of the cap");
+
+            core.Add(ItemId.RawWater, 1);
+            Assert.AreEqual(1, Pause()?.ParamA, "hauling more home would only burn convoy fuel");
+            RunPendingOrders();
+            Assert.IsTrue(_sim.Deposits.Get(deposit).IsPaused);
+
+            core.Add(ItemId.RawWater, -(cap - cap / 2));
+            Assert.IsNull(Pause(), "not yet below half");
+            core.Add(ItemId.RawWater, -1);
+            Assert.AreEqual(0, Pause()?.ParamA);
+        }
+
+        private DelayedPlayerCommand? Pause()
+        {
+            _sim.Clock.Advance(_sim.Balance.Ai.ThinkIntervalTicks - _sim.Clock.CurrentTick % _sim.Balance.Ai.ThinkIntervalTicks);
+            int n = Think(Sentinel);
+            for (int i = 0; i < n; i++)
+                if (_sim.Ai.OrderAt(i).Action == AiAction.PauseDrills)
+                    for (int c = 0; c < _sim.Clock.PendingCommandCount; c++)
+                        if (_sim.Clock.PendingAt(c).CommandType == CommandType.PauseDrills)
+                            return _sim.Clock.PendingAt(c);
+            return null;
+        }
+
+        [Test]
         public void RetractsDrills_WhenOutgunnedAtTheSite()
         {
             var deposit = _sim.World.Create();
