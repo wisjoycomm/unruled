@@ -859,6 +859,9 @@ namespace Unruled.Core.AI
                 }, AiAction.SellSurplus, Score(weight, Threshold));
         }
 
+        // What it keeps of an item before selling: a raw it feeds up to the stock its drills stop at, else the threshold.
+        private int Keep(int feeds, ItemId item, int threshold) => Feeds(feeds, item) ? _balance.RawStockCap : threshold;
+
         // A raw a core refinery or the next stress test takes in: kept, since a deposit runs out and its fuel is made from it.
         private static bool Feeds(int feeds, ItemId item) =>
             ItemIds.IsRaw(item) && (feeds & (1 << ItemIds.ToSlot(item))) != 0;
@@ -867,7 +870,7 @@ namespace Unruled.Core.AI
         private int Surplus(int playerId, EntityId hq, ref Stockpile stock, ItemId item, int keep) =>
             stock.Get(item) - ProgressReserve(hq, item) - GateReserve(playerId, item) - keep;
 
-        // The best rival bid for an item the player has surplus of, doesn't feed (see NeededRaws) and isn't already selling,
+        // The best rival bid for an item the player has surplus of (see Keep) and isn't already selling,
         // at a site a contract convoy
         // can reach from the core base (else the contract is void) on fuel the core holds above its reserve (else the
         // convoy strands and the contract fails): sold into at its price.
@@ -882,8 +885,8 @@ namespace Unruled.Core.AI
                 ref var bid = ref _wtoOrders.At(o);
                 if (bid.Side != OrderSide.Buy || bid.OwnerPlayerId == player.PlayerId || bid.PriceCents <= price)
                     continue;
-                int surplus = Surplus(player.PlayerId, hq, ref stock, bid.Item, _balance.FillAbove);
-                if (surplus <= 0 || Feeds(feeds, bid.Item) || HasOpenOrder(player.PlayerId, bid.Item, OrderSide.Sell) ||
+                int surplus = Surplus(player.PlayerId, hq, ref stock, bid.Item, Keep(feeds, bid.Item, _balance.FillAbove));
+                if (surplus <= 0 || HasOpenOrder(player.PlayerId, bid.Item, OrderSide.Sell) ||
                     !_routes.TryPlan(player.CoreBase, bid.Site, WtoContractSystem.ConvoyTier, ref _route) ||
                     stock.Get(ItemId.ItemFuel) - _balance.CoreSupplyReserve < RouteFuel(in ContractConvoy))
                     continue;
@@ -894,7 +897,7 @@ namespace Unruled.Core.AI
             return wanted > 0;
         }
 
-        // With no listing of its own open, a batch of the first item in surplus by a whole batch that it doesn't feed, under
+        // With no listing of its own open, a batch of the first item in surplus by a whole batch (see Keep), under
         // the reference price.
         private bool FindSurplusToList(int playerId, EntityId hq, ref Stockpile stock, int feeds, long tick, out ItemId item,
             out long price, out long wanted)
@@ -912,13 +915,13 @@ namespace Unruled.Core.AI
             return true;
         }
 
-        // The first item in surplus by a whole batch that it doesn't feed.
+        // The first item in surplus by a whole batch.
         private bool FindSurplus(int playerId, EntityId hq, ref Stockpile stock, int feeds, out ItemId item)
         {
             for (int slot = 0; slot < ItemIds.Count; slot++)
             {
                 item = ItemIds.FromSlot(slot);
-                if (!Feeds(feeds, item) && Surplus(playerId, hq, ref stock, item, _balance.SellAbove) >= _balance.SellBatch)
+                if (Surplus(playerId, hq, ref stock, item, Keep(feeds, item, _balance.SellAbove)) >= _balance.SellBatch)
                     return true;
             }
             item = ItemId.None;

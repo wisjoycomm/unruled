@@ -98,3 +98,5 @@
 - 2026-10-17 - Claude - Convoy routes set out with the fuel to come home by the toll-free bypass, so a convoy no longer strands at its outpost when the owner can't pay the tolls by then; test. Soak: p5's convoy sat at the tungsten site from day 3 with 458 fuel.
 - 2026-10-17 - Claude - AI idle-cash feedstock buying also runs in a stress test that has nothing left to bid for; test.
 - 2026-10-17 - Claude - THE SYSTEM also sells: SellToSystem goods go into its stock (on the WTO fee pool, added on load for old saves) and BuyFromSystem resells them at 130% into the fee pool; AI buys stress-test shortfalls and idle-cash feedstock from it; tests.
+
+2026-10-17 - Claude - AI sells a raw its refineries take in once it holds a batch above the drill stock cap, so complementary hoards (p4 copper, p5 silicon in the soak) reach the market; test.

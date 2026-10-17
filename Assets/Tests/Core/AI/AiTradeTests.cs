@@ -101,6 +101,23 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void SellsARawItsRefineriesTakeIn_OnlyAboveTheStockItsDrillsStopAt()
+        {
+            var ai = _sim.Balance.Ai;
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawBiomass, ai.RawStockCap + ai.SellBatch - 1);
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemRations });
+            Assert.IsFalse(Find(AiAction.SellSurplus).HasValue, "short of a whole batch above the cap");
+
+            _sim.Stockpiles.Get(_home).Add(ItemId.RawBiomass, 1);
+            Assert.IsTrue(Find(AiAction.SellSurplus).HasValue, "a hoard beyond what its drills keep is traded");
+            DelayedPlayerCommand sell = default;
+            for (int i = 0; i < _sim.Clock.PendingCommandCount; i++)
+                if (_sim.Clock.PendingAt(i).CommandType == CommandType.PlaceSellOrder)
+                    sell = _sim.Clock.PendingAt(i);
+            Assert.AreEqual((int)ItemId.RawBiomass, sell.ParamA);
+        }
+
+        [Test]
         public void SellsIntoARivalBid_AtItsPrice_OnlyWhenAFuelledConvoyCanReachIt()
         {
             var ai = _sim.Balance.Ai;
