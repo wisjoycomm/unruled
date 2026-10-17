@@ -69,3 +69,4 @@
 - 2026-10-16 - Claude - Phone layout: CompactLayout switches below 1100 px to a full-width board with a STOCK / BOARD / FLEET · OPS bottom bar; the top bar wraps.
 - 2026-10-16 - Claude - AI Citadel assault: besieging presets send Tier 3+ fleets at an outgunned or unguarded Citadel and hold it while bombarding; tests.
 - 2026-10-16 - Claude - AI WTO trading: AI lists surplus, fills reachable rival bids, bids for stress-test shortfalls and cancels stale orders; tests.
+- 2026-10-17 - Claude - World gen: home systems hold every raw item except tungsten/uranium and the contested cluster holds all of them; test over 4 seeds.

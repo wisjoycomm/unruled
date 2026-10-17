@@ -24,9 +24,11 @@ namespace Unruled.Core.Simulation
     /// <summary>
     /// World setup for a new game (GDD §1, §2.1 A). Every participant gets a home system (cluster = participant
     /// index) from a seed drawn from the world seed. Each site gets a stockpile and deposits of the raw items whose
-    /// preferred ESI window holds its ESI; home systems hold no tungsten or uranium. The core base is the home's
+    /// preferred ESI window holds its ESI; home systems hold no tungsten or uranium but every other raw item (one missing
+    /// after the roll goes to the non-core site nearest its ESI window). The core base is the home's
     /// highest-ESI site: it is owned, rigged, given refineries and stock, and a fleet starts there. Rivals are AI-run.
-    /// Then the neutral contested cluster (cluster = participant count) is generated with every raw item, and each home
+    /// Then the neutral contested cluster (cluster = participant count) is generated with every raw item (filled in the
+    /// same way), and each home
     /// gets a dormant jump gate from its outermost orbit to its own contested orbit (GDD §1.2). THE SYSTEM holds the
     /// contested cluster's outermost orbit, which no gate lands on, as its Citadel.
     /// Runs once, before the clock starts.
@@ -70,6 +72,7 @@ namespace Unruled.Core.Simulation
                     sim.Stockpiles.Add(site, default);
                 AddDeposits(sim, ref siteRng, site, sim.Sites.At(i).BaseEsiMilli, home: false);
             }
+            AddMissingRaws(sim, firstSite, contested, default, home: false);
 
             int orbits = sim.Sites.Count - firstSite;
             for (int p = 0; p < participants; p++)
@@ -132,6 +135,7 @@ namespace Unruled.Core.Simulation
                 }
             }
             if (bestEsi < 0) throw new InvalidOperationException($"System {clusterId} generated no sites.");
+            AddMissingRaws(sim, firstSite, clusterId, coreBase, home: true);
 
             sim.Sites.Get(coreBase).OwnerPlayerId = playerId;
             var hq = sim.CreatePlayer(playerId, coreBase);
@@ -180,6 +184,57 @@ namespace Unruled.Core.Simulation
             for (int i = 0; i < rules.FleetStockCount; i++)
                 hold.Add(rules.FleetStock(i).Item, rules.FleetStock(i).Quantity);
             return new NewGame(hq, coreBase, fleet);
+        }
+
+        // GDD §1.2: a home system lacks only the raw items excluded at home; the contested cluster lacks none. Each raw item
+        // with an ESI window that the roll left out gets a deposit on the site nearest that window (lowest orbit on a
+        // tie), never the core base unless it is the only site.
+        private static void AddMissingRaws(SimulationWorld sim, int firstSite, int clusterId, EntityId coreBase, bool home)
+        {
+            var rules = sim.Balance.NewGame;
+            for (int slot = 0; slot < ItemIds.RawCount; slot++)
+            {
+                var raw = ItemIds.FromSlot(slot);
+                ref readonly var item = ref sim.Balance.Recipes.GetItem(raw);
+                if ((home && rules.IsExcludedAtHome(raw)) || !item.HasPreferredEsi || HasDeposit(sim, clusterId, raw))
+                    continue;
+                EntityId best = default;
+                int bestDistance = int.MaxValue;
+                for (int i = firstSite; i < sim.Sites.Count; i++)
+                {
+                    var site = sim.Sites.EntityAt(i);
+                    if (site == coreBase && sim.Sites.Count - firstSite > 1)
+                        continue;
+                    int esi = sim.Sites.At(i).BaseEsiMilli;
+                    int distance = esi < item.PreferredEsiMinMilli ? item.PreferredEsiMinMilli - esi
+                        : esi > item.PreferredEsiMaxMilli ? esi - item.PreferredEsiMaxMilli : 0;
+                    if (distance < bestDistance ||
+                        (distance == bestDistance && sim.Sites.At(i).OrbitIndex < sim.Sites.Get(best).OrbitIndex))
+                    {
+                        best = site;
+                        bestDistance = distance;
+                    }
+                }
+                sim.Deposits.Add(sim.World.Create(), new MineralDeposit
+                {
+                    Site = best,
+                    RawItem = raw,
+                    SurfaceReserve = rules.SurfaceReserve,
+                    DeepCrustReserve = rules.DeepCrustReserve,
+                    CoreFractureReserve = rules.CoreFractureReserve
+                });
+            }
+        }
+
+        private static bool HasDeposit(SimulationWorld sim, int clusterId, ItemId raw)
+        {
+            for (int d = 0; d < sim.Deposits.Count; d++)
+            {
+                ref var deposit = ref sim.Deposits.At(d);
+                if (deposit.RawItem == raw && sim.Sites.Get(deposit.Site).ClusterId == clusterId)
+                    return true;
+            }
+            return false;
         }
 
         /// <summary>

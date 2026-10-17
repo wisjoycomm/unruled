@@ -59,6 +59,35 @@ namespace Unruled.Tests.Core.Simulation
         }
 
         [Test]
+        public void Create_HomesHoldEveryOtherRawItem_TheContestedClusterHoldsAll()
+        {
+            foreach (ulong seed in new ulong[] { 1, 1851, 2468, 3702 })
+                AssertEveryClusterHoldsItsRawItems(seed);
+        }
+
+        private static void AssertEveryClusterHoldsItsRawItems(ulong seed)
+        {
+            var sim = NewWorld(seed);
+            var rules = sim.Balance.NewGame;
+            NewGameSetup.Create(sim, 1);
+            int clusters = 2 + rules.RivalCount;
+            for (int cluster = 0; cluster < clusters; cluster++)
+            {
+                bool home = cluster < clusters - 1;
+                for (int slot = 0; slot < ItemIds.RawCount; slot++)
+                {
+                    var raw = ItemIds.FromSlot(slot);
+                    if (!sim.Balance.Recipes.GetItem(raw).HasPreferredEsi || (home && rules.IsExcludedAtHome(raw)))
+                        continue;
+                    bool found = false;
+                    for (int d = 0; d < sim.Deposits.Count && !found; d++)
+                        found = sim.Deposits.At(d).RawItem == raw && sim.Sites.Get(sim.Deposits.At(d).Site).ClusterId == cluster;
+                    Assert.IsTrue(found, $"seed {seed}: cluster {cluster} lacks {raw}");
+                }
+            }
+        }
+
+        [Test]
         public void Create_CoreBaseMinesItsLifeSupport_OtherDepositsFollowEsi()
         {
             var sim = NewWorld();
