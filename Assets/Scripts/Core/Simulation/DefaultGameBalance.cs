@@ -104,8 +104,9 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §1 and §2.1 A: own home system with no tungsten or uranium, deposits by preferred ESI window.
-        /// PROVISIONAL: 4 AI rivals (archetypes 1..4), 2 deposits per site of 60,000 / 120,000 / 30,000 ore, a core base
-        /// that mines its own life support (water 4 rigs, nitrogen 3, methane 2, biomass 2: the coolant and fuel
+        /// PROVISIONAL: 4 AI rivals (archetypes 1..4), 2 deposits per site of 60,000 / 120,000 / 30,000 ore (5x at a core
+        /// base, since 2026-10-17: its water ran dry in 5-20 days and with it the fuel), a core base that mines its own life
+        /// support (water 4 rigs, nitrogen 3, methane 2, biomass 2: the coolant and fuel
         /// refineries, which run first, outrun the drills' burn at both depths, and rations cover fleet upkeep), the
         /// core-base refineries and stock below, and a Tier-1 fleet of 10 line, 2 EW, 2 supply.
         /// </summary>
@@ -115,6 +116,7 @@ namespace Unruled.Core.Simulation
             surfaceReserve: 60_000,
             deepCrustReserve: 120_000,
             coreFractureReserve: 30_000,
+            coreBaseReserveMultiplier: 5,
             coreBaseDeposits: new[]
             {
                 new ItemStack(ItemId.RawWater, 4), new ItemStack(ItemId.RawNitrogen, 3), new ItemStack(ItemId.RawMethane, 2),

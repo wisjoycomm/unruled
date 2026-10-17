@@ -83,3 +83,4 @@
 - 2026-10-17 - Claude - Loans (L4): BASE tab SYSTEM LOAN group (debt, due date, interest-free/overdue state, Borrow/Repay 1,000); in-flight strip names Borrow/Repay.
 - 2026-10-17 - Claude - AI: a mined-out deposit no longer counts as mining its ore (it settles a site with that ore again); never sells raws its core refineries or next stress test take in; tests. Soak: core water ran out in 5-20 days, which starved fuel.
 - 2026-10-17 - Claude - Refinery upkeep cut tenfold (milli-cent rate, 0.5 cent per cycle, charged in whole cents as they add up); tests.
+- 2026-10-17 - Claude - Core-base life-support deposits hold 5x the reserves (CoreBaseReserveMultiplier); tests.

@@ -149,6 +149,9 @@ namespace Unruled.Core.Simulation
                     if (deposit.Site != coreBase || deposit.RawItem != spec.Item)
                         continue;
                     deposit.RigCount = spec.Quantity;
+                    deposit.SurfaceReserve = rules.SurfaceReserve * rules.CoreBaseReserveMultiplier;
+                    deposit.DeepCrustReserve = rules.DeepCrustReserve * rules.CoreBaseReserveMultiplier;
+                    deposit.CoreFractureReserve = rules.CoreFractureReserve * rules.CoreBaseReserveMultiplier;
                     found = true;
                 }
                 if (!found)
@@ -156,9 +159,9 @@ namespace Unruled.Core.Simulation
                     {
                         Site = coreBase,
                         RawItem = spec.Item,
-                        SurfaceReserve = rules.SurfaceReserve,
-                        DeepCrustReserve = rules.DeepCrustReserve,
-                        CoreFractureReserve = rules.CoreFractureReserve,
+                        SurfaceReserve = rules.SurfaceReserve * rules.CoreBaseReserveMultiplier,
+                        DeepCrustReserve = rules.DeepCrustReserve * rules.CoreBaseReserveMultiplier,
+                        CoreFractureReserve = rules.CoreFractureReserve * rules.CoreBaseReserveMultiplier,
                         RigCount = spec.Quantity
                     });
             }

@@ -43,6 +43,7 @@ namespace Unruled.Tests.Core.Simulation
         {
             var sim = NewWorld();
             NewGameSetup.Create(sim, 1);
+            var rules = sim.Balance.NewGame;
 
             Assert.Greater(sim.Deposits.Count, 0);
             for (int i = 0; i < sim.Deposits.Count; i++)
@@ -54,7 +55,8 @@ namespace Unruled.Tests.Core.Simulation
                     Assert.AreNotEqual(ItemId.RawUranium, deposit.RawItem);
                 }
                 Assert.IsTrue(ItemIds.IsRaw(deposit.RawItem));
-                Assert.AreEqual(sim.Balance.NewGame.SurfaceReserve, deposit.SurfaceReserve);
+                bool lifeSupport = IsAnyCoreBase(sim, deposit.Site) && IsCoreBaseDeposit(rules, deposit.RawItem);
+                Assert.AreEqual(rules.SurfaceReserve * (lifeSupport ? rules.CoreBaseReserveMultiplier : 1), deposit.SurfaceReserve);
             }
         }
 
@@ -89,7 +91,7 @@ namespace Unruled.Tests.Core.Simulation
         }
 
         [Test]
-        public void Create_CoreBaseMinesItsLifeSupport_OtherDepositsFollowEsi()
+        public void Create_CoreBaseMinesItsLifeSupport_FromDeepReserves_OtherDepositsFollowEsi()
         {
             var sim = NewWorld();
             var rules = sim.Balance.NewGame;
@@ -97,11 +99,20 @@ namespace Unruled.Tests.Core.Simulation
             int coreEsi = sim.Sites.Get(game.CoreBase).BaseEsiMilli;
             for (int d = 0; d < rules.CoreBaseDepositCount; d++)
             {
-                int rigs = -1;
+                MineralDeposit found = default;
+                int count = 0;
                 for (int i = 0; i < sim.Deposits.Count; i++)
                     if (sim.Deposits.At(i).Site == game.CoreBase && sim.Deposits.At(i).RawItem == rules.CoreBaseDeposit(d).Item)
-                        rigs = sim.Deposits.At(i).RigCount;
-                Assert.AreEqual(rules.CoreBaseDeposit(d).Quantity, rigs, rules.CoreBaseDeposit(d).Item.ToString());
+                    {
+                        found = sim.Deposits.At(i);
+                        count++;
+                    }
+                string raw = rules.CoreBaseDeposit(d).Item.ToString();
+                Assert.AreEqual(1, count, raw);
+                Assert.AreEqual(rules.CoreBaseDeposit(d).Quantity, found.RigCount, raw);
+                Assert.AreEqual(rules.SurfaceReserve * rules.CoreBaseReserveMultiplier, found.SurfaceReserve, raw);
+                Assert.AreEqual(rules.DeepCrustReserve * rules.CoreBaseReserveMultiplier, found.DeepCrustReserve, raw);
+                Assert.AreEqual(rules.CoreFractureReserve * rules.CoreBaseReserveMultiplier, found.CoreFractureReserve, raw);
             }
             for (int i = 0; i < sim.Deposits.Count; i++)
             {
@@ -113,6 +124,14 @@ namespace Unruled.Tests.Core.Simulation
                     $"{deposit.RawItem} window {item.PreferredEsiMinMilli}..{item.PreferredEsiMaxMilli} vs ESI {coreEsi}");
                 Assert.AreEqual(0, deposit.RigCount);
             }
+        }
+
+        private static bool IsAnyCoreBase(SimulationWorld sim, Unruled.Core.Ecs.EntityId site)
+        {
+            for (int p = 0; p < sim.Players.Count; p++)
+                if (sim.Players.At(p).CoreBase == site)
+                    return true;
+            return false;
         }
 
         private static bool IsCoreBaseDeposit(NewGameBalance rules, ItemId raw)
@@ -187,7 +206,8 @@ namespace Unruled.Tests.Core.Simulation
                 if (deposit.Site != game.CoreBase || deposit.RigCount == 0)
                     continue;
                 rigged++;
-                Assert.Less(deposit.SurfaceReserve, sim.Balance.NewGame.SurfaceReserve, $"{deposit.RawItem} was mined");
+                Assert.Less(deposit.SurfaceReserve, sim.Balance.NewGame.SurfaceReserve * sim.Balance.NewGame.CoreBaseReserveMultiplier,
+                    $"{deposit.RawItem} was mined");
             }
             Assert.Greater(rigged, 0);
         }

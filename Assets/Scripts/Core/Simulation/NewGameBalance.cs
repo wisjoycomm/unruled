@@ -29,6 +29,7 @@ namespace Unruled.Core.Simulation
         public readonly int SurfaceReserve;
         public readonly int DeepCrustReserve;
         public readonly int CoreFractureReserve;
+        public readonly int CoreBaseReserveMultiplier; // a core base's own deposits hold this many times the reserves
         public readonly byte FleetTechTier;
         public readonly int FleetLineShips;
         public readonly int FleetEwShips;
@@ -42,6 +43,7 @@ namespace Unruled.Core.Simulation
 
         public NewGameBalance(
             int rivalCount, int depositsPerSite, int surfaceReserve, int deepCrustReserve, int coreFractureReserve,
+            int coreBaseReserveMultiplier,
             ItemStack[] coreBaseDeposits, byte fleetTechTier, int fleetLineShips, int fleetEwShips, int fleetSupplyTenders,
             int fleetCargoConvoys, ItemId[] homeExcludedRaws, ItemId[] startingRefineries, ItemStack[] coreBaseStock,
             ItemStack[] fleetStock)
@@ -50,6 +52,7 @@ namespace Unruled.Core.Simulation
             if (depositsPerSite < 1) throw new ArgumentOutOfRangeException(nameof(depositsPerSite));
             if (surfaceReserve < 0 || deepCrustReserve < 0 || coreFractureReserve < 0)
                 throw new ArgumentOutOfRangeException(nameof(surfaceReserve), "Reserves cannot be negative.");
+            if (coreBaseReserveMultiplier < 1) throw new ArgumentOutOfRangeException(nameof(coreBaseReserveMultiplier));
             if (coreBaseDeposits == null) throw new ArgumentNullException(nameof(coreBaseDeposits));
             for (int i = 0; i < coreBaseDeposits.Length; i++)
                 if (!ItemIds.IsRaw(coreBaseDeposits[i].Item) || coreBaseDeposits[i].Quantity < 0)
@@ -70,6 +73,7 @@ namespace Unruled.Core.Simulation
             SurfaceReserve = surfaceReserve;
             DeepCrustReserve = deepCrustReserve;
             CoreFractureReserve = coreFractureReserve;
+            CoreBaseReserveMultiplier = coreBaseReserveMultiplier;
             FleetTechTier = fleetTechTier;
             FleetLineShips = fleetLineShips;
             FleetEwShips = fleetEwShips;
