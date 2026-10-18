@@ -27,7 +27,7 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §1: an alliance that brings down the System Citadel forms The Directorate; Tier-5 nuclear ships are the
-        /// weapon for it (tab 02). PROVISIONAL: a 100,000 shield checked every 60 ticks; a line ship bombards 1/2/4/8/40
+        /// weapon for it (tab 02). A 100,000 shield checked every 60 ticks; a line ship bombards 1/2/4/8/40
         /// by tier for 1 ammo; 50 regenerates per quiet check; the garrison (30 line + 10 EW) forms at Tier 3, Tier 4
         /// below 75% and Tier 5 below 40%, and re-forms an hour after it is destroyed; bombarding within the last hour
         /// before the fall earns a Directorate seat.
@@ -38,28 +38,27 @@ namespace Unruled.Core.Simulation
             garrisonAmmo: 3_000, garrisonBatteries: 500, garrisonRespawnTicks: 3_600, directorateWindowTicks: 3_600);
 
         /// <summary>
-        /// GDD §1: CargoConvoys feed remote mines. PROVISIONAL: 250 of each item per convoy ship, checked every 10 ticks;
+        /// GDD §1: CargoConvoys feed remote mines. 250 of each item per convoy ship, checked every 10 ticks;
         /// a route fleet keeps 3 upkeep intervals of its own oxygen and rations, and leaves 500 of each supply at its hub.
         /// </summary>
         public static ConvoyBalance CreateConvoyBalance() =>
             new ConvoyBalance(capacityPerConvoy: 250, checkIntervalTicks: 10, upkeepReserveIntervals: 3, hubSupplyReserve: 500);
 
         /// <summary>
-        /// GDD §1.2: Tier 2 plus an energy charge opens the home gate. PROVISIONAL: 50 batteries + 50 fuel from the core
+        /// GDD §1.2: Tier 2 plus an energy charge opens the home gate: 50 batteries + 50 fuel from the core
         /// base; the gate lane is 400 map units long.
         /// </summary>
         public static JumpGateBalance CreateJumpGateBalance() => new JumpGateBalance(
             laneLength: 400,
             openCost: new[] { new ItemStack(ItemId.ItemBattery, 50), new ItemStack(ItemId.ItemFuel, 50) });
 
-        /// <summary>PROVISIONAL: an outpost takes 10 steel + 5 batteries from the claiming fleet's hold.</summary>
+        /// <summary>An outpost takes 10 steel + 5 batteries from the claiming fleet's hold.</summary>
         public static SiteControlBalance CreateSiteControlBalance() => new SiteControlBalance(
             new[] { new ItemStack(ItemId.ItemSteel, 10), new ItemStack(ItemId.ItemBattery, 5) });
 
         /// <summary>
         /// Tab 03 Build_And_Repair_Items: tier 1 steel; 2 steel + battery; 3 alloy + ammo; 4 alloy + microchip; 5 nuclear
-        /// core + alloy. PROVISIONAL: the quantities per ship, 30/45/60/90/120 ticks per ship, retrofit at 50% of the
-        /// new tier's cost, at most 50 ships per order.
+        /// core + alloy. 30/45/60/90/120 ticks per ship, retrofit at 50% of the new tier's cost, at most 50 ships per order.
         /// </summary>
         public static ShipyardBalance CreateShipyardBalance() => new ShipyardBalance(
             maxShipsPerOrder: 50,
@@ -76,10 +75,10 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §2.3: P_base tier 2/3/4/5 = 60/45/30/20%, +18% per failed test; gates from GDD §1.2 / §2.1 B / tab 02:
-        /// laser comms and core-fracture mining at Tier 4, terraforming at Tier 5, the home jump gate at Tier 2 (§1.2); stress-test items follow tab 03's
-        /// Build_And_Repair_Items per tier. PROVISIONAL: 1,000 milli of telemetry at 1 milli per storm level per tick
-        /// (about 17 min in a level-1 storm), 5 microchips aboard to measure, 10 of each test item, retooling
-        /// 1/2/4/8 h for tiers 2..5.
+        /// laser comms (Signals) and core-fracture mining (Industry) at Tier 4, terraforming (Industry) at Tier 5, the home
+        /// jump gate (Logistics) at Tier 2 (§1.2); stress-test items follow tab 03's Build_And_Repair_Items per tier.
+        /// 1,000 milli of telemetry at 1 milli per storm level per tick (about 17 min in a level-1 storm), 5 microchips
+        /// aboard to measure, 10 of each test item, retooling 1/2/4/8 h for tiers 2..5.
         /// </summary>
         public static ResearchBalance CreateResearchBalance() => new ResearchBalance(
             telemetryTargetMilli: 1_000,
@@ -104,11 +103,10 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §1 and §2.1 A: own home system with no tungsten or uranium, deposits by preferred ESI window.
-        /// PROVISIONAL: 4 AI rivals (archetypes 1..4), 2 deposits per site of 60,000 / 120,000 / 30,000 ore (5x at a core
-        /// base, since 2026-10-17: its water ran dry in 5-20 days and with it the fuel), a core base that mines its own life
-        /// support (water 4 rigs, nitrogen 3, methane 2, biomass 2: the coolant and fuel
-        /// refineries, which run first, outrun the drills' burn at both depths, and rations cover fleet upkeep), the
-        /// core-base refineries and stock below, and a Tier-1 fleet of 10 line, 2 EW, 2 supply.
+        /// 4 AI rivals (archetypes 1..4), 2 deposits per site of 60,000 / 120,000 / 30,000 ore (5x at a core
+        /// base), a core base that mines its own life support (water 4 rigs, nitrogen 3, methane 2, biomass 2: the coolant
+        /// and fuel refineries, which run first, outrun the drills' burn at both depths, and rations cover fleet upkeep),
+        /// the core-base refineries and stock below, and a Tier-1 fleet of 10 line, 2 EW, 2 supply.
         /// </summary>
         public static NewGameBalance CreateNewGameBalance() => new NewGameBalance(
             rivalCount: 4,
@@ -149,7 +147,7 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,
         /// barren husk -0.20 ESI, core fracture 4x (speed 100% per GDD §2.1 B); drills take 180 ticks to retract (§2.1 B).
-        /// PROVISIONAL: 60-tick cycle, 30 ore and 1 fuel + 1 coolant per rig per cycle; a rig costs 10 steel + 5 coolant,
+        /// 60-tick cycle, 30 ore and 1 fuel + 1 coolant per rig per cycle; a rig costs 10 steel + 5 coolant,
         /// at most 10 rigs per deposit.
         /// </summary>
         public static MiningBalance CreateMiningBalance() => new MiningBalance(
@@ -168,7 +166,7 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §2.4 B and data sheet tab 04: 2 batteries to start, RWR at 15 ticks, reveal after 60 ticks (120 under
-        /// ECM), 2 batteries to jam. PROVISIONAL: a reveal lasts 60 ticks.
+        /// ECM), 2 batteries to jam; a reveal lasts 60 ticks.
         /// </summary>
         public static RadarBalance CreateRadarBalance() => new RadarBalance(
             startupBatteries: 2,
@@ -180,7 +178,7 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// Data sheet tab 03: upkeep per ship each hour, combat burn multipliers, 80% mothball discount, warm-up 60–180
-        /// ticks, IAEA reveal for Tier 5. PROVISIONAL: base speed 5 map units per tick and 1 fuel per ship per 100 units
+        /// ticks, IAEA reveal for Tier 5. Base speed 5 map units per tick and 1 fuel per ship per 100 units
         /// (scaled by the lane tier's speed and fuel multiplier).
         /// </summary>
         public static FleetBalance CreateFleetBalance() => new FleetBalance(
@@ -214,7 +212,7 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// GDD §2.4 C and data sheet tab 04: 5-tick salvo, ROF 50/100/150%, defender +35% PD at its own site, -20% PD
         /// per extra lane (floor 20%, at most 3 extra), guns lock above 90 °C until below 75 °C, cook-off 5% hull.
-        /// PROVISIONAL: Alpha 10 and Beta 20 (a 2:1 line:EW fleet exactly cancels an equal one), hull 100/60/80/50 for
+        /// Alpha 10 and Beta 20 (a 2:1 line:EW fleet exactly cancels an equal one), hull 100/60/80/50 for
         /// line/EW/supply/cargo, 0.1 ammo per line ship and 0.1 battery per EW ship per salvo, 0.2 coolant per ship per
         /// venting salvo, tenders hand over 2 of each per salvo up to 10 in a hold, ambient 20 °C, +4 °C per salvo at
         /// 100% ROF (x ROF²), -4 °C passive, -15 °C venting, 0.02 fuel per acting ship per salvo (x the tab-03 fuel burn).
@@ -251,42 +249,39 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// GDD §2.4 A, §4.2 and data sheet tab 04: teardown 900–1800 ticks with the old base at 50% defence bonus,
         /// convoy 1800–3600 ticks (latency x2, paralysis 15 min if destroyed), bootstrap 1800 ticks, cooldown 48 h.
-        /// PROVISIONAL: costs 20 alloy + 50 fuel + 20 battery (teardown) and 20 coolant + 20 battery (bootstrap), all
+        /// Costs 20 alloy + 50 fuel + 20 battery (teardown) and 20 coolant + 20 battery (bootstrap), all
         /// paid from the old core base when ordered; durations rolled uniformly inside each range.
         /// </summary>
         /// <summary>
-        /// Players start with no credits, only goods, and borrow from THE SYSTEM (user decision 2026-10-17). PROVISIONAL:
-        /// a 10,000-credit limit, no interest in the first 30 days, then 1% of the principal a day, due 30 days after
-        /// interest starts on it.
+        /// Players start with no credits, only goods, and borrow from THE SYSTEM: a 10,000-credit limit, no interest in
+        /// the first 30 days, then 1% of the principal a day, due 30 days after interest starts on it.
         /// </summary>
         public static LedgerBalance CreateLedgerBalance() => new LedgerBalance(
             startingCents: 0, creditLimitCents: 10_000 * Wallet.CentsPerCredit, interestFreeTicks: 30 * SimTick.TicksPerDay,
             dailyInterestBasisPoints: 100, loanTermTicks: 30 * SimTick.TicksPerDay);
 
-        /// <summary>PROVISIONAL: the STA toll is 0.2 credits per ship per 100 units of highway (tab 04 names no amount).</summary>
+        /// <summary>The STA toll is 0.2 credits per ship per 100 units of highway.</summary>
         public static StaBalance CreateStaBalance() => new StaBalance(tollCentsPerShipPer100Units: 20);
 
         /// <summary>GDD §2.2 B: VWAP over the last 100 ticks, price band 0.8x-1.2x.</summary>
         public static WtoBalance CreateWtoBalance() => new WtoBalance(vwapWindowTicks: 100, priceBandPercent: 20, systemBidPercent: 70,
             systemAskPercent: 130);
 
-        /// <summary>PROVISIONAL: a contract convoy has twice its planned travel time plus 10 minutes to deliver.</summary>
+        /// <summary>A contract convoy has twice its planned travel time plus 10 minutes to deliver.</summary>
         public static WtoContractBalance CreateWtoContractBalance() =>
             new WtoContractBalance(deadlineTravelPercent: 200, deadlineGraceTicks: 10 * 60);
 
         /// <summary>
-        /// PROVISIONAL Call-to-Arms: offences count for a day; the first bars the WTO for an hour, the third brings a
+        /// Call-to-Arms: offences count for a day; the first bars the WTO for an hour, the third brings a
         /// WTO defence fleet of 20 Tier-1 line ships to the offender's core base for an hour. Bulletins last an hour.
         /// </summary>
         /// <summary>
         /// Tab 06 presets (weights and ratio in milli, vent temperature in milli-degrees). Think every 10 ticks (GDD §2.5).
-        /// PROVISIONAL: 100% battery = 10 scan startups at the core base above 1,000 kept for fleets, and scans start only
-        /// in the first 10 minutes of each hour (nonstop scans of every adjacent bypass lane burned ~30k batteries a day,
-        /// the copper of whole outposts, and left none for EW ships, claims or Tier-4 upkeep); resupply below 5 ammo per line ship; at the
-        /// core base a fleet loads 6 upkeep intervals of oxygen and rations, up to 20 ammo per line ship, 5 batteries per EW ship (their point defence burns them in a fight, so a siege
-        /// sets out with them on top of the claim cost) and 1,500 fuel (or a round trip to its next settle target); 2 rigs per bare deposit of a claimed site;
-        /// 2 cargo convoys running batches of 500 per outpost (their full capacity; 100 starved outposts of fuel and cores of
-        /// silicon, 2026-10-17); a new refinery once 100 of both its inputs sit at the core base;
+        /// 100% battery = 10 scan startups at the core base above 1,000 kept for fleets, and scans start only
+        /// in the first 10 minutes of each hour; resupply below 5 ammo per line ship; at the
+        /// core base a fleet loads 6 upkeep intervals of oxygen and rations, up to 20 ammo per line ship, 5 batteries per EW ship
+        /// and 1,500 fuel (or a round trip to its next settle target); 2 rigs per bare deposit of a claimed site;
+        /// 2 cargo convoys running batches of 500 per outpost; a new refinery once 100 of both its inputs sit at the core base;
         /// fleets leave 500 fuel and 500 coolant at the core base for its drills; drills pause at 5,000 ore in stock;
         /// besieging presets send Tier 3+ fleets at the Citadel; on the WTO it sells stock above 20 into rivals' bids,
         /// lists 500-unit batches of stock above 3,000 at 5% under the reference price, bids 5% over it (with at most half
@@ -296,8 +291,7 @@ namespace Unruled.Core.Simulation
         /// battle line that can't take the Citadel yet waits mothballed. It borrows from THE SYSTEM up to 2,000 credits in
         /// hand once it holds under 1,000 (kept for tolls, never locked in WTO orders), repays debt from cash above 4,000,
         /// and repays all it can once the debt falls due. A core-base deposit with under 300,000 ore left no longer counts as a
-        /// source, so it settles another before the home one runs dry (a week of a core's water draw; soaks saw it dry by day 20).
-        /// A fleet of 8+ line ships splits for a two-lane attack (PROVISIONAL).
+        /// source, so it settles another before the home one runs dry. A fleet of 8+ line ships splits for a two-lane attack.
         /// </summary>
         public static AiBalance CreateAiBalance() => new AiBalance(
             thinkIntervalTicks: 10, fullBatteryScans: 10, resupplyAmmoPerLineShip: 5, loadAmmoPerLineShip: 20, loadFuel: 1_500,
@@ -322,8 +316,8 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// Data sheet tab 05, one row per bracket. "Current Storm Path" = no lead but sees storms now; the unrated
-        /// bracket sees no forecast. 40% escrow applies to unrated players evading the audit.
-        /// PROVISIONAL: the audit runs once a game day (86,400 ticks).
+        /// bracket sees no forecast. 40% escrow applies to unrated players evading the audit; the audit runs once a game
+        /// day (86,400 ticks).
         /// </summary>
         public static LeaderboardBalance CreateLeaderboardBalance() => new LeaderboardBalance(new[]
         {
@@ -356,9 +350,9 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §2.4 A and data sheet tab 04: 15 ticks at the core base, 35 per hop, 8 per relayed hop, x2 while the
-        /// capital convoy is in transit. PROVISIONAL: an R3+ radio blackout on the target blocks orders (GDD §1.1 says
-        /// R3+ storms "lock communications"; laser comms that pierce them come with Tier 4 research). A relay costs 20
-        /// steel + 10 batteries from its site and burns 1 battery an hour there.
+        /// capital convoy is in transit. An R3+ radio blackout on the target blocks orders (GDD §1.1: R3+ storms lock
+        /// communications; laser comms that pierce them come with Signals Tier 4). A relay costs 20 steel + 10 batteries
+        /// from its site and burns 1 battery an hour there.
         /// </summary>
         public static LatencyBalance CreateLatencyBalance() => new LatencyBalance(
             baseTicks: 15,
@@ -372,8 +366,8 @@ namespace Unruled.Core.Simulation
             relayUpkeepIntervalTicks: 3_600);
 
         /// <summary>
-        /// PROVISIONAL (not in the GDD or data sheet): each system rolls every 10 min with a 25% chance of a new front;
-        /// level odds 40/30/17/10/3% for 1..5, lasting 30 min – 3 h over a 150–500 unit disc.
+        /// Each system rolls every 10 min with a 25% chance of a new front; level odds 40/30/17/10/3% for 1..5,
+        /// lasting 30 min – 3 h over a 150–500 unit disc.
         /// </summary>
         public static NoaaBalance CreateNoaaBalance() => new NoaaBalance(
             rollIntervalTicks: 600,
@@ -387,7 +381,7 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// Data sheet tab 04: highway 100% speed / 1.0x fuel / sheltered / STA toll; bypass 60% / 4.5x / storms up to
         /// G2 / 90% hidden from auto radar; shortcut 90% / 1.5x / storms up to level 4 / tech tier 4+.
-        /// PROVISIONAL: topology chances (bypass 50%, shortcut 25% between orbits 3 apart).
+        /// Topology chances: bypass 50% between orbits 2 apart, shortcut 25% between orbits 3 apart.
         /// </summary>
         public static StarlaneBalance CreateStarlaneBalance() => new StarlaneBalance(
             highway: new StarlaneTierRules(100, 1000, maxStormLevel: 0, minTechTier: 0, autoRadarHiddenPercent: 0, chargesStaToll: true),
@@ -398,10 +392,8 @@ namespace Unruled.Core.Simulation
             shortcutSpan: 3);
 
         /// <summary>
-        /// Data sheet tab 02: irradiated world = S4 radiation for 24–72h and ESI 0.00; terraforming lifts ESI to 0.60;
-        /// a nuclear strike takes 1 core from a Tier 5 fleet (GDD §1.2 stage 4: Tier 5 nuclear ships).
-        /// PROVISIONAL: terraform cost of 100 water + 100 nitrogen + 100 biomass + 1 nuclear core (the sheet names
-        /// the items but not the amounts).
+        /// Data sheet tab 02: irradiated world = S4 radiation for 24–72h and ESI 0.00; terraforming lifts ESI to 0.60
+        /// for 100 water + 100 nitrogen + 100 biomass + 1 nuclear core; a nuclear strike takes 1 core from a Tier 5 fleet.
         /// </summary>
         public static LifecycleBalance CreateLifecycleBalance() => new LifecycleBalance(
             irradiationMinTicks: 86_400,
@@ -417,11 +409,9 @@ namespace Unruled.Core.Simulation
             strikeNuclearCores: 1);
 
         /// <summary>
-        /// GDD §2.2 A: 10-tick cycle, idle at 20% upkeep, brownout from G2.
-        /// PROVISIONAL: base upkeep 0.5 cent per cycle (1.8 credits an hour; cut tenfold on 2026-10-17 so a loan covers a
-        /// month of play) and 1 battery per storm cycle are not in the GDD
-        /// or data sheet; a refinery
-        /// costs 20 steel + 5 batteries, at most 10 per site (one of each refined item); it idles while its site holds 5,000 of its output.
+        /// GDD §2.2 A: 10-tick cycle, idle at 20% upkeep, brownout from G2. Base upkeep 0.5 cent per cycle (1.8 credits
+        /// an hour) and 1 battery per storm cycle; a refinery costs 20 steel + 5 batteries, at most 10 per site (one of
+        /// each refined item); it idles while its site holds 5,000 of its output.
         /// </summary>
         public static RefineryBalance CreateRefineryBalance() => new RefineryBalance(
             cycleTicks: 10,
@@ -440,8 +430,8 @@ namespace Unruled.Core.Simulation
             whoQuarantineTicks: 300);
 
         /// <summary>
-        /// PROVISIONAL: only MinSiteSpacing (120) comes from the GDD; the rest are proposed defaults until the
-        /// data sheet defines them. 8 orbits from r = 300 to ~1560, habitable zone centred on orbit 3.
+        /// 8 orbits from r = 300 to ~1560 (step 180 ± 25, min spacing 120), golden-angle spacing ±10°, habitable zone
+        /// centred on orbit 3 (R_HZ 840, W_HZ 700, ±0.05 atmo noise).
         /// </summary>
         public static UniverseGenBalance CreateUniverseGenBalance() => new UniverseGenBalance(
             sitesPerSystem: 8,
