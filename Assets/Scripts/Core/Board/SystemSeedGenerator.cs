@@ -21,7 +21,7 @@ namespace Unruled.Core.Board
             if (sites == null) throw new ArgumentNullException(nameof(sites));
             if (balance == null) throw new ArgumentNullException(nameof(balance));
 
-            var rng = new SplitMix64(systemSeed);
+            var rng = new ChaCha8(systemSeed);
             int angle = rng.NextInt(0, FixedMath.AngleMask);
             long widthSquared = (long)balance.HabitableWidth * balance.HabitableWidth;
 

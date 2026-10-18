@@ -83,7 +83,8 @@ methods, in this order (rule 4).
 ## Core folders
 
 - **Simulation/**: `SimTick`, `SimClock`, `DelayedPlayerCommand` (target = entity index + generation),
-  `CommandRouter`, `SimulationWorld`. `SplitMix64` is the only RNG; `FixedMath` provides Q16 sin/cos and an exact
+  `CommandRouter`, `SimulationWorld`. `SplitMix64` and `ChaCha8` (RFC 7539 8-round stream generator seeded from
+  `SplitMix64`, used by the system and starlane generators) are the only RNGs; `FixedMath` provides Q16 sin/cos and an exact
   integer sqrt. `GameBalanceConfig` holds every balance object, and `DefaultGameBalance` is the one place sheet
   values are written. `NewGameSetup` + `NewGameBalance` lay out a new game.
 - **Ecs/**: `EntityId`, `World` (create/destroy, owns the stores) and `ComponentStore<T>` (sorted sparse set,
@@ -153,7 +154,8 @@ methods, in this order (rule 4).
   Balance is not saved (it comes from config); the starlane graph is rebuilt on load. A new store or component
   field must be appended to `ComponentFormatters` / `SaveGame`, with `SchemaVersion` bumped. Schema 2 appended the
   `Loan` store; schema 4 appended per-branch tiers and `ActiveBranch` to `TechProgress` (older saves migrate the
-  player's single tier to all four branches).
+  player's single tier to all four branches); schema 5 switched the system and starlane generators to `ChaCha8`
+  (existing saves keep their stored map entities).
   `GameSession` continues `persistentDataPath/unruled.save` at start-up and autosaves every sim hour and on
   pause/quit.
 

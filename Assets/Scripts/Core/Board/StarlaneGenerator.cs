@@ -24,7 +24,7 @@ namespace Unruled.Core.Board
             if (balance == null) throw new ArgumentNullException(nameof(balance));
 
             var orbits = CollectOrbits(sites, clusterId);
-            var rng = new SplitMix64(systemSeed ^ StreamSalt);
+            var rng = new ChaCha8(systemSeed ^ StreamSalt);
 
             for (int i = 0; i + 1 < orbits.Length; i++)
                 AddLane(world, sites, lanes, orbits[i], orbits[i + 1], StarlaneTier.StaHighway);

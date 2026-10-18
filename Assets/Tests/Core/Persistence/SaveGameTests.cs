@@ -220,5 +220,20 @@ namespace Unruled.Tests.Core.Persistence
             Assert.AreEqual(12_345, loaded.Citadels.At(0).Integrity);
             Assert.AreEqual(77, loaded.Citadels.At(0).LastHitTick);
         }
+
+        // Migration: schema 4 saves keep their stored site and starlane entities unchanged across generator upgrades.
+        [Test]
+        public void Schema4Save_KeepsStoredMapSitesAndStarlanes()
+        {
+            var balance = DefaultGameBalance.Create();
+            var sim = new SimulationWorld(balance, worldSeed: 9);
+            NewGameSetup.Create(sim, 1);
+            sim.Sites.At(0).PosX = 42_000;
+
+            var loaded = SaveGame.Load(balance, SaveGame.Write(sim, schemaVersion: 4, storeCount: 38));
+            Assert.AreEqual(sim.Sites.Count, loaded.Sites.Count);
+            Assert.AreEqual(42_000, loaded.Sites.At(0).PosX);
+            Assert.AreEqual(sim.Starlanes.Count, loaded.Starlanes.Count);
+        }
     }
 }
