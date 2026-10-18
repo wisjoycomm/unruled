@@ -17,8 +17,10 @@ namespace Unruled.Tests.Core.AI
         private const int Me = 1;
         private const int Rival = 2;
         private const byte Sentinel = 1; // Stealth_Raid 0, Siege_Conquest 0
+        private const byte Industrialist = 2; // Resupply_Logistics 2.0
         private const byte Raider = 3; // Stealth_Raid 1.9
         private const byte Warlord = 4; // Siege_Conquest 1.8
+        private const byte Technocrat = 5; // Radar_Belt_Scan 1.8
 
         private SimulationWorld _sim;
         private EntityId _home, _target, _hq;
@@ -330,6 +332,41 @@ namespace Unruled.Tests.Core.AI
             for (int i = 0; i < cost.Length; i++)
                 _sim.Stockpiles.Get(_home).Add(cost[i].Item, cost[i].Quantity);
             Assert.IsTrue(Find(Sentinel, AiAction.StressTest).HasValue);
+        }
+
+        [Test]
+        public void StressTests_PicksTheBranchByPreset_TakesLogisticsForAClosedGate_AndBringsMilitaryToTier4()
+        {
+            _sim.JumpGates.Add(_sim.World.Create(), new JumpGate { OwnerPlayerId = Me, HomeSite = _home, FarSite = _target });
+            for (byte t = 2; t <= ResearchBalance.TopTier; t++)
+            {
+                var cost = _sim.Balance.Research.Tier(t).StressTestCost;
+                for (int i = 0; i < cost.Length; i++)
+                    _sim.Stockpiles.Get(_home).Add(cost[i].Item, 1_000);
+            }
+
+            Assert.AreEqual(ResearchBranch.Military, NextBranch(Warlord));
+            Assert.AreEqual(ResearchBranch.Industry, NextBranch(Industrialist));
+            Assert.AreEqual(ResearchBranch.Logistics, NextBranch(Raider));
+            Assert.AreEqual(ResearchBranch.Signals, NextBranch(Technocrat));
+
+            _sim.TechProgress.Get(_hq).IndustryTier = 2;
+            Assert.AreEqual(ResearchBranch.Logistics, NextBranch(Industrialist), "Logistics T2 unlocks the closed jump gate");
+
+            _sim.TechProgress.Get(_hq).LogisticsTier = 2;
+            Assert.AreEqual(ResearchBranch.Industry, NextBranch(Industrialist), "back to the preset's branch up to Tier 4");
+
+            _sim.TechProgress.Get(_hq).IndustryTier = 4;
+            Assert.AreEqual(ResearchBranch.Military, NextBranch(Industrialist), "Military to Tier 4 before a Tier-5 nuclear test");
+        }
+
+        private ResearchBranch NextBranch(byte archetype)
+        {
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.StressTest;
+            Assert.IsTrue(Find(archetype, AiAction.StressTest).HasValue);
+            var branch = (ResearchBranch)Pending(CommandType.StressTest).Value.ParamA;
+            RunPendingOrders();
+            return branch;
         }
 
         [Test]

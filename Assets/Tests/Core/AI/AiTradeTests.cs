@@ -29,7 +29,7 @@ namespace Unruled.Tests.Core.AI
             _sim.Weather.Add(_home, default);
             _hq = _sim.CreatePlayer(Me, _home);
             _sim.Standings.Get(_hq).IsAudited = true;
-            _sim.TechProgress.Get(_hq).Stage = ResearchStage.Retooling; // no stress test to bid for unless a test says so
+            _sim.TechProgress.Get(_hq).Stage = ResearchStage.Complete; // no stress test to bid for unless a test says so
         }
 
         private AiOrder? Find(AiAction action)

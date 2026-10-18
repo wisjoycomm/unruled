@@ -847,14 +847,13 @@ namespace Unruled.Core.AI
             }
             // What the next stress test needs comes first, once the player mines both raw inputs: another refinery may
             // eat a shared input before it piles up at the core.
-            if (_progress.Has(hq) && _progress.Get(hq).Stage <= ResearchStage.StressTest)
+            if (TryNextStressTest(hq, out _, out var stressCost))
             {
-                var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
                 int mined = MinedOres(player.PlayerId);
-                for (int i = 0; i < cost.Length; i++)
+                for (int i = 0; i < stressCost.Length; i++)
                 {
-                    var output = cost[i].Item;
-                    if (ItemIds.IsRaw(output) || HasRefinery(player.CoreBase, output) || stock.Has(output, cost[i].Quantity))
+                    var output = stressCost[i].Item;
+                    if (ItemIds.IsRaw(output) || HasRefinery(player.CoreBase, output) || stock.Has(output, stressCost[i].Quantity))
                         continue;
                     ref readonly var recipe = ref _recipes.GetRecipe(output);
                     int raws = RecipeRaws(output);
@@ -958,9 +957,8 @@ namespace Unruled.Core.AI
 
             if (_issuer.IsInFlight(player.PlayerId, CommandType.PlaceBuyOrder, player.CoreBase))
                 return;
-            if (_progress.Has(hq) && _progress.Get(hq).Stage <= ResearchStage.StressTest)
+            if (TryNextStressTest(hq, out _, out var cost))
             {
-                var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
                 for (int i = 0; i < cost.Length; i++)
                 {
                     int missing = cost[i].Quantity - stock.Get(cost[i].Item);
@@ -1699,10 +1697,8 @@ namespace Unruled.Core.AI
             {
                 if (_players.At(h).PlayerId != player.PlayerId)
                     continue;
-                var hq = _players.EntityAt(h);
-                if (!_progress.Has(hq) || _progress.Get(hq).Stage > ResearchStage.StressTest)
+                if (!TryNextStressTest(_players.EntityAt(h), out _, out var cost))
                     break;
-                var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
                 for (int i = 0; i < cost.Length; i++)
                     mask |= ItemIds.IsRaw(cost[i].Item) ? 1 << ItemIds.ToSlot(cost[i].Item) : RecipeRaws(cost[i].Item);
                 break;
@@ -1775,16 +1771,17 @@ namespace Unruled.Core.AI
             if (!_stockpiles.Has(player.CoreBase))
                 return;
             ref var stock = ref _stockpiles.Get(player.CoreBase);
-            if (_progress.Has(hq) && _progress.Get(hq).Stage == ResearchStage.StressTest && preset.RadarBeltScanWeight > 0)
+            if (_progress.Has(hq) && _progress.Get(hq).Stage == ResearchStage.StressTest && preset.RadarBeltScanWeight > 0 &&
+                TryNextStressTest(hq, out var branch, out var cost))
             {
-                var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
                 bool affordable = true;
                 for (int i = 0; i < cost.Length; i++)
                     affordable &= stock.Has(cost[i].Item, cost[i].Quantity);
                 if (affordable)
                     Issue(new DelayedPlayerCommand
                     {
-                        PlayerId = player.PlayerId, CommandType = CommandType.StressTest, Target = player.CoreBase
+                        PlayerId = player.PlayerId, CommandType = CommandType.StressTest, Target = player.CoreBase,
+                        ParamA = (int)branch
                     }, AiAction.StressTest, Score(preset.RadarBeltScanWeight, Full));
             }
 
@@ -1808,12 +1805,83 @@ namespace Unruled.Core.AI
             }
         }
 
+        // Next stress test for the player's chosen branch and its cost from the core base; false once all branches are complete.
+        private bool TryNextStressTest(EntityId hq, out ResearchBranch branch, out ItemStack[] cost)
+        {
+            branch = ResearchBranch.Military;
+            cost = null;
+            if (!_progress.Has(hq))
+                return false;
+            ref var p = ref _progress.Get(hq);
+            if (p.Stage > ResearchStage.StressTest || p.AllAtOrAbove(ResearchBalance.TopTier))
+                return false;
+            var preset = _controllers.Has(hq) ? _balance.Preset(_controllers.Get(hq).Archetype) : _balance.Preset(1);
+            int playerId = _players.Has(hq) ? _players.Get(hq).PlayerId : 0;
+            branch = PickBranch(playerId, preset, in p);
+            cost = _researchBalance.Tier((byte)(p.Tier(branch) + 1)).StressTestCost;
+            return true;
+        }
+
+        // Branch order by preset and next needed gate: the preset's leading branch first, Logistics to the jump-gate tier
+        // when the player has a closed gate, Military to the Tier-4 ship and shortcut tier before any Tier-5 nuclear-core
+        // test, then the remaining branches.
+        private ResearchBranch PickBranch(int playerId, AiPreset preset, in TechProgress progress)
+        {
+            var lead = LeadingBranch(preset);
+            if (progress.Tier(lead) < _researchBalance.JumpGateTier)
+                return lead;
+            if (progress.LogisticsTier < _researchBalance.JumpGateTier && HasDormantGate(playerId))
+                return ResearchBranch.Logistics;
+            byte preNuclear = _researchBalance.LaserCommsTier;
+            if (progress.Tier(lead) < preNuclear)
+                return lead;
+            if (progress.TechTier < preNuclear)
+                return ResearchBranch.Military;
+            if (progress.TechTier < ResearchBalance.TopTier)
+                return ResearchBranch.Military;
+            if (progress.Tier(lead) < ResearchBalance.TopTier)
+                return lead;
+            for (int b = 0; b < TechProgress.BranchCount; b++)
+            {
+                var branch = (ResearchBranch)b;
+                if (progress.Tier(branch) < ResearchBalance.TopTier)
+                    return branch;
+            }
+            return lead;
+        }
+
+        private static ResearchBranch LeadingBranch(AiPreset preset)
+        {
+            var best = ResearchBranch.Military;
+            int bestWeight = Math.Max(preset.DefenseHoldWeight, preset.SiegeConquestWeight);
+            if (preset.ResupplyLogisticsWeight > bestWeight)
+            {
+                best = ResearchBranch.Industry;
+                bestWeight = preset.ResupplyLogisticsWeight;
+            }
+            if (preset.StealthRaidWeight > bestWeight)
+            {
+                best = ResearchBranch.Logistics;
+                bestWeight = preset.StealthRaidWeight;
+            }
+            if (preset.RadarBeltScanWeight > bestWeight)
+                best = ResearchBranch.Signals;
+            return best;
+        }
+
+        private bool HasDormantGate(int playerId)
+        {
+            for (int g = 0; g < _gates.Count; g++)
+                if (_gates.At(g).OwnerPlayerId == playerId && !_gates.At(g).IsOpen)
+                    return true;
+            return false;
+        }
+
         // What the next stress test needs of an item, kept back from scans, loads, builds and sales until it is passed.
         private int ProgressReserve(EntityId hq, ItemId item)
         {
-            if (!_progress.Has(hq) || _progress.Get(hq).Stage > ResearchStage.StressTest)
+            if (!TryNextStressTest(hq, out _, out var cost))
                 return 0;
-            var cost = _researchBalance.Tier((byte)(_progress.Get(hq).TechTier + 1)).StressTestCost;
             int reserve = 0;
             for (int i = 0; i < cost.Length; i++)
                 if (cost[i].Item == item)
@@ -1833,15 +1901,8 @@ namespace Unruled.Core.AI
             return reserve;
         }
 
-        private bool HasClosedGate(int playerId)
-        {
-            if (!_tech.Unlocks(playerId, TechGate.JumpGate))
-                return false;
-            for (int g = 0; g < _gates.Count; g++)
-                if (_gates.At(g).OwnerPlayerId == playerId && !_gates.At(g).IsOpen)
-                    return true;
-            return false;
-        }
+        private bool HasClosedGate(int playerId) =>
+            _tech.Unlocks(playerId, TechGate.JumpGate) && HasDormantGate(playerId);
 
         // The claim cost, plus extra batteries a siege sets out with for its EW ships' point defence: a fight on the way
         // must not burn the claim's batteries.
