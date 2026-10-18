@@ -357,9 +357,8 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// GDD §2.4 A and data sheet tab 04: 15 ticks at the core base, 35 per hop, 8 per relayed hop, x2 while the
         /// capital convoy is in transit. PROVISIONAL: an R3+ radio blackout on the target blocks orders (GDD §1.1 says
-        /// R3+ storms "lock communications"; laser comms that pierce them come with Tier 4 research). PROVISIONAL (the
-        /// data sheet names "Relay Battery Upkeep" without numbers): a relay costs 20 steel + 10 batteries from its site and
-        /// burns 1 battery an hour there.
+        /// R3+ storms "lock communications"; laser comms that pierce them come with Tier 4 research). A relay costs 20
+        /// steel + 10 batteries from its site and burns 1 battery an hour there.
         /// </summary>
         public static LatencyBalance CreateLatencyBalance() => new LatencyBalance(
             baseTicks: 15,
@@ -399,10 +398,10 @@ namespace Unruled.Core.Simulation
             shortcutSpan: 3);
 
         /// <summary>
-        /// Data sheet tab 02: irradiated world = S4 radiation for 24–72h and ESI 0.00; terraforming lifts ESI to 0.60.
+        /// Data sheet tab 02: irradiated world = S4 radiation for 24–72h and ESI 0.00; terraforming lifts ESI to 0.60;
+        /// a nuclear strike takes 1 core from a Tier 5 fleet (GDD §1.2 stage 4: Tier 5 nuclear ships).
         /// PROVISIONAL: terraform cost of 100 water + 100 nitrogen + 100 biomass + 1 nuclear core (the sheet names
-        /// the items but not the amounts); a nuclear strike takes 1 core from a Tier 5 fleet (GDD §1.2 stage 4: Tier 5
-        /// nuclear ships).
+        /// the items but not the amounts).
         /// </summary>
         public static LifecycleBalance CreateLifecycleBalance() => new LifecycleBalance(
             irradiationMinTicks: 86_400,

@@ -12,8 +12,7 @@ namespace Unruled.Core.Military
     /// that neither the player nor THE SYSTEM owns (its Citadel keeps its own shield rules) and that is not irradiated, carrying
     /// <see cref="LifecycleBalance.StrikeNuclearCores"/> nuclear cores. The cores leave the hold and the site becomes an
     /// irradiated dead world through <see cref="PlanetLifecycleSystem.ApplyNuclearStrike"/> (the IAEA posts the strike).
-    /// Anything else changes nothing. PROVISIONAL: the GDD names the weapon but not who may fire it at what, and a strike
-    /// is not an offence.
+    /// Anything else changes nothing. A strike is not a Call-to-Arms offence.
     /// </summary>
     public sealed class NuclearStrikeSystem : ICommandHandler
     {

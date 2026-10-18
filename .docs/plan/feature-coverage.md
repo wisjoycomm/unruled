@@ -39,12 +39,12 @@ Every feature named in GDD §1, §2, §4 and §5, with the system that implement
 | Home lacks tungsten and uranium | [x] | `SystemSeedGenerator` home rules |
 | Tier 2 opens the gate into the contested cluster | [x] | `JumpGateSystem` (`OpenJumpGate`), `TechGate.JumpGate` |
 | Outer-rim bypass hides 90% of the signal | [x] | `StarlaneTierRules.AutoRadarHiddenPercent` |
-| EW ships / relay stations cut hops from 35 s to 8 s | [x] P | `SignalLatencySolver`; relays built by `RelayStationSystem` (`BuildRelay`) |
+| EW ships / relay stations cut hops from 35 s to 8 s | [x] | `SignalLatencySolver`; relays built by `RelayStationSystem` (`BuildRelay`) |
 | Tier 4 laser comms through R-scale blackouts | [x] | `TechGate.LaserComms` |
 | Tier 4 storm-shortcut lanes (G4/S4) | [x] | `HazardStormShortcut` lanes, `MinTechTier: 4` |
 | Multi-lane flanking campaigns | [x] | `SalvoCombatEngine` (F_flank), `SplitFleet`, AI flanking |
 | Tier 5: uranium → nuclear core; Tier 5 flagship broadcast by the IAEA | [x] | `RecipeDatabase`, `iaeaGlobalReveal` (Tier 5 fleet balance), `FocusedRadarSystem` |
-| Tier 5: nuclear strike cracks a planet open | [x] P | `NuclearStrikeSystem` (`NuclearStrike`) → `PlanetLifecycleSystem.ApplyNuclearStrike` |
+| Tier 5: nuclear strike cracks a planet open | [x] | `NuclearStrikeSystem` (`NuclearStrike`) → `PlanetLifecycleSystem.ApplyNuclearStrike` |
 | Tier 5: all-out assault on the System Citadel | [x] P | `SystemDefenseEvaluator`, Citadel assault and bombardment |
 
 ## §2.1 Universe and depletion
@@ -90,7 +90,7 @@ Every feature named in GDD §1, §2, §4 and §5, with the system that implement
 |---|---|---|
 | Every order lands at `CurrentTick + SignalLatency` | [x] | `CommandIssuer` → `SimClock` |
 | Dijkstra latency (15 + Σ w) × relocation mult; w = 8 relayed, 35 not | [x] | `SignalLatencySolver` |
-| Relay stations | [x] P | `RelayStationSystem`: build cost and hourly battery upkeep |
+| Relay stations | [x] | `RelayStationSystem`: build cost and hourly battery upkeep |
 | 3-phase base relocation, ×2 latency in phase 2 | [x] | `CapitalRelocationSystem` |
 | Radar: 2 batteries at tick 0, RWR at tick 15, ECM jam doubles scan to 120 | [x] | `FocusedRadarSystem` (`ScanBelt`, `EcmJam`, `CancelScan`), fleet `Reverse` |
 | 5-tick salvo cycle; Ψ − Ω damage to the focus class | [x] | `SalvoCombatEngine` |
