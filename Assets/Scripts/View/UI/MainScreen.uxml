@@ -318,9 +318,15 @@
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
                             <ui:Label class="gauge__label" text="RESEARCH" />
-                            <ui:Label name="research-status" class="section-meta" text="TIER 1 · TELEMETRY 0%" />
+                            <ui:Label name="research-status" class="section-meta" text="MIL T1 · TELEMETRY 0%" />
                         </ui:VisualElement>
-                        <ui:VisualElement class="orders">
+                        <ui:VisualElement class="seg">
+                            <ui:Button name="research-branch-0" class="seg__item seg__item--on" text="MIL T1" />
+                            <ui:Button name="research-branch-1" class="seg__item" text="IND T1" />
+                            <ui:Button name="research-branch-2" class="seg__item" text="LOG T1" />
+                            <ui:Button name="research-branch-3" class="seg__item" text="SIG T1" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders ops__orders">
                             <ui:Button name="do-stress-test" class="u-btn" text="Stress test" />
                             <ui:Button name="do-audit" class="u-btn u-btn--secondary" text="Join audit" />
                         </ui:VisualElement>

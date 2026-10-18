@@ -26,8 +26,11 @@ namespace Unruled.View.UI
         private static readonly int[] ShipCounts = { 1, 5, 10 };
         private static readonly int[] Caps = { 0, 1_000, 5_000 };
 
+        private static readonly string[] BranchCodes = { "MIL", "IND", "LOG", "SIG" };
+
         private readonly Button[] _tabs = new Button[3];
         private readonly VisualElement[] _panels = new VisualElement[3];
+        private readonly Button[] _researchBranches = new Button[TechProgress.BranchCount];
         private readonly Button[] _shipClass = new Button[4];
         private readonly Button[] _shipCount = new Button[3];
         private readonly Button[] _caps = new Button[3];
@@ -42,6 +45,7 @@ namespace Unruled.View.UI
         private EntityId _fleet;
         private EntityId _site;
         private int _tab;
+        private int _branchIndex;
         private int _classIndex;
         private int _countIndex;
         private int _itemSlot;
@@ -60,6 +64,17 @@ namespace Unruled.View.UI
             _panels[0] = TopTelemetryHud.Require<VisualElement>(root, "market");
             _panels[1] = TopTelemetryHud.Require<VisualElement>(root, "ops-base");
             _panels[2] = TopTelemetryHud.Require<VisualElement>(root, "ops-site");
+            for (int i = 0; i < _researchBranches.Length; i++)
+            {
+                int index = i;
+                _researchBranches[i] = TopTelemetryHud.Require<Button>(root, "research-branch-" + UiFormat.Number(i));
+                _researchBranches[i].clicked += () =>
+                {
+                    Pick(_researchBranches, ref _branchIndex, index);
+                    ResetCache();
+                    Refresh();
+                };
+            }
             for (int i = 0; i < _shipClass.Length; i++)
             {
                 int index = i;
@@ -114,7 +129,7 @@ namespace Unruled.View.UI
             var prev = TopTelemetryHud.Require<Button>(root, "item-prev");
             var next = TopTelemetryHud.Require<Button>(root, "item-next");
 
-            _stressTest.clicked += () => SendBase(CommandType.StressTest, CoreBase, 0);
+            _stressTest.clicked += () => SendBase(CommandType.StressTest, CoreBase, _branchIndex);
             _audit.clicked += () => SendBase(CommandType.AuditOptIn, CoreBase, IsAudited ? 0 : 1);
             _borrow.clicked += () => SendBase(CommandType.Borrow, CoreBase, LoanStep);
             _repay.clicked += () => SendBase(CommandType.Repay, CoreBase, LoanStep);
@@ -218,13 +233,22 @@ namespace Unruled.View.UI
             if (_sim.TechProgress.Has(_hq))
             {
                 ref var progress = ref _sim.TechProgress.Get(_hq);
+                var picked = (ResearchBranch)_branchIndex;
                 long value = progress.Stage == ResearchStage.FieldTelemetry
                     ? (long)progress.TelemetryMilli * 100 / _sim.Balance.Research.TelemetryTargetMilli
                     : progress.Stage == ResearchStage.Retooling ? (progress.RetoolUntilTick - tick) : progress.FailedTests;
-                long key = ((long)progress.Stage << 56) | ((long)progress.TechTier << 48) | (value & 0xFFFFFFFFFFFF);
+                long tiers = ((long)progress.TechTier << 24) | ((long)progress.IndustryTier << 16) |
+                             ((long)progress.LogisticsTier << 8) | progress.SignalsTier;
+                long key = ((long)progress.Stage << 60) | ((long)_branchIndex << 56) |
+                           ((long)progress.ActiveBranch << 52) | (tiers << 20) | (value & 0xFFFFF);
                 if (key != _cache[0])
-                    UiFormat.Set(_research, ref _cache[0], key, ResearchText(in progress, value));
-                _stressTest.SetEnabled(progress.Stage == ResearchStage.StressTest);
+                {
+                    for (int i = 0; i < _researchBranches.Length; i++)
+                        _researchBranches[i].text = BranchCodes[i] + " T" + UiFormat.Number(progress.Tier((ResearchBranch)i));
+                    UiFormat.Set(_research, ref _cache[0], key, ResearchText(in progress, picked, value));
+                }
+                _stressTest.SetEnabled(progress.Stage == ResearchStage.StressTest &&
+                    progress.Tier(picked) < ResearchBalance.TopTier);
             }
             _audit.text = IsAudited ? "Leave audit" : "Join audit";
             RefreshLoan(tick);
@@ -255,7 +279,7 @@ namespace Unruled.View.UI
             bool auto = IsAuto;
             int archetype = auto ? _sim.AiControllers.Get(_hq).Archetype : 0;
             bool pending = _sim.Issuer.IsInFlight(_playerId, CommandType.SetStandingOrders, CoreBase);
-            long key = archetype | (pending ? 1L << 8 : 0) | (long)_presetIndex << 16;
+            long key = (uint)archetype | (pending ? 1L << 8 : 0) | (long)_presetIndex << 16;
             if (key == _cache[10])
                 return;
             UiFormat.Set(_sop, ref _cache[10], key, (auto ? "AUTO · " + PresetName(archetype) : "OFF · YOU COMMAND") +
@@ -314,24 +338,25 @@ namespace Unruled.View.UI
             return debt + " · DUE IN " + UiFormat.Duration(loan.DueTick - tick) + free;
         }
 
-        private string ResearchText(in TechProgress progress, long value)
+        private string ResearchText(in TechProgress progress, ResearchBranch picked, long value)
         {
-            string tier = "TIER " + UiFormat.Number(progress.TechTier) + " · ";
-            switch (progress.Stage)
+            byte pickedTier = progress.Tier(picked);
+            string head = BranchCodes[(int)picked] + " T" + UiFormat.Number(pickedTier) + " · ";
+            if (progress.Stage == ResearchStage.Retooling)
             {
-                case ResearchStage.FieldTelemetry:
-                    return tier + "TELEMETRY " + UiFormat.Number(value) + "%";
-                case ResearchStage.StressTest:
-                    var cost = _sim.Balance.Research.Tier((byte)(progress.TechTier + 1)).StressTestCost;
-                    string text = tier + "TEST";
-                    for (int i = 0; i < cost.Length; i++)
-                        text += " · " + UiFormat.Number(cost[i].Quantity) + " " + ContractAndMarketUI.ItemCode(cost[i].Item);
-                    return text;
-                case ResearchStage.Retooling:
-                    return tier + "RETOOLING " + UiFormat.Duration(value);
-                default:
-                    return tier + "COMPLETE";
+                var active = progress.ActiveBranch;
+                return BranchCodes[(int)active] + " T" + UiFormat.Number(progress.Tier(active) + 1) +
+                       " · RETOOLING " + UiFormat.Duration(value);
             }
+            if (pickedTier >= ResearchBalance.TopTier || progress.Stage == ResearchStage.Complete)
+                return head + "COMPLETE";
+            if (progress.Stage == ResearchStage.FieldTelemetry)
+                return head + "TELEMETRY " + UiFormat.Number(value) + "%";
+            var cost = _sim.Balance.Research.Tier((byte)(pickedTier + 1)).StressTestCost;
+            string text = head + "TEST";
+            for (int i = 0; i < cost.Length; i++)
+                text += " · " + UiFormat.Number(cost[i].Quantity) + " " + ContractAndMarketUI.ItemCode(cost[i].Item);
+            return text;
         }
 
         private string GateText(long state)

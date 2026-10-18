@@ -115,3 +115,4 @@
 2026-10-18 - Antigravity - Drop PROVISIONAL tag from relay station and nuclear strike numbers in DefaultGameBalance, NuclearStrikeSystem, roadmap, and feature-coverage.
 2026-10-18 - Antigravity - Add 4 research branches (ResearchBranch: Military, Industry, Logistics, Signals), per-branch tiers and ActiveBranch on TechProgress (SchemaVersion 4 migration), StressTest ParamA = branch, branch-mapped TechGates, and Military tier checks in ShipyardSystem and NuclearStrikeSystem; tests.
 2026-10-18 - Antigravity - AI branch selection: UtilityAiEngine picks the research branch by preset weight, takes Logistics T2 for a closed jump gate, and brings Military to T4 before Tier-5 nuclear-core tests; tests and 5-seed 30-day soak (all rivals reach Military T4–T5, Citadel falls days 5.5–9.8).
+2026-10-18 - Antigravity - BASE tab research UI shows 4 branch tiers (MIL/IND/LOG/SIG) and lets the player pick the branch for StressTest; verified in Play Mode.
