@@ -14,7 +14,7 @@ namespace Unruled.Tests.Core.Military
         private const int Me = 1;
 
         private SimulationWorld _sim;
-        private EntityId _home, _target, _biomass, _tungsten;
+        private EntityId _home, _target, _biomass, _tungsten, _hq;
 
         [SetUp]
         public void SetUp()
@@ -26,7 +26,8 @@ namespace Unruled.Tests.Core.Military
             _sim.Starlanes.Add(lane, new StarlaneEdge { SiteA = _home, SiteB = _target, Tier = StarlaneTier.StaHighway, Length = 200 });
             _sim.LaneWeather.Add(lane, default);
             _sim.Graph.Rebuild(_sim.Starlanes);
-            _sim.CreatePlayer(Me, _home);
+            _hq = _sim.CreatePlayer(Me, _home);
+            _sim.TechProgress.Get(_hq).TechTier = _sim.Balance.Lifecycle.StrikeMinFleetTier;
             _biomass = Deposit(ItemId.RawBiomass);
             _tungsten = Deposit(ItemId.RawTungsten);
             _sim.Stockpiles.Get(_target).Add(ItemId.RawBiomass, 50);
@@ -85,12 +86,19 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
-        public void ALowerTierFleet_CannotFire()
+        public void ALowerTierFleet_OrPlayerBelowMilitaryTier5_CannotFire()
         {
             var fleet = Fleet((byte)(_sim.Balance.Lifecycle.StrikeMinFleetTier - 1), 5);
             Strike(fleet);
             Assert.IsFalse(Irradiated);
             Assert.AreEqual(5, _sim.Stockpiles.Get(fleet).Get(ItemId.ItemNuclearCore));
+
+            var tier5Fleet = Fleet(_sim.Balance.Lifecycle.StrikeMinFleetTier, 5);
+            _sim.TechProgress.Get(_hq).TechTier = 4;
+            _sim.TechProgress.Get(_hq).IndustryTier = 5;
+            Strike(tier5Fleet);
+            Assert.IsFalse(Irradiated, "Military branch is still tier 4");
+            Assert.AreEqual(5, _sim.Stockpiles.Get(tier5Fleet).Get(ItemId.ItemNuclearCore));
         }
 
         [Test]

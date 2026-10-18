@@ -46,29 +46,40 @@ namespace Unruled.Tests.Core.Research
         public void TierDefaultsToOne_ForUnknownAndSystemPlayers()
         {
             Assert.AreEqual(1, _sim.TechGates.TechTierOf(Player));
-            Assert.AreEqual(1, _sim.TechGates.TechTierOf(42));
-            Assert.AreEqual(1, _sim.TechGates.TechTierOf(-4));
+            Assert.AreEqual(1, _sim.TechGates.TechTierOf(42, ResearchBranch.Signals));
+            Assert.AreEqual(1, _sim.TechGates.TechTierOf(-4, ResearchBranch.Industry));
         }
 
         [Test]
-        public void Blackout_RefusesOrders_UntilLaserComms()
+        public void Blackout_RefusesOrders_UntilLaserComms_OnSignalsBranch()
         {
             Assert.AreEqual(IssueResult.Blackout, Order());
-            _sim.TechProgress.Get(_hq).TechTier = 3;
+            _sim.TechProgress.Get(_hq).TechTier = 5; // Military 5 does not unlock LaserComms
+            _sim.TechProgress.Get(_hq).SignalsTier = 3;
             Assert.AreEqual(IssueResult.Blackout, Order());
-            _sim.TechProgress.Get(_hq).TechTier = 4;
+            _sim.TechProgress.Get(_hq).SignalsTier = 4;
             Assert.AreEqual(IssueResult.Issued, Order());
         }
 
         [Test]
-        public void Gates_FollowTheirTiers()
+        public void Gates_FollowTheirBranchesAndTiers()
         {
             ref var p = ref _sim.TechProgress.Get(_hq);
-            p.TechTier = 4;
+            p.TechTier = 5;
+            Assert.IsFalse(_sim.TechGates.Unlocks(Player, TechGate.JumpGate), "Logistics is still tier 1");
+            Assert.IsFalse(_sim.TechGates.Unlocks(Player, TechGate.CoreFractureMining), "Industry is still tier 1");
+            Assert.IsFalse(_sim.TechGates.Unlocks(Player, TechGate.LaserComms), "Signals is still tier 1");
+
+            p.LogisticsTier = 2;
+            Assert.IsTrue(_sim.TechGates.Unlocks(Player, TechGate.JumpGate));
+
+            p.SignalsTier = 4;
             Assert.IsTrue(_sim.TechGates.Unlocks(Player, TechGate.LaserComms));
+
+            p.IndustryTier = 4;
             Assert.IsTrue(_sim.TechGates.Unlocks(Player, TechGate.CoreFractureMining));
             Assert.IsFalse(_sim.TechGates.Unlocks(Player, TechGate.Terraform));
-            p.TechTier = 5;
+            p.IndustryTier = 5;
             Assert.IsTrue(_sim.TechGates.Unlocks(Player, TechGate.Terraform));
         }
     }

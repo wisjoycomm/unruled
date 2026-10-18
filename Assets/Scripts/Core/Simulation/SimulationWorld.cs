@@ -254,7 +254,7 @@ namespace Unruled.Core.Simulation
             Clock.Register(relays);
             Commands.Register(CommandType.BuildRelay, relays);
             Commands.Register(CommandType.NuclearStrike, new NuclearStrikeSystem(
-                Fleets, FleetMotions, Sites, Stockpiles, Lifecycle, balance.Lifecycle));
+                Fleets, FleetMotions, Sites, Stockpiles, Lifecycle, balance.Lifecycle, TechGates));
             Commands.Register(CommandType.ClaimSite, new SiteControlSystem(
                 Sites, Players, Fleets, FleetMotions, FleetReadiness, FleetCombat, Stockpiles, balance.SiteControl));
             Commands.Register(CommandType.TransferCargo, new CargoTransferSystem(
@@ -300,7 +300,7 @@ namespace Unruled.Core.Simulation
             Wallets.Add(hq, new Wallet { OwnerPlayerId = playerId });
             Standings.Add(hq, new PlayerStanding { Bracket = LeaderboardBalance.Unrated });
             Loans.Add(hq, default);
-            TechProgress.Add(hq, new TechProgress { TechTier = 1 });
+            TechProgress.Add(hq, Unruled.Core.Research.TechProgress.Create(1));
             Ledger.Grant(hq, Balance.Ledger.StartingCents);
             return hq;
         }

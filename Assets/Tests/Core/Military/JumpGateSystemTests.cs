@@ -67,7 +67,7 @@ namespace Unruled.Tests.Core.Military
         [Test]
         public void Open_AtTier2_ChargesTheCoreBase_AndLinksHomeToTheContestedCluster()
         {
-            _sim.TechProgress.Get(_game.PlayerHq).TechTier = 2;
+            _sim.TechProgress.Get(_game.PlayerHq).LogisticsTier = 2;
             Fund();
             int batteries = Core.Get(ItemId.ItemBattery);
             int lanes = _sim.Starlanes.Count;
@@ -88,7 +88,7 @@ namespace Unruled.Tests.Core.Military
             Open(Player, Gate.HomeSite);
             Assert.IsFalse(Gate.IsOpen, "tier 1");
 
-            _sim.TechProgress.Get(_game.PlayerHq).TechTier = 2;
+            _sim.TechProgress.Get(_game.PlayerHq).LogisticsTier = 2;
             Core.Add(ItemId.ItemBattery, -Core.Get(ItemId.ItemBattery));
             Open(Player, Gate.HomeSite);
             Assert.IsFalse(Gate.IsOpen, "no batteries");

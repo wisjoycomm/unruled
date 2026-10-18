@@ -14,6 +14,8 @@ namespace Unruled.Tests.Core.Research
 
         public byte TechTierOf(int playerId) => Tier;
 
+        public byte TechTierOf(int playerId, ResearchBranch branch) => Tier;
+
         public bool Unlocks(int playerId, TechGate gate) => Tier >= _balance.GateTier(gate);
     }
 }

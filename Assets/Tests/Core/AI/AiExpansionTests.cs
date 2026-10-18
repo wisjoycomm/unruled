@@ -341,7 +341,7 @@ namespace Unruled.Tests.Core.AI
             stock.Add(ItemId.ItemFuel, 100);
             Assert.IsFalse(Find(Warlord, AiAction.OpenGate).HasValue, "tier 1");
 
-            _sim.TechProgress.Get(_hq).TechTier = 2;
+            _sim.TechProgress.Get(_hq).LogisticsTier = 2;
             Assert.IsTrue(Find(Sentinel, AiAction.OpenGate).HasValue, "contract convoys need the lane too");
         }
 

@@ -17,6 +17,7 @@ namespace Unruled.Core.Research
     public interface ITechGates
     {
         byte TechTierOf(int playerId);
+        byte TechTierOf(int playerId, ResearchBranch branch);
         bool Unlocks(int playerId, TechGate gate);
     }
 
@@ -34,8 +35,11 @@ namespace Unruled.Core.Research
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
         }
 
-        /// <summary>The player's tech tier; 1 for a player without research (and for THE SYSTEM or neutral ids).</summary>
-        public byte TechTierOf(int playerId)
+        /// <summary>The player's Military tech tier; 1 for a player without research (and for THE SYSTEM or neutral ids).</summary>
+        public byte TechTierOf(int playerId) => TechTierOf(playerId, ResearchBranch.Military);
+
+        /// <summary>The player's tech tier in <paramref name="branch"/>; 1 for a player without research (and for THE SYSTEM or neutral ids).</summary>
+        public byte TechTierOf(int playerId, ResearchBranch branch)
         {
             if (playerId <= 0)
                 return 1;
@@ -44,11 +48,12 @@ namespace Unruled.Core.Research
                 if (_players.At(i).PlayerId != playerId)
                     continue;
                 var hq = _players.EntityAt(i);
-                return _progress.Has(hq) ? _progress.Get(hq).TechTier : (byte)1;
+                return _progress.Has(hq) ? _progress.Get(hq).Tier(branch) : (byte)1;
             }
             return 1;
         }
 
-        public bool Unlocks(int playerId, TechGate gate) => TechTierOf(playerId) >= _balance.GateTier(gate);
+        public bool Unlocks(int playerId, TechGate gate) =>
+            TechTierOf(playerId, _balance.GateBranch(gate)) >= _balance.GateTier(gate);
     }
 }

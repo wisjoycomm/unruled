@@ -110,6 +110,27 @@ namespace Unruled.Tests.Core.Persistence
             Assert.IsFalse(state.RaidsConvoys);
         }
 
+        // Migration: schema 3 saved TechProgress with 6 keys (one TechTier); loading copies that tier to every branch.
+        [Test]
+        public void Schema3TechProgress_MigratesOldTierToEveryBranch()
+        {
+            var w = new MsgPackWriter();
+            w.WriteArrayHeader(6);
+            w.Write(4);
+            w.Write((int)Unruled.Core.Research.ResearchStage.StressTest);
+            w.Write(1_000);
+            w.Write(2);
+            w.Write(0L);
+            ComponentFormatters.WriteEntity(w, default);
+            var p = ComponentFormatters.ReadTechProgress(new MsgPackReader(w.ToArray()));
+
+            Assert.AreEqual(4, p.Tier(Unruled.Core.Research.ResearchBranch.Military));
+            Assert.AreEqual(4, p.Tier(Unruled.Core.Research.ResearchBranch.Industry));
+            Assert.AreEqual(4, p.Tier(Unruled.Core.Research.ResearchBranch.Logistics));
+            Assert.AreEqual(4, p.Tier(Unruled.Core.Research.ResearchBranch.Signals));
+            Assert.AreEqual(Unruled.Core.Research.ResearchBranch.Military, p.ActiveBranch);
+        }
+
         [Test]
         public void NewerComponentShape_UnknownTrailingKeys_AreSkipped()
         {

@@ -123,7 +123,7 @@ namespace Unruled.Core.Military
         {
             if (command.ParamA < (int)TargetFocusClass.LineShips || command.ParamA > (int)TargetFocusClass.CargoConvoys ||
                 command.ParamB < 1 || command.ParamB > _balance.MaxShipsPerOrder ||
-                command.ParamC < 1 || command.ParamC > _tech.TechTierOf(command.PlayerId))
+                command.ParamC < 1 || command.ParamC > _tech.TechTierOf(command.PlayerId, ResearchBranch.Military))
                 return;
             var site = command.Target;
             if (!IsOwnCoreBase(command.PlayerId, site))
@@ -145,7 +145,7 @@ namespace Unruled.Core.Military
             if (!_units.Has(fleet) || !_motions.Has(fleet))
                 return;
             ref var unit = ref _units.Get(fleet);
-            byte tier = _tech.TechTierOf(command.PlayerId);
+            byte tier = _tech.TechTierOf(command.PlayerId, ResearchBranch.Military);
             if (unit.OwnerPlayerId != command.PlayerId || unit.TechTier >= tier || unit.TotalShips == 0 ||
                 !IsDocked(fleet, tick) || !IsOwnCoreBase(command.PlayerId, _motions.Get(fleet).Site))
                 return;

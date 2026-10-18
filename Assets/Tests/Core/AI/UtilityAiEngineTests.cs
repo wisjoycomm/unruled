@@ -286,7 +286,8 @@ namespace Unruled.Tests.Core.AI
         [Test]
         public void ScansKeepBack_WhatOpeningAnUnlockedGateNeeds()
         {
-            _sim.TechProgress.Get(_hq).TechTier = 2; // the gate unlocks; the next stress test takes no batteries
+            _sim.TechProgress.Get(_hq).TechTier = 2;
+            _sim.TechProgress.Get(_hq).LogisticsTier = 2; // the gate unlocks; the next stress test takes no batteries
             var gate = _sim.World.Create();
             _sim.JumpGates.Add(gate, new JumpGate { OwnerPlayerId = Me, HomeSite = _home, FarSite = _field });
             ref var core = ref _sim.Stockpiles.Get(_home);

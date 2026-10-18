@@ -144,7 +144,7 @@ methods, in this order (rule 4).
   - `SystemDefenseEvaluator` + `CitadelBalance`: owns `SystemCitadel` (on THE SYSTEM's Citadel site, the contested
     cluster's outermost orbit) and `CitadelAssault` (on HQs); `VictoryEvaluator` owns `VictoryRecord` and
     `DirectorateSeat`. The HUD's citadel tag shows the shield and defence tier, then The Directorate.
-- **Research/**: `TechProgress` (on the HQ: tech tier 1..5, stage, telemetry, failed tests, retool end), `ResearchSystem` (telemetry in storms, `StressTest` command with calibration pity, retooling) + `ResearchBalance`; blasts go to `IResearchIncidentLog` (THE SYSTEM's bulletins). `TechGates` (`ITechGates`, `sim.TechGates`) answers a player's tier and gates: laser comms (orders through R3+ blackouts) and core-fracture mining at Tier 4, terraforming at Tier 5.
+- **Research/**: `ResearchBranch` (`Military`, `Industry`, `Logistics`, `Signals`), `TechProgress` (on the HQ: per-branch tiers 1..5, active branch, stage, telemetry, failed tests, retool end), `ResearchSystem` (telemetry in storms, `StressTest` command with `ParamA` = branch and calibration pity, retooling) + `ResearchBalance`; blasts go to `IResearchIncidentLog` (THE SYSTEM's bulletins). `TechGates` (`ITechGates`, `sim.TechGates`) answers a player's per-branch tier (`Military` by default for shipyard/strike) and maps gates to their branches: jump gate on `Logistics` T2, core-fracture mining on `Industry` T4, terraforming on `Industry` T5, laser comms (orders through R3+ blackouts) on `Signals` T4.
 - **AI/**: `UtilityAiEngine` + `AiController` (on an AI-run HQ) + `AiBalance` / `AiPreset` (tab 06).
 - **Persistence/**: `SaveGame.Write(sim)` / `SaveGame.Load(balance, bytes)` save the whole world as MessagePack
   (`SchemaVersion`, seed, tick, entity allocator, queued commands, then every store in a fixed, append-only order).
@@ -152,7 +152,8 @@ methods, in this order (rule 4).
   keys read as defaults and unknown ones are skipped. `MsgPackWriter` / `MsgPackReader` are a small in-house codec.
   Balance is not saved (it comes from config); the starlane graph is rebuilt on load. A new store or component
   field must be appended to `ComponentFormatters` / `SaveGame`, with `SchemaVersion` bumped. Schema 2 appended the
-  `Loan` store; a schema-1 save loads with an empty loan on every player.
+  `Loan` store; schema 4 appended per-branch tiers and `ActiveBranch` to `TechProgress` (older saves migrate the
+  player's single tier to all four branches).
   `GameSession` continues `persistentDataPath/unruled.save` at start-up and autosaves every sim hour and on
   pause/quit.
 

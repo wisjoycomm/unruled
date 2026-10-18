@@ -620,13 +620,17 @@ namespace Unruled.Core.Persistence
 
         internal static void Write(MsgPackWriter w, in TechProgress v)
         {
-            w.WriteArrayHeader(6);
-            w.Write((int)v.TechTier);
+            w.WriteArrayHeader(10);
+            w.Write((int)v.Tier(ResearchBranch.Military));
             w.Write((int)v.Stage);
             w.Write(v.TelemetryMilli);
             w.Write(v.FailedTests);
             w.Write(v.RetoolUntilTick);
             WriteEntity(w, v.LastTelemetryFleet);
+            w.Write((int)v.Tier(ResearchBranch.Industry));
+            w.Write((int)v.Tier(ResearchBranch.Logistics));
+            w.Write((int)v.Tier(ResearchBranch.Signals));
+            w.Write((int)v.ActiveBranch);
         }
 
         internal static TechProgress ReadTechProgress(MsgPackReader r)
@@ -639,7 +643,11 @@ namespace Unruled.Core.Persistence
             if (n > 3) v.FailedTests = r.ReadInt32();
             if (n > 4) v.RetoolUntilTick = r.ReadInt64();
             if (n > 5) v.LastTelemetryFleet = ReadEntity(r);
-            SkipNewer(r, n, 6);
+            v.IndustryTier = n > 6 ? r.ReadByte() : v.TechTier;
+            v.LogisticsTier = n > 7 ? r.ReadByte() : v.TechTier;
+            v.SignalsTier = n > 8 ? r.ReadByte() : v.TechTier;
+            if (n > 9) v.ActiveBranch = (ResearchBranch)r.ReadByte();
+            SkipNewer(r, n, 10);
             return v;
         }
 

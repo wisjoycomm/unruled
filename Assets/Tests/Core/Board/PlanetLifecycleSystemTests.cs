@@ -179,7 +179,7 @@ namespace Unruled.Tests.Core.Board
             sim.Sites.Add(site, new SiteInfo { OwnerPlayerId = Owner, LifecycleState = PlanetLifecycleState.PristineWorld });
             sim.Stockpiles.Add(site, default);
             var hq = sim.CreatePlayer(Owner, site);
-            sim.TechProgress.Get(hq).TechTier = 5;
+            sim.TechProgress.Get(hq).IndustryTier = 5;
             sim.Lifecycle.ApplyNuclearStrike(site, 0);
             ref var stock = ref sim.Stockpiles.Get(site);
             stock.Add(ItemId.RawWater, _balance.TerraformWater);

@@ -2,6 +2,7 @@ using System;
 using Unruled.Core.Board;
 using Unruled.Core.Economy;
 using Unruled.Core.Ecs;
+using Unruled.Core.Research;
 using Unruled.Core.Simulation;
 
 namespace Unruled.Core.Military
@@ -22,10 +23,12 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly PlanetLifecycleSystem _lifecycle;
         private readonly LifecycleBalance _balance;
+        private readonly ITechGates _tech;
 
         public NuclearStrikeSystem(
             ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions, ComponentStore<SiteInfo> sites,
-            ComponentStore<Stockpile> stockpiles, PlanetLifecycleSystem lifecycle, LifecycleBalance balance)
+            ComponentStore<Stockpile> stockpiles, PlanetLifecycleSystem lifecycle, LifecycleBalance balance,
+            ITechGates tech)
         {
             _units = units ?? throw new ArgumentNullException(nameof(units));
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
@@ -33,6 +36,7 @@ namespace Unruled.Core.Military
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _lifecycle = lifecycle ?? throw new ArgumentNullException(nameof(lifecycle));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
+            _tech = tech ?? throw new ArgumentNullException(nameof(tech));
         }
 
         public void Handle(in DelayedPlayerCommand command, long tick)
@@ -46,6 +50,7 @@ namespace Unruled.Core.Military
             ref var motion = ref _motions.Get(fleet);
             var site = motion.Site;
             if (unit.OwnerPlayerId != command.PlayerId || unit.TechTier < _balance.StrikeMinFleetTier ||
+                _tech.TechTierOf(command.PlayerId, ResearchBranch.Military) < _balance.StrikeMinFleetTier ||
                 !motion.Lane.IsNull || !_sites.Has(site))
                 return;
             ref var info = ref _sites.Get(site);

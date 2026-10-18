@@ -54,16 +54,19 @@ namespace Unruled.Tests.Core.Research
                 _sim.Clock.Advance(1);
         }
 
-        private void StressTest()
+        private void StressTest(ResearchBranch branch = ResearchBranch.Military)
         {
-            var command = new DelayedPlayerCommand { PlayerId = Player, CommandType = CommandType.StressTest, Target = _core };
+            var command = new DelayedPlayerCommand
+            {
+                PlayerId = Player, CommandType = CommandType.StressTest, Target = _core, ParamA = (int)branch
+            };
             Assert.AreEqual(IssueResult.Issued, _sim.Issuer.Issue(command, out long at));
             Run((int)(at - _sim.Clock.CurrentTick));
         }
 
-        private void StockTestItems(int times)
+        private void StockTestItems(int times, ResearchBranch branch = ResearchBranch.Military)
         {
-            var cost = _sim.Balance.Research.Tier((byte)(Progress.TechTier + 1)).StressTestCost;
+            var cost = _sim.Balance.Research.Tier((byte)(Progress.Tier(branch) + 1)).StressTestCost;
             for (int i = 0; i < cost.Length; i++)
                 _sim.Stockpiles.Get(_core).Add(cost[i].Item, cost[i].Quantity * times);
         }
@@ -81,6 +84,9 @@ namespace Unruled.Tests.Core.Research
         public void NewPlayer_StartsAtTierOneGatheringTelemetry()
         {
             Assert.AreEqual(1, Progress.TechTier);
+            Assert.AreEqual(1, Progress.Tier(ResearchBranch.Industry));
+            Assert.AreEqual(1, Progress.Tier(ResearchBranch.Logistics));
+            Assert.AreEqual(1, Progress.Tier(ResearchBranch.Signals));
             Assert.AreEqual(ResearchStage.FieldTelemetry, Progress.Stage);
             Assert.AreEqual(1, _sim.TechGates.TechTierOf(Player));
         }
@@ -164,26 +170,42 @@ namespace Unruled.Tests.Core.Research
         }
 
         [Test]
-        public void Retooling_UnlocksTheNextTierWhenItEnds()
+        public void Retooling_UnlocksTheNextTierOnTheActiveBranchWhenItEnds()
         {
-            Progress.Stage = ResearchStage.Retooling;
-            Progress.RetoolUntilTick = 50;
+            Progress.Stage = ResearchStage.StressTest;
+            StockTestItems(4, ResearchBranch.Logistics);
+            while (Progress.Stage == ResearchStage.StressTest)
+                StressTest(ResearchBranch.Logistics);
+            Assert.AreEqual(ResearchBranch.Logistics, Progress.ActiveBranch);
+            Progress.RetoolUntilTick = _sim.Clock.CurrentTick + 50;
             Run(49);
-            Assert.AreEqual(1, Progress.TechTier);
+            Assert.AreEqual(1, Progress.Tier(ResearchBranch.Logistics));
             Run(1);
-            Assert.AreEqual(2, Progress.TechTier);
+            Assert.AreEqual(2, Progress.Tier(ResearchBranch.Logistics));
+            Assert.AreEqual(1, Progress.Tier(ResearchBranch.Military), "other branches stay at their tier");
             Assert.AreEqual(ResearchStage.FieldTelemetry, Progress.Stage);
-            Assert.AreEqual(2, _sim.TechGates.TechTierOf(Player));
+            Assert.AreEqual(2, _sim.TechGates.TechTierOf(Player, ResearchBranch.Logistics));
         }
 
         [Test]
-        public void Retooling_TheTopTier_CompletesResearch()
+        public void Retooling_TheTopTier_CompletesResearch_OnlyWhenEveryBranchIsDone()
         {
             Progress.TechTier = 4;
+            Progress.ActiveBranch = ResearchBranch.Military;
             Progress.Stage = ResearchStage.Retooling;
             Progress.RetoolUntilTick = 1;
             Run(1);
             Assert.AreEqual(5, Progress.TechTier);
+            Assert.AreEqual(ResearchStage.FieldTelemetry, Progress.Stage, "three branches still below tier 5");
+
+            Progress.IndustryTier = 5;
+            Progress.LogisticsTier = 5;
+            Progress.SignalsTier = 4;
+            Progress.ActiveBranch = ResearchBranch.Signals;
+            Progress.Stage = ResearchStage.Retooling;
+            Progress.RetoolUntilTick = 2;
+            Run(1);
+            Assert.AreEqual(5, Progress.SignalsTier);
             Assert.AreEqual(ResearchStage.Complete, Progress.Stage);
         }
     }

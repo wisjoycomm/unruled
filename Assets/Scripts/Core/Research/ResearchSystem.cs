@@ -61,8 +61,10 @@ namespace Unruled.Core.Research
                 ref var p = ref _progress.At(i);
                 if (p.Stage != ResearchStage.Retooling || tick < p.RetoolUntilTick)
                     continue;
-                p.TechTier++;
-                p.Stage = p.TechTier >= ResearchBalance.TopTier ? ResearchStage.Complete : ResearchStage.FieldTelemetry;
+                var branch = p.ActiveBranch;
+                byte next = (byte)Math.Min((int)ResearchBalance.TopTier, p.Tier(branch) + 1);
+                p.SetTier(branch, next);
+                p.Stage = p.AllAtOrAbove(ResearchBalance.TopTier) ? ResearchStage.Complete : ResearchStage.FieldTelemetry;
                 p.TelemetryMilli = 0;
                 p.FailedTests = 0;
                 p.RetoolUntilTick = 0;
@@ -93,16 +95,21 @@ namespace Unruled.Core.Research
         {
             if (command.CommandType != CommandType.StressTest)
                 throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
+            if (command.ParamA < 0 || command.ParamA >= TechProgress.BranchCount)
+                return;
+            var branch = (ResearchBranch)command.ParamA;
             var hq = FindHq(command.PlayerId);
             if (hq.IsNull || !_progress.Has(hq))
                 return;
             ref var p = ref _progress.Get(hq);
             var coreBase = _players.Get(hq).CoreBase;
-            if (p.Stage != ResearchStage.StressTest || command.Target != coreBase || !_stockpiles.Has(coreBase) ||
+            byte currentTier = p.Tier(branch);
+            if (p.Stage != ResearchStage.StressTest || currentTier >= ResearchBalance.TopTier ||
+                command.Target != coreBase || !_stockpiles.Has(coreBase) ||
                 !_sites.Has(coreBase) || _sites.Get(coreBase).OwnerPlayerId != command.PlayerId)
                 return;
 
-            byte tier = (byte)(p.TechTier + 1);
+            byte tier = (byte)(currentTier + 1);
             var rules = _balance.Tier(tier);
             ref var stock = ref _stockpiles.Get(coreBase);
             for (int i = 0; i < rules.StressTestCost.Length; i++)
@@ -110,6 +117,12 @@ namespace Unruled.Core.Research
                     return;
             for (int i = 0; i < rules.StressTestCost.Length; i++)
                 stock.Add(rules.StressTestCost[i].Item, -rules.StressTestCost[i].Quantity);
+
+            if (p.ActiveBranch != branch)
+            {
+                p.ActiveBranch = branch;
+                p.FailedTests = 0;
+            }
 
             var rng = new SplitMix64(_worldSeed ^ RollSalt ^ ((ulong)(uint)command.PlayerId << 32) ^ (ulong)tick);
             if (rng.NextInt(0, 999) < _balance.StressChancePermille(tier, p.FailedTests))

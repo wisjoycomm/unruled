@@ -78,6 +78,19 @@ namespace Unruled.Core.Research
             }
         }
 
+        /// <summary>The research branch whose tier unlocks <paramref name="gate"/>.</summary>
+        public ResearchBranch GateBranch(TechGate gate)
+        {
+            switch (gate)
+            {
+                case TechGate.LaserComms: return ResearchBranch.Signals;
+                case TechGate.CoreFractureMining: return ResearchBranch.Industry;
+                case TechGate.Terraform: return ResearchBranch.Industry;
+                case TechGate.JumpGate: return ResearchBranch.Logistics;
+                default: throw new ArgumentOutOfRangeException(nameof(gate));
+            }
+        }
+
         /// <summary>Rules for researching <paramref name="tier"/> (2..5).</summary>
         public TierResearchRules Tier(byte tier)
         {
