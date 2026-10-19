@@ -58,6 +58,24 @@ namespace Unruled.SimLab
             Console.WriteLine();
             Console.WriteLine(problems == 0 ? "SURVIVAL: every player is alive and growing." : $"SURVIVAL: {problems} player(s) flagged (see verdicts).");
 
+            Console.WriteLine();
+            Console.WriteLine("LONG-RUN HEALTH (from hourly samples)");
+            Console.WriteLine("seed   player preset               minFuel  minO2 minRat  dryHrs limitHrs  fleets/ships  orders/d refused%  T5 day MIL IND LOG SIG");
+            foreach (var r in results)
+                foreach (var p in r.Players)
+                {
+                    var h = p.Health;
+                    Console.WriteLine($"{r.Seed,-6} {p.Last.PlayerId,-6} {p.PresetCode,-20} {h.MinFuel,7} {h.MinOxygen,6} {h.MinRations,6} {h.DryHours,7} {h.LimitHours,8}  " +
+                        $"{p.Last.Fleets,5}/{p.Last.Ships,-6}  {h.OrdersPerDay,8:0} {h.RefusedPercent,7:0.0}  " +
+                        $"{T5(h.T5Day[0]),7} {T5(h.T5Day[1]),3} {T5(h.T5Day[2]),3} {T5(h.T5Day[3]),3}");
+                }
+            Console.WriteLine();
+            var all = results.SelectMany(r => r.Players).ToList();
+            Console.WriteLine($"Totals: {all.Count(p => p.Health.DryHours > 0)}/{all.Count} ran a core supply dry, " +
+                $"{all.Count(p => p.Health.LimitHours > 24)}/{all.Count} spent >1 day at the loan limit, " +
+                $"{all.Count(p => p.Last.Fleets > 2 * Math.Max(1, p.Last.Ships / 10))}/{all.Count} fragmented fleets, " +
+                $"median T5-all day {Median(all.Select(p => p.Health.T5Day.Max()).ToList())}.");
+
             if (csv != null)
                 WriteCsv(csv, results);
             return 0;
@@ -70,8 +88,17 @@ namespace Unruled.SimLab
             public List<PlayerResult> Players;
         }
 
+        private sealed class Health
+        {
+            public int MinFuel = int.MaxValue, MinOxygen = int.MaxValue, MinRations = int.MaxValue;
+            public int DryHours, LimitHours;
+            public double OrdersPerDay, RefusedPercent;
+            public double[] T5Day = { -1, -1, -1, -1 }; // -1 = never
+        }
+
         private sealed class PlayerResult
         {
+            public Health Health;
             public PlayerSample Last;
             public string PresetCode;
             public string Verdict;
@@ -89,9 +116,48 @@ namespace Unruled.SimLab
             foreach (var p in last.Players)
             {
                 string code = p.Preset == 0 ? "human (idle)" : game.Sim.Balance.Ai.Preset(p.Preset).Code;
-                r.Players.Add(new PlayerResult { Last = p, PresetCode = code, Verdict = Verdict(game, p), History = game.History });
+                r.Players.Add(new PlayerResult
+                {
+                    Last = p, PresetCode = code, Verdict = Verdict(game, p), History = game.History, Health = MeasureHealth(game, p.PlayerId)
+                });
             }
             return r;
+        }
+
+        private static Health MeasureHealth(LabGame game, int playerId)
+        {
+            const int fuel = (int)Unruled.Core.Economy.ItemId.ItemFuel - 1;
+            const int oxygen = (int)Unruled.Core.Economy.ItemId.ItemOxygen - 1;
+            const int rations = (int)Unruled.Core.Economy.ItemId.ItemRations - 1;
+            long limit = game.Sim.Balance.Ledger.CreditLimitCents / Unruled.Core.Economy.Wallet.CentsPerCredit;
+            var h = new Health();
+            foreach (var s in game.History)
+            {
+                var p = s.Players.Find(q => q.PlayerId == playerId);
+                if (p == null || s.Tick == 0) continue;
+                h.MinFuel = Math.Min(h.MinFuel, p.Stock[fuel]);
+                h.MinOxygen = Math.Min(h.MinOxygen, p.Stock[oxygen]);
+                h.MinRations = Math.Min(h.MinRations, p.Stock[rations]);
+                if (p.Stock[fuel] == 0 || p.Stock[oxygen] == 0 || p.Stock[rations] == 0) h.DryHours++;
+                if (p.Debt >= limit) h.LimitHours++;
+                for (int b = 0; b < 4; b++)
+                    if (h.T5Day[b] < 0 && p.Tiers[b] >= 5) h.T5Day[b] = s.Tick / (double)SimTick.TicksPerDay;
+            }
+            double days = Math.Max(1, game.Tick / (double)SimTick.TicksPerDay);
+            long orders = game.ActionCounts.TryGetValue(playerId, out var counts) ? counts.Sum(c => (long)c) : 0;
+            long refused = game.Refused.TryGetValue(playerId, out long x) ? x : 0;
+            h.OrdersPerDay = orders / days;
+            h.RefusedPercent = orders == 0 ? 0 : 100.0 * refused / orders;
+            return h;
+        }
+
+        private static string T5(double day) => day < 0 ? "-" : day.ToString("0");
+
+        private static string Median(List<double> days)
+        {
+            if (days.Any(d => d < 0)) return "never (some branch not T5)";
+            days.Sort();
+            return "day " + days[days.Count / 2].ToString("0.0");
         }
 
         /// <summary>Flags the ways an empire fails to survive: no ships, broke and in debt, stalled at tier 1, starving.</summary>
