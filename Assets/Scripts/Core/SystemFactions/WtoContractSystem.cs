@@ -45,11 +45,12 @@ namespace Unruled.Core.SystemFactions
     /// <list type="bullet">
     /// <item>Convoy at the buyer's site: the contract goods it still holds are delivered.</item>
     /// <item>Convoy destroyed, or the deadline passed: nothing delivered. A late convoy stays the seller's, goods
-    /// included.</item>
+    /// included; one still docked at a site of the seller's is unloaded there and disbanded.</item>
     /// </list>
     /// Settling pays the seller the delivered value less their bracket fee (to the WTO fee pool) plus the delivered
     /// share of the deposit; the buyer gets back the undelivered value plus the rest of the deposit as compensation.
-    /// A trade between two sites with no route is void: goods, value and deposit go back. Same-site trades deliver
+    /// A trade between two sites with no route, or whose route fuel the seller's site lacks, is void: goods, value and
+    /// deposit go back. Same-site trades deliver
     /// at once.
     /// </summary>
     public sealed class WtoContractSystem : ISimSystem, ITradeSettlement
@@ -63,6 +64,7 @@ namespace Unruled.Core.SystemFactions
         private readonly ComponentStore<FleetMotion> _motions;
         private readonly ComponentStore<StarlaneEdge> _lanes;
         private readonly ComponentStore<Stockpile> _stockpiles;
+        private readonly ComponentStore<SiteInfo> _sites;
         private readonly Ledger _ledger;
         private readonly EntityId _escrow;
         private readonly EntityId _feePool;
@@ -76,7 +78,7 @@ namespace Unruled.Core.SystemFactions
         public WtoContractSystem(
             World world, ComponentStore<WtoContract> contracts, ComponentStore<ContractCargo> cargo,
             ComponentStore<FleetMotion> motions, ComponentStore<StarlaneEdge> lanes, ComponentStore<Stockpile> stockpiles,
-            Ledger ledger, EntityId escrow, EntityId feePool, IMarketRates rates, FleetFactory fleets, RoutePlanner planner,
+            ComponentStore<SiteInfo> sites, Ledger ledger, EntityId escrow, EntityId feePool, IMarketRates rates, FleetFactory fleets, RoutePlanner planner,
             SimClock clock, FleetBalance fleetBalance, WtoContractBalance balance)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
@@ -85,6 +87,7 @@ namespace Unruled.Core.SystemFactions
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
             _lanes = lanes ?? throw new ArgumentNullException(nameof(lanes));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
+            _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             if (escrow.IsNull) throw new ArgumentException("WTO escrow wallet required.", nameof(escrow));
             if (feePool.IsNull) throw new ArgumentException("WTO fee pool required.", nameof(feePool));
@@ -116,9 +119,7 @@ namespace Unruled.Core.SystemFactions
             var route = default(FleetRoute);
             if (!_planner.TryPlan(trade.SellerSite, trade.BuyerSite, ConvoyTier, ref route))
             {
-                _stockpiles.Get(trade.SellerSite).Add(trade.Item, trade.Quantity);
-                Pay(Wallet(trade.BuyerPlayerId), trade.PriceCents * trade.Quantity);
-                Pay(Wallet(trade.SellerPlayerId), trade.DepositCents);
+                Void(in trade);
                 return;
             }
 
@@ -131,12 +132,18 @@ namespace Unruled.Core.SystemFactions
                 travel += _planner.TravelTicks(edge);
                 fuel += _planner.FuelFor(unit, edge);
             }
+            ref var supplies = ref _stockpiles.Get(trade.SellerSite);
+            if (!supplies.Has(ItemId.ItemFuel, fuel))
+            {
+                Void(in trade);
+                return;
+            }
             contract.DeadlineTick = tick + travel * _balance.DeadlineTravelPercent / 100 + _balance.DeadlineGraceTicks;
 
             var convoy = _fleets.Create(unit, trade.SellerSite);
             ref var hold = ref _stockpiles.Get(convoy);
             hold.Add(trade.Item, trade.Quantity);
-            ref var supplies = ref _stockpiles.Get(trade.SellerSite);
+            supplies = ref _stockpiles.Get(trade.SellerSite);
             Load(ref supplies, ref hold, ItemId.ItemFuel, fuel);
             long intervals = contract.DeadlineTick / _fleetBalance.UpkeepIntervalTicks - tick / _fleetBalance.UpkeepIntervalTicks;
             var upkeep = _fleetBalance.Tier(ConvoyTier).UpkeepPerShipHour;
@@ -182,6 +189,9 @@ namespace Unruled.Core.SystemFactions
                 {
                     Settle(contract, 0);
                     _cargo.Remove(convoy);
+                    var site = _motions.Get(convoy).Site;
+                    if (!site.IsNull && _sites.Has(site) && _sites.Get(site).OwnerPlayerId == contract.SellerPlayerId)
+                        Disband(convoy, site);
                 }
                 else
                 {
@@ -200,6 +210,30 @@ namespace Unruled.Core.SystemFactions
             Pay(_feePool, fee);
             Pay(Wallet(contract.BuyerPlayerId),
                 contract.PriceCents * (contract.Quantity - delivered) + contract.DepositCents - sellerDeposit);
+        }
+
+        // A trade no convoy can carry (no route, or the seller's site can't fuel it): goods, value and deposit go back.
+        private void Void(in TradeMatch trade)
+        {
+            _stockpiles.Get(trade.SellerSite).Add(trade.Item, trade.Quantity);
+            Pay(Wallet(trade.BuyerPlayerId), trade.PriceCents * trade.Quantity);
+            Pay(Wallet(trade.SellerPlayerId), trade.DepositCents);
+        }
+
+        // A failed convoy docked at one of the seller's own sites (it never left) goes back into that site's stock rather than idling there as a
+        // one-ship fleet that owes upkeep forever.
+        private void Disband(EntityId convoy, EntityId site)
+        {
+            ref var hold = ref _stockpiles.Get(convoy);
+            ref var stock = ref _stockpiles.Get(site);
+            for (int slot = 0; slot < ItemIds.Count; slot++)
+            {
+                var item = ItemIds.FromSlot(slot);
+                int quantity = hold.Get(item);
+                if (quantity > 0)
+                    stock.Add(item, quantity);
+            }
+            _world.Destroy(convoy);
         }
 
         private static void Load(ref Stockpile from, ref Stockpile to, ItemId item, int wanted)

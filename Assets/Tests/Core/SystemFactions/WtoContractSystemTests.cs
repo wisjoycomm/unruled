@@ -59,6 +59,13 @@ namespace Unruled.Tests.Core.SystemFactions
             }, _sim.Clock.CurrentTick);
         }
 
+        // Empties the route fuel from its hold, so the queued Move can't depart: the convoy stays docked at the seller's site.
+        private void KeepAtSellersSite(EntityId convoy)
+        {
+            ref var hold = ref _sim.Stockpiles.Get(convoy);
+            hold.Add(ItemId.ItemFuel, -hold.Get(ItemId.ItemFuel));
+        }
+
         private EntityId Convoy() => _sim.Contracts.At(0).Convoy;
         private long Cash(EntityId wallet) => _sim.Ledger.Balance(wallet);
         private long Start => _sim.Balance.Ledger.StartingCents;
@@ -109,8 +116,12 @@ namespace Unruled.Tests.Core.SystemFactions
         [Test]
         public void MissedDeadline_CompensatesTheBuyer_AndTheConvoyStaysTheSellers()
         {
-            Open(_buyerSite); // no fuel at the seller's site: the convoy can't leave
+            _sim.Stockpiles.Get(_sellerSite).Add(ItemId.ItemFuel, 500);
+            Open(_buyerSite);
             var convoy = Convoy();
+            _sim.Clock.Advance(5);
+            Assert.IsFalse(_sim.FleetMotions.Get(convoy).Lane.IsNull, "under way");
+            _sim.FleetMotions.Get(convoy).IsHolding = true; // stopped mid-lane: it will miss the deadline
             long deadline = _sim.Contracts.At(0).DeadlineTick;
             _sim.Clock.Advance(deadline - _sim.Clock.CurrentTick - 1);
             Assert.AreEqual(1, _sim.Contracts.Count, "still open before the deadline");
@@ -123,9 +134,42 @@ namespace Unruled.Tests.Core.SystemFactions
         }
 
         [Test]
+        public void MissedDeadline_AtTheSellersSite_UnloadsAndDisbandsTheConvoy()
+        {
+            _sim.Stockpiles.Get(_sellerSite).Add(ItemId.ItemFuel, 500);
+            Open(_buyerSite);
+            var convoy = Convoy();
+            KeepAtSellersSite(convoy);
+            int coolantAboard = _sim.Stockpiles.Get(convoy).Get(ItemId.ItemCoolant);
+            int coolantLeft = _sim.Stockpiles.Get(_sellerSite).Get(ItemId.ItemCoolant);
+            long deadline = _sim.Contracts.At(0).DeadlineTick;
+            _sim.Clock.Advance(deadline - _sim.Clock.CurrentTick);
+
+            AssertBuyerMadeWhole();
+            Assert.IsFalse(_sim.World.IsAlive(convoy), "no stranded one-ship fleet at home");
+            Assert.AreEqual(Qty, _sim.Stockpiles.Get(_sellerSite).Get(Ammo), "goods back in the seller's stock");
+            Assert.AreEqual(coolantLeft + coolantAboard, _sim.Stockpiles.Get(_sellerSite).Get(ItemId.ItemCoolant),
+                "the rest of its hold comes back too");
+        }
+
+        [Test]
+        public void SellerSiteShortOfRouteFuel_VoidsTheTrade()
+        {
+            Open(_buyerSite); // no fuel at the seller's site: a convoy could never leave
+            Assert.AreEqual(0, _sim.Contracts.Count, "no contract, no convoy");
+            Assert.AreEqual(0, _sim.Fleets.Count);
+            Assert.AreEqual(Qty, _sim.Stockpiles.Get(_sellerSite).Get(Ammo), "goods back to the seller");
+            Assert.AreEqual(Start, Cash(_sellerHq));
+            Assert.AreEqual(Start, Cash(_buyerHq));
+            Assert.AreEqual(0, Cash(_sim.WtoEscrow));
+        }
+
+        [Test]
         public void Piracy_TakesTheCargo_FlaggedStolen()
         {
-            Open(_buyerSite); // stuck at the seller's site without fuel
+            _sim.Stockpiles.Get(_sellerSite).Add(ItemId.ItemFuel, 500);
+            Open(_buyerSite);
+            KeepAtSellersSite(Convoy()); // where the raider waits
             var raider = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Pirate, TechTier = 1, LineShips = 10 }, _sellerSite);
             _sim.FleetCombat.Get(raider).RaidsConvoys = true;
             ref var hold = ref _sim.Stockpiles.Get(raider);

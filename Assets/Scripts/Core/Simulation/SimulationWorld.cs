@@ -163,7 +163,7 @@ namespace Unruled.Core.Simulation
             Authority = new SystemAuthorityManager(
                 World, Sanctions, Bulletins, Sites, Players, Stockpiles, Ledger, FleetFactory, balance.Fleets, balance.Authority);
             ContractSystem = new WtoContractSystem(
-                World, Contracts, ContractCargo, FleetMotions, Starlanes, Stockpiles, Ledger, WtoEscrow, WtoFeePool, Rates,
+                World, Contracts, ContractCargo, FleetMotions, Starlanes, Stockpiles, Sites, Ledger, WtoEscrow, WtoFeePool, Rates,
                 FleetFactory, Routes, Clock, balance.Fleets, balance.Contracts);
 
             // Fixed tick order: weather first, then producers before consumers, watchers last.
