@@ -167,7 +167,8 @@ market and contracts, STA tolls, leaderboard audit, Call-to-Arms, NOAA forecast,
 `SimulationWorld` run (same seeds → same state) and save/load (a loaded game re-saves to the same bytes and plays on
 in lockstep with the original).
 `DataSheetConsistencyTests` parses the markdown data sheet (tabs 01–06) and fails if `DefaultGameBalance`
-drifts from it. Run EditMode tests for `Unruled.Tests.Core`.
+drifts from it. Run EditMode tests for `Unruled.Tests.Core`. Without the Editor, Core and its tests also build
+and run under plain .NET (`.docs/dev-setup.md` §3).
 
 ## Tooling
 
