@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unruled Sim Lab</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --dim: #8b949e;
+    --ok: #3fb950; --warn: #d29922; --bad: #f85149; --accent: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 ui-monospace, Consolas, monospace; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  header h1 { font-size: 15px; margin: 0 12px 0 0; letter-spacing: 1px; }
+  button, select, input { background: #21262d; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 5px 9px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); color: #000; border-color: var(--accent); }
+  input { width: 90px; cursor: text; }
+  .clock { font-size: 15px; font-weight: bold; min-width: 170px; }
+  .dim { color: var(--dim); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 12px; padding: 12px 16px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; }
+  section h2 { font-size: 12px; margin: 0 0 8px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child, td.l, th.l { text-align: left; }
+  tr.sel td { background: #1f2a3a; }
+  tr { cursor: pointer; }
+  .tier { display: inline-block; width: 18px; text-align: center; border-radius: 3px; margin-left: 2px; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 12px; }
+  .chart h3 { margin: 0 0 4px; font-size: 12px; color: var(--dim); font-weight: normal; }
+  canvas { width: 100%; height: 170px; display: block; background: #0d1117; border: 1px solid var(--line); border-radius: 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 0; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 4px; background: var(--c); border-radius: 2px; }
+  .bar { height: 14px; background: #21262d; border-radius: 3px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--bad); }
+  #log { height: 300px; overflow-y: auto; font-size: 12px; }
+  #log div { padding: 1px 0; border-bottom: 1px dotted #21262d; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .grid2 button { width: 100%; }
+  .row { display: flex; gap: 6px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+  #feedback { min-height: 18px; margin-top: 6px; }
+  .stock { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 12px; font-size: 12px; }
+  .stock div { display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<header>
+  <h1>UNRULED · SIM LAB</h1>
+  <span class="clock" id="clock">day 0 00:00</span>
+  <button id="play">▶ Run</button>
+  <span class="dim">speed</span>
+  <select id="speed">
+    <option value="60">1 min/s</option>
+    <option value="600">10 min/s</option>
+    <option value="3600" selected>1 h/s</option>
+    <option value="21600">6 h/s</option>
+    <option value="0">MAX</option>
+  </select>
+  <button data-step="3600">+1h</button>
+  <button data-step="86400">+1d</button>
+  <span class="dim">run to day</span><input id="untilDay" type="number" value="30" min="1"><button id="runUntil">Go</button>
+  <span class="dim" id="tps"></span>
+  <span style="flex:1"></span>
+  <span class="dim">seed</span><input id="seed" type="number" value="1234">
+  <select id="newPreset"><option value="0">seat 1: human</option></select>
+  <button id="reset">New game</button>
+</header>
+
+<main>
+  <div>
+    <section>
+      <h2>Empires <span class="dim" id="orders"></span></h2>
+      <table id="players">
+        <thead><tr>
+          <th class="l">P</th><th class="l">Controller</th><th>Cash</th><th>Debt</th>
+          <th>MIL IND LOG SIG</th><th>Fleets</th><th>Ships</th><th>Sites</th><th>Gate</th><th>Fuel</th><th>O₂</th><th>Rations</th><th class="l">Health</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>The System Citadel</h2>
+      <div class="row"><div class="bar" style="flex:1"><div id="citadelBar"></div></div><span id="citadelText"></span></div>
+    </section>
+
+    <section>
+      <h2>Over time (one point per sim hour)</h2>
+      <div class="charts">
+        <div class="chart"><h3>Cash (credits)</h3><canvas id="cCash"></canvas></div>
+        <div class="chart"><h3>Debt (credits)</h3><canvas id="cDebt"></canvas></div>
+        <div class="chart"><h3>Highest tech tier (any branch)</h3><canvas id="cTier"></canvas></div>
+        <div class="chart"><h3>Ships</h3><canvas id="cShips"></canvas></div>
+        <div class="chart"><h3>Sites owned</h3><canvas id="cSites"></canvas></div>
+        <div class="chart"><h3>Citadel shield</h3><canvas id="cCitadel"></canvas></div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>Seat control · player <span id="selId">1</span></h2>
+      <div class="row">
+        <select id="seatPreset"><option value="0">Human (you)</option></select>
+        <button id="seatApply">Apply</button>
+      </div>
+      <div class="dim" id="seatInfo"></div>
+      <h2 style="margin-top:12px">Commands (go through latency like a real order)</h2>
+      <div class="grid2">
+        <button data-cmd="Borrow" data-target="core" data-a="1000">Borrow 1,000</button>
+        <button data-cmd="Repay" data-target="core" data-a="1000">Repay 1,000</button>
+        <button data-cmd="StressTest" data-target="core" data-a="0">Stress test MIL</button>
+        <button data-cmd="StressTest" data-target="core" data-a="1">Stress test IND</button>
+        <button data-cmd="StressTest" data-target="core" data-a="2">Stress test LOG</button>
+        <button data-cmd="StressTest" data-target="core" data-a="3">Stress test SIG</button>
+        <button data-cmd="AuditOptIn" data-target="core" data-a="1">Audit opt-in</button>
+        <button data-cmd="Retrofit" data-target="fleet">Retrofit fleet</button>
+      </div>
+      <div class="row">
+        <span class="dim">build</span>
+        <select id="shipClass"><option value="0">LINE</option><option value="1">EW</option><option value="2">SUPPLY</option><option value="3">CARGO</option></select>
+        <select id="shipCount"><option>1</option><option selected>5</option><option>10</option></select>
+        <button id="buildShips">Build ships</button>
+      </div>
+      <div class="row">
+        <span class="dim">raw</span>
+        <select id="cmdType"></select>
+        <input id="pa" placeholder="A" style="width:60px"><input id="pb" placeholder="B" style="width:60px"><input id="pc" placeholder="C" style="width:60px">
+        <select id="cmdTarget"><option>core</option><option>fleet</option><option>hq</option></select>
+        <button id="sendRaw">Send</button>
+      </div>
+      <div id="feedback" class="dim"></div>
+    </section>
+
+    <section>
+      <h2>Core stock · player <span id="stockId">1</span></h2>
+      <div class="stock" id="stock"></div>
+    </section>
+
+    <section>
+      <h2>Event / AI log</h2>
+      <div class="row"><label><input type="checkbox" id="logSel" style="width:auto"> only selected player</label></div>
+      <div id="log"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const COLORS = ["#58a6ff", "#3fb950", "#d29922", "#f85149", "#bc8cff", "#39c5cf", "#ff7b72", "#a5d6ff"];
+const $ = (id) => document.getElementById(id);
+let meta = null, state = null, history = [], selected = 1;
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+const fmt = (n) => Math.round(n).toLocaleString("en-US");
+function clock(tick) {
+  const d = Math.floor(tick / 86400), h = Math.floor(tick % 86400 / 3600), m = Math.floor(tick % 3600 / 60);
+  return `day ${d} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+const presetName = (id) => id === 0 ? "HUMAN" : (meta.presets.find(p => p.id === id) || {}).code;
+const slot = (name) => meta.items.indexOf(name);
+
+function health(p) {
+  const flags = [];
+  if (p.ships === 0) flags.push(["NO FLEET", "bad"]);
+  if (p.cash <= 0 && p.debt > 0) flags.push(["BROKE", "bad"]);
+  const s = p.stock;
+  if (s[slot("ItemFuel")] === 0 || s[slot("ItemOxygen")] === 0 || s[slot("ItemRations")] === 0) flags.push(["STARVING", "bad"]);
+  if (p.debt >= 10000) flags.push(["AT LIMIT", "warn"]);
+  if (Math.max(...p.tiers) <= 1 && state.tick > 3 * 86400) flags.push(["STALLED", "warn"]);
+  return flags.length ? flags.map(([t, c]) => `<span class="${c}">${t}</span>`).join(" ") : `<span class="ok">ok</span>`;
+}
+
+function renderPlayers() {
+  const body = $("players").tBodies[0];
+  body.innerHTML = state.players.map((p, i) => {
+    const tiers = p.tiers.map(t => `<span class="tier" style="background:${t >= 4 ? "#1f6f3f" : t >= 2 ? "#3a3a1f" : "#3a1f1f"}">${t}</span>`).join("");
+    const s = p.stock;
+    return `<tr data-p="${p.playerId}" class="${p.playerId === selected ? "sel" : ""}">
+      <td style="color:${COLORS[i % COLORS.length]}">● ${p.playerId}</td>
+      <td class="l">${presetName(p.preset)}</td>
+      <td>${fmt(p.cash)}</td><td class="${p.debt > 0 ? "warn" : ""}">${fmt(p.debt)}</td>
+      <td>${tiers}</td><td>${p.fleets}</td><td>${p.ships}</td><td>${p.sites}</td>
+      <td>${p.gateOpen ? "open" : "shut"}</td>
+      <td>${fmt(s[slot("ItemFuel")])}</td><td>${fmt(s[slot("ItemOxygen")])}</td><td>${fmt(s[slot("ItemRations")])}</td>
+      <td class="l">${health(p)}</td></tr>`;
+  }).join("");
+  for (const row of body.rows)
+    row.onclick = () => { selected = +row.dataset.p; render(); };
+}
+
+function renderSide() {
+  const p = state.players.find(x => x.playerId === selected) || state.players[0];
+  $("selId").textContent = p.playerId;
+  $("stockId").textContent = p.playerId;
+  if (document.activeElement !== $("seatPreset")) $("seatPreset").value = p.preset;
+  $("seatInfo").textContent = p.preset === 0
+    ? "You control this seat. The AI does nothing here; use the commands below."
+    : `AI preset ${presetName(p.preset)} is playing this seat.`;
+  $("stock").innerHTML = meta.items.map((name, i) =>
+    `<div><span class="${i < 10 ? "dim" : ""}">${name.replace(/^(Raw|Item)/, "")}</span><span>${fmt(p.stock[i])}</span></div>`).join("");
+
+  const only = $("logSel").checked;
+  $("log").innerHTML = state.log
+    .filter(l => !only || l.playerId === selected || l.playerId === 0)
+    .map(l => {
+      const cls = l.playerId === 0 ? "warn" : l.text.startsWith("YOU") ? "ok" : "";
+      return `<div class="${cls}"><span class="dim">${clock(l.tick)}</span> P${l.playerId} ${l.text}</div>`;
+    }).join("");
+}
+
+function renderHeader() {
+  $("clock").textContent = clock(state.tick);
+  $("play").textContent = state.running ? "❚❚ Pause" : "▶ Run";
+  $("play").classList.toggle("on", state.running);
+  $("tps").textContent = state.running ? `${fmt(state.tps)} ticks/s` : "paused";
+  $("orders").textContent = `· seed ${state.seed} · ${fmt(state.orders)} AI orders`;
+  const pct = 100 * state.citadel / state.citadelMax;
+  $("citadelBar").style.width = pct + "%";
+  $("citadelText").innerHTML = state.citadelFallTick
+    ? `<span class="ok">FALLEN ${clock(state.citadelFallTick)}</span>` + (state.victoryTick ? ` · Directorate ${clock(state.victoryTick)}` : "")
+    : `${fmt(state.citadel)} / ${fmt(state.citadelMax)}`;
+}
+
+function drawChart(id, series, opts = {}) {
+  const c = $(id), dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d");
+  g.scale(dpr, dpr);
+  g.clearRect(0, 0, w, h);
+  const all = series.flatMap(s => s.points);
+  if (all.length < 2) return;
+  const pad = { l: 46, r: 8, t: 8, b: 18 };
+  const xs = all.map(p => p[0]), ys = all.map(p => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs, x0 + 1);
+  const y0 = opts.min ?? Math.min(0, ...ys), y1 = Math.max(opts.max ?? 0, ...ys, y0 + 1);
+  const X = (x) => pad.l + (x - x0) / (x1 - x0) * (w - pad.l - pad.r);
+  const Y = (y) => h - pad.b - (y - y0) / (y1 - y0) * (h - pad.t - pad.b);
+  g.strokeStyle = "#30363d"; g.fillStyle = "#8b949e"; g.font = "10px monospace"; g.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = y0 + (y1 - y0) * i / 4, y = Y(v);
+    g.beginPath(); g.moveTo(pad.l, y); g.lineTo(w - pad.r, y); g.stroke();
+    g.fillText(Math.abs(v) >= 10000 ? (v / 1000).toFixed(0) + "k" : v.toFixed(v < 10 && v % 1 ? 1 : 0), 2, y + 3);
+  }
+  const days = (x1 - x0) / 86400, stepDays = days > 40 ? 10 : days > 12 ? 5 : days > 4 ? 1 : 0.25;
+  for (let d = Math.ceil(x0 / 86400 / stepDays) * stepDays; d * 86400 <= x1; d += stepDays)
+    g.fillText("d" + d, X(d * 86400) - 6, h - 4);
+  for (const s of series) {
+    g.strokeStyle = s.color; g.lineWidth = 1.5; g.beginPath();
+    s.points.forEach(([x, y], i) => i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y)));
+    g.stroke();
+  }
+}
+
+function renderCharts() {
+  if (!history.length) return;
+  const ids = history[history.length - 1].players.map(p => p.playerId);
+  const per = (f) => ids.map((id, i) => ({
+    color: COLORS[i % COLORS.length],
+    points: history.map(s => { const p = s.players.find(q => q.playerId === id); return [s.tick, p ? f(p) : 0]; })
+  }));
+  drawChart("cCash", per(p => p.cash));
+  drawChart("cDebt", per(p => p.debt));
+  drawChart("cTier", per(p => Math.max(...p.tiers)), { min: 0, max: 5 });
+  drawChart("cShips", per(p => p.ships));
+  drawChart("cSites", per(p => p.sites));
+  drawChart("cCitadel", [{ color: "#f85149", points: history.map(s => [s.tick, s.citadelIntegrity]) }], { min: 0 });
+  $("legend").innerHTML = ids.map((id, i) => {
+    const p = state.players.find(q => q.playerId === id);
+    return `<span style="--c:${COLORS[i % COLORS.length]}">P${id} ${p ? presetName(p.preset) : ""}</span>`;
+  }).join("");
+}
+
+function render() { if (!state) return; renderHeader(); renderPlayers(); renderSide(); renderCharts(); }
+
+async function poll() {
+  try {
+    state = await api("/api/state");
+    if (history.length && history[history.length - 1].tick > state.tick) history = [];
+    const h = await api("/api/history?since=" + history.length);
+    history.push(...h.samples);
+    render();
+  } catch (e) { $("tps").textContent = "server offline"; }
+  setTimeout(poll, 500);
+}
+
+function say(r, what) {
+  $("feedback").innerHTML = r.ok
+    ? `<span class="ok">SENT ${what} · lands in ${fmt(r.landsIn)} ticks</span>`
+    : `<span class="bad">REFUSED ${what} · ${r.result || r.error}</span>`;
+}
+
+async function command(type, target, a = 0, b = 0, c = 0) {
+  const r = await api("/api/command", { playerId: selected, type, target, a, b, c });
+  say(r, type);
+}
+
+async function init() {
+  meta = await api("/api/meta");
+  for (const p of meta.presets) {
+    $("seatPreset").add(new Option(p.code, p.id));
+    $("newPreset").add(new Option("seat 1: " + p.code, p.id));
+  }
+  for (const c of meta.commands) $("cmdType").add(new Option(c, c));
+
+  $("play").onclick = () => api("/api/run", { running: !state.running });
+  $("speed").onchange = () => api("/api/run", { speed: +$("speed").value });
+  for (const b of document.querySelectorAll("[data-step]"))
+    b.onclick = () => api("/api/step", { ticks: +b.dataset.step });
+  $("runUntil").onclick = () => api("/api/run", { untilDay: +$("untilDay").value, speed: +$("speed").value });
+  $("reset").onclick = async () => {
+    await api("/api/reset", { seed: +$("seed").value, humanPreset: +$("newPreset").value });
+    history = [];
+  };
+  $("seatApply").onclick = async () => {
+    const r = await api("/api/seat", { playerId: selected, preset: +$("seatPreset").value });
+    $("feedback").innerHTML = r.ok ? `<span class="ok">seat ${selected} → ${presetName(+$("seatPreset").value)}</span>` : `<span class="bad">${r.error}</span>`;
+  };
+  for (const b of document.querySelectorAll("[data-cmd]"))
+    b.onclick = () => command(b.dataset.cmd, b.dataset.target, +(b.dataset.a || 0));
+  $("buildShips").onclick = () => {
+    const p = state.players.find(x => x.playerId === selected);
+    command("BuildShips", "core", +$("shipClass").value, +$("shipCount").value, p.tiers[0]);
+  };
+  $("sendRaw").onclick = () => command($("cmdType").value, $("cmdTarget").value, +$("pa").value || 0, +$("pb").value || 0, +$("pc").value || 0);
+  $("logSel").onchange = render;
+  window.onresize = renderCharts;
+  poll();
+}
+init();
+</script>
+</body>

@@ -131,3 +131,11 @@ All capture analysis scripts in `tools/ld/` automatically analyze at **450x800**
 | `prepare_unity_3d.py`, `BuildRecoveredGallery.cs`, `ValidateRecoveredScenes.cs`, `verify_packages.py` | build and validate recovered Unity 3D prefabs, scenes, and `.unitypackage` archives |
 
 
+
+---
+
+## 6. Sim Lab — `tools/simlab/` (bot simulation + browser control)
+
+.NET 10 app that runs `Unruled.Core` headless with AI on every seat. `dotnet run -c Release` serves a
+control page on http://localhost:5080 (speed, seat takeover, commands, charts); `dotnet run -c Release --
+batch --seeds 5 --days 30` prints a per-seed survival report. See `tools/simlab/README.md`.

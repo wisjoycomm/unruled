@@ -88,7 +88,12 @@ dotnet test .temp\coretest --filter "FullyQualifiedName~GameSoakTests"   # one c
 
 `LangVersion 9.0` matches what Unity compiles, so C# features Unity rejects also fail here.
 
-## 4. Quick rule checks (no Unity)
+## 4. Sim Lab (bot simulation, no Unity)
+
+`tools/simlab/` runs the real Core rules headless with AI on every seat and a browser control page;
+see `tools/simlab/README.md`. `cd tools/simlab; dotnet run -c Release` then open http://localhost:5080.
+
+## 5. Quick rule checks (no Unity)
 
 ```bash
 grep -rln "UnityEngine" Assets/Scripts/Core                    # expect nothing
@@ -96,7 +101,7 @@ grep -rln "System.Linq" Assets/Scripts/Core                    # expect nothing
 grep -rnE "\.Current\b|Find(Any)?Object" Assets/Scripts        # expect nothing new
 ```
 
-## 5. State on 2026-10-19 (second machine)
+## 6. State on 2026-10-19 (second machine)
 
 - Pulled `bbfdf71..4ef7c68` (loans, nuclear strike, relays, research branches, ChaCha8, balance lock).
 - Headless build: 0 warnings, 0 errors. Tests: 346 / 346 pass.
