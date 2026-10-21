@@ -36,7 +36,7 @@ namespace Unruled.Tests.Core.AI
             sim.Standings.Get(hq).IsAudited = true; // so the audit opt-in doesn't add an order to every think
             sim.Ledger.TryFindPlayerWallet(Me, out var wallet);
             sim.Ledger.Burn(wallet, sim.Ledger.Balance(wallet)); // and no WTO bids for the stress test
-            sim.Loans.Get(hq) = new Loan { PrincipalCents = sim.Balance.Ledger.CreditLimitCents, DueTick = long.MaxValue }; // nor loans
+            sim.Loans.Get(hq) = new Loan { PrincipalCents = sim.Lending.CreditLimitCents(hq), DueTick = long.MaxValue }; // nor loans
             return sim;
         }
 

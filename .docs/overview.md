@@ -102,7 +102,7 @@ methods, in this order (rule 4).
   - `Wallet` (credits as `long` cents on player HQs and the three pools: WTO fees, STA tolls, WTO escrow) and
     `Ledger` (`Transfer` never overdraws or creates money; `Grant` only for world setup, `Lend` for loans).
   - `LoanSystem` + `Loan` (on the HQ): THE SYSTEM's credit line, the only new money in play. `Borrow` / `Repay`
-    (ParamA credits) up to `LedgerBalance.CreditLimitCents`; daily interest after the interest-free start goes to the
+    (ParamA credits) up to `LoanSystem.CreditLimitCents(hq)` (base `LedgerBalance.CreditLimitCents` plus bonuses per tech tier unlocked above Tier 1, open jump gate, owned outpost and owned refinery); daily interest after the interest-free start goes to the
     WTO fee pool on repayment; an overdue debt takes the wallet, then core-base goods at the WTO reference price.
   - `WtoMarketEngine` + `WtoOrder` / `ItemMarket` (VWAP ring) + `WtoBalance`; `IMarketRates` (bracket fees and
     escrow), `IMarketAccess` (Call-to-Arms bar), `ITradeSettlement`; `ContractCargo` and `StolenGoods` components.

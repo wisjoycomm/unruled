@@ -406,6 +406,9 @@ namespace Unruled.Core.AI
         private int[] _playerMinedOres = Array.Empty<int>();
         private bool[] _playerDormantGate = Array.Empty<bool>();
         private EntityId[] _playerDormantGateSite = Array.Empty<EntityId>();
+        private bool[] _playerOpenGate = Array.Empty<bool>();
+        private int[] _playerOutpostCount = Array.Empty<int>();
+        private int[] _playerRefineryCount = Array.Empty<int>();
         private int[] _playerShipOrders = Array.Empty<int>();
         private int[] _playerBuyOrderMask = Array.Empty<int>();
         private int[] _playerSellOrderMask = Array.Empty<int>();
@@ -450,6 +453,9 @@ namespace Unruled.Core.AI
                 Array.Resize(ref _playerMinedOres, cap);
                 Array.Resize(ref _playerDormantGate, cap);
                 Array.Resize(ref _playerDormantGateSite, cap);
+                Array.Resize(ref _playerOpenGate, cap);
+                Array.Resize(ref _playerOutpostCount, cap);
+                Array.Resize(ref _playerRefineryCount, cap);
                 Array.Resize(ref _playerShipOrders, cap);
                 Array.Resize(ref _playerBuyOrderMask, cap);
                 Array.Resize(ref _playerSellOrderMask, cap);
@@ -471,6 +477,9 @@ namespace Unruled.Core.AI
                 _playerMinedOres[playerId] = 0;
                 _playerDormantGate[playerId] = false;
                 _playerDormantGateSite[playerId] = default;
+                _playerOpenGate[playerId] = false;
+                _playerOutpostCount[playerId] = 0;
+                _playerRefineryCount[playerId] = 0;
                 _playerShipOrders[playerId] = 0;
                 _playerBuyOrderMask[playerId] = 0;
                 _playerSellOrderMask[playerId] = 0;
@@ -567,6 +576,8 @@ namespace Unruled.Core.AI
                 EnsurePlayerSlot(pid);
                 _playerSiteNext[i] = _playerFirstSite[pid];
                 _playerFirstSite[pid] = i;
+                if (_sites.EntityAt(i) != _playerCoreBase[pid])
+                    _playerOutpostCount[pid]++;
             }
             if (_depositNext.Length < _deposits.Count)
             {
@@ -725,14 +736,25 @@ namespace Unruled.Core.AI
                 _siteRefineryCount[s]++;
                 _siteRefineryMask[s] |= 1 << ItemIds.ToSlot(refinery.Output);
                 _siteRefineryRaws[s] |= RecipeRaws(refinery.Output);
+                if (_sites.Has(site))
+                {
+                    int pid = _sites.Get(site).OwnerPlayerId;
+                    if (pid > 0)
+                    {
+                        EnsurePlayerSlot(pid);
+                        _playerRefineryCount[pid]++;
+                    }
+                }
             }
             for (int g = 0; g < _gates.Count; g++)
             {
                 ref var gate = ref _gates.At(g);
-                if (gate.OwnerPlayerId <= 0 || gate.IsOpen)
+                if (gate.OwnerPlayerId <= 0)
                     continue;
                 EnsurePlayerSlot(gate.OwnerPlayerId);
-                if (!_playerDormantGate[gate.OwnerPlayerId])
+                if (gate.IsOpen)
+                    _playerOpenGate[gate.OwnerPlayerId] = true;
+                else if (!_playerDormantGate[gate.OwnerPlayerId])
                 {
                     _playerDormantGate[gate.OwnerPlayerId] = true;
                     _playerDormantGateSite[gate.OwnerPlayerId] = gate.HomeSite;
@@ -1364,8 +1386,9 @@ namespace Unruled.Core.AI
             }
         }
 
-        // THE SYSTEM's credit line: below the travel cash it borrows up to the cash reserve, repays from cash above twice it,
-        // and once the debt falls due (or is about to, within an AI think of it) repays all it can, so its goods aren't seized.
+        // THE SYSTEM's credit line: below the travel cash it borrows up to the cash reserve (within its dynamic credit limit),
+        // repays from cash above twice it, and once the debt falls due (or is about to, within an AI think of it) repays all
+        // it can, so its goods aren't seized.
         private void ThinkFinance(in PlayerHq player, AiPreset preset, EntityId hq, long tick)
         {
             if (!_loans.Has(hq))
@@ -1377,7 +1400,7 @@ namespace Unruled.Core.AI
             if (loan.DebtCents > 0 && tick + _balance.ThinkIntervalTicks >= loan.DueTick)
                 repay = Math.Min(cash, loan.DebtCents);
             else if (cash < _balance.TravelCashCredits * Wallet.CentsPerCredit)
-                borrow = Math.Min(reserve - cash, Math.Max(0, _ledgerBalance.CreditLimitCents - loan.DebtCents));
+                borrow = Math.Min(reserve - cash, Math.Max(0, CreditLimitCents(player.PlayerId, hq) - loan.DebtCents));
             else if (cash > 2 * reserve)
                 repay = Math.Min(cash - reserve, loan.DebtCents);
             // Commands carry whole credits: borrow rounds up, repay down.
@@ -1388,6 +1411,23 @@ namespace Unruled.Core.AI
             var type = borrow > 0 ? CommandType.Borrow : CommandType.Repay;
             Issue(new DelayedPlayerCommand { PlayerId = player.PlayerId, CommandType = type, Target = player.CoreBase, ParamA = credits },
                 borrow > 0 ? AiAction.Borrow : AiAction.Repay, Score(preset.ResupplyLogisticsWeight, Threshold));
+        }
+
+        private long CreditLimitCents(int playerId, EntityId hq)
+        {
+            int techSteps = 0;
+            if (_progress.Has(hq))
+            {
+                ref var tech = ref _progress.Get(hq);
+                techSteps = Math.Max(0, tech.TechTier - 1) + Math.Max(0, tech.IndustryTier - 1) +
+                            Math.Max(0, tech.LogisticsTier - 1) + Math.Max(0, tech.SignalsTier - 1);
+            }
+            bool valid = playerId > 0 && playerId < _playerStamp.Length && _playerStamp[playerId] == _thinkStamp;
+            return _ledgerBalance.DynamicCreditLimitCents(
+                techSteps,
+                valid && _playerOpenGate[playerId],
+                valid ? _playerOutpostCount[playerId] : 0,
+                valid ? _playerRefineryCount[playerId] : 0);
         }
 
         // WTO: cancels its orders open past the trade window; sells surplus into a rival's bid, or else, under the travel

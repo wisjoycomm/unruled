@@ -321,17 +321,17 @@ namespace Unruled.View.UI
                 return;
             ref var loan = ref _sim.Loans.Get(_hq);
             bool overdue = LoanSystem.IsOverdue(in loan, tick);
+            long limit = _sim.Lending.CreditLimitCents(_hq) / Wallet.CentsPerCredit;
             long left = loan.DebtCents == 0 ? 0 : (loan.DueTick - tick) / SimTick.TicksPerMinute;
-            long key = (loan.DebtCents << 20) ^ left ^ (overdue ? 1L << 62 : 0);
+            long key = (loan.DebtCents << 20) ^ (limit << 40) ^ left ^ (overdue ? 1L << 62 : 0);
             if (key != _cache[9])
-                UiFormat.Set(_loan, ref _cache[9], key, LoanText(in loan, overdue, tick));
+                UiFormat.Set(_loan, ref _cache[9], key, LoanText(in loan, limit, overdue, tick));
             _borrow.SetEnabled(_sim.Lending.HeadroomCents(_hq, tick) > 0);
             _repay.SetEnabled(loan.DebtCents > 0 && _sim.Ledger.Balance(_hq) > 0);
         }
 
-        private string LoanText(in Loan loan, bool overdue, long tick)
+        private string LoanText(in Loan loan, long limit, bool overdue, long tick)
         {
-            long limit = _sim.Balance.Ledger.CreditLimitCents / Wallet.CentsPerCredit;
             if (loan.DebtCents == 0)
                 return "NO DEBT · LIMIT " + UiFormat.Thousands(limit) + " CR";
             string debt = "OWES " + UiFormat.Price(loan.DebtCents) + " CR";

@@ -94,5 +94,22 @@ namespace Unruled.Tests.Core.AI
             Assert.AreEqual(0, Loan.DebtCents);
             Assert.AreEqual(0, Cash);
         }
+
+        [Test]
+        public void AtTheBaseCreditLimit_UnlockingTechOrInfrastructure_RaisesTheLimitAndAllowsBorrowingAgain()
+        {
+            Loan.PrincipalCents = _sim.Balance.Ledger.CreditLimitCents;
+            Loan.DueTick = long.MaxValue;
+            Assert.IsFalse(Think(AiAction.Borrow).HasValue, "at the base limit");
+
+            _sim.TechProgress.Get(_hq).TechTier = 2;
+            var outpost = _sim.World.Create();
+            _sim.Sites.Add(outpost, new SiteInfo { OwnerPlayerId = Me });
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _home, Output = ItemId.ItemSteel });
+
+            Assert.IsTrue(Think(AiAction.Borrow).HasValue, "headroom unlocked by tech, outpost and refinery");
+            RunPendingOrders();
+            Assert.AreEqual(Reserve, Cash);
+        }
     }
 }

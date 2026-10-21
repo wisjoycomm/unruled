@@ -48,7 +48,9 @@ namespace Unruled.SimLab
                 ? d.Ledger
                 : new Unruled.Core.Economy.LedgerBalance(d.Ledger.StartingCents,
                     creditLimit.Value * Unruled.Core.Economy.Wallet.CentsPerCredit, d.Ledger.InterestFreeTicks,
-                    d.Ledger.DailyInterestBasisPoints, d.Ledger.LoanTermTicks);
+                    d.Ledger.DailyInterestBasisPoints, d.Ledger.LoanTermTicks,
+                    d.Ledger.CreditPerTechTierCents, d.Ledger.OpenGateCreditCents,
+                    d.Ledger.CreditPerOutpostCents, d.Ledger.CreditPerRefineryCents);
             var ng = d.NewGame;
             if (rivalCount != null)
             {
@@ -193,6 +195,23 @@ namespace Unruled.SimLab
                 if (gate.IsOpen && pid > 0 && pid < byPid.Length && byPid[pid] != null)
                     byPid[pid].GateOpen = true;
             }
+            for (int i = 0; i < Sim.Refineries.Count; i++)
+            {
+                var site = Sim.Refineries.At(i).Site;
+                if (!Sim.Sites.Has(site)) continue;
+                int pid = Sim.Sites.Get(site).OwnerPlayerId;
+                if (pid > 0 && pid < byPid.Length && byPid[pid] != null)
+                    byPid[pid].Refineries++;
+            }
+            for (int i = 0; i < players.Count; i++)
+            {
+                var p = players[i];
+                int techSteps = Math.Max(0, p.Tiers[0] - 1) + Math.Max(0, p.Tiers[1] - 1) +
+                                Math.Max(0, p.Tiers[2] - 1) + Math.Max(0, p.Tiers[3] - 1);
+                int outposts = Math.Max(0, p.Sites - 1);
+                p.CreditLimit = Sim.Balance.Ledger.DynamicCreditLimitCents(techSteps, p.GateOpen, outposts, p.Refineries) /
+                                Wallet.CentsPerCredit;
+            }
 
             var sample = new Sample { Tick = tick, Players = players };
             if (Sim.Citadels.Count > 0)
@@ -258,6 +277,13 @@ namespace Unruled.SimLab
             for (int i = 0; i < Sim.JumpGates.Count; i++)
                 if (Sim.JumpGates.At(i).OwnerPlayerId == playerId && Sim.JumpGates.At(i).IsOpen)
                     p.GateOpen = true;
+            for (int i = 0; i < Sim.Refineries.Count; i++)
+            {
+                var site = Sim.Refineries.At(i).Site;
+                if (Sim.Sites.Has(site) && Sim.Sites.Get(site).OwnerPlayerId == playerId)
+                    p.Refineries++;
+            }
+            p.CreditLimit = Sim.Lending.CreditLimitCents(hq) / Wallet.CentsPerCredit;
             return p;
         }
     }
@@ -275,11 +301,13 @@ namespace Unruled.SimLab
         public byte Preset { get; set; }
         public long Cash { get; set; }
         public long Debt { get; set; }
+        public long CreditLimit { get; set; }
         public int[] Tiers { get; set; }
         public int Fleets { get; set; }
         public int Ships { get; set; }
         public int LineShips { get; set; }
         public int Sites { get; set; }
+        public int Refineries { get; set; }
         public bool GateOpen { get; set; }
         public int[] Stock { get; set; }
     }

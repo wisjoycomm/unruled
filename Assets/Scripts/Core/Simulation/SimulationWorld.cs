@@ -267,7 +267,8 @@ namespace Unruled.Core.Simulation
                 balance.Leaderboard);
             Clock.Register(Audit);
             Commands.Register(CommandType.AuditOptIn, Audit);
-            Lending = new LoanSystem(Loans, Players, Stockpiles, Ledger, WtoFeePool, Market, balance.Ledger);
+            Lending = new LoanSystem(
+                Loans, Players, Stockpiles, Ledger, WtoFeePool, Market, balance.Ledger, Sites, Refineries, TechProgress, JumpGates);
             Clock.Register(Lending);
             Commands.Register(CommandType.Borrow, Lending);
             Commands.Register(CommandType.Repay, Lending);

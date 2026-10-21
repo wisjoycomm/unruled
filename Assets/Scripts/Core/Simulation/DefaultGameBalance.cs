@@ -267,7 +267,11 @@ namespace Unruled.Core.Simulation
         /// </summary>
         public static LedgerBalance CreateLedgerBalance() => new LedgerBalance(
             startingCents: 0, creditLimitCents: 10_000 * Wallet.CentsPerCredit, interestFreeTicks: 30 * SimTick.TicksPerDay,
-            dailyInterestBasisPoints: 100, loanTermTicks: 30 * SimTick.TicksPerDay);
+            dailyInterestBasisPoints: 100, loanTermTicks: 30 * SimTick.TicksPerDay,
+            creditPerTechTierCents: 2_500 * Wallet.CentsPerCredit,
+            openGateCreditCents: 5_000 * Wallet.CentsPerCredit,
+            creditPerOutpostCents: 3_000 * Wallet.CentsPerCredit,
+            creditPerRefineryCents: 1_000 * Wallet.CentsPerCredit);
 
         /// <summary>The STA toll is 0.2 credits per ship per 100 units of highway.</summary>
         public static StaBalance CreateStaBalance() => new StaBalance(tollCentsPerShipPer100Units: 20);

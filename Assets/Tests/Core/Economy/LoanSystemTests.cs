@@ -130,5 +130,46 @@ namespace Unruled.Tests.Core.Economy
             Assert.Greater(Loan.DebtCents, 0);
             Assert.IsTrue(LoanSystem.IsOverdue(in Loan, dueDay));
         }
+
+        [Test]
+        public void CreditLimit_RisesWithTechTiers_AnOpenGate_Outposts_AndRefineries_AndLendsUpToTheRaisedLimit()
+        {
+            long limit = Rules.CreditLimitCents;
+            Assert.AreEqual(limit, _sim.Lending.CreditLimitCents(_hq));
+
+            ref var tech = ref _sim.TechProgress.Get(_hq);
+            tech.TechTier = 3;
+            tech.LogisticsTier = 2; // 3 tiers unlocked above Tier 1
+            limit += 3 * Rules.CreditPerTechTierCents;
+            Assert.AreEqual(limit, _sim.Lending.CreditLimitCents(_hq), "tech tiers above Tier 1");
+
+            var outpost = _sim.World.Create();
+            _sim.Sites.Add(outpost, new SiteInfo { OwnerPlayerId = Me });
+            limit += Rules.CreditPerOutpostCents;
+            Assert.AreEqual(limit, _sim.Lending.CreditLimitCents(_hq), "owned outpost beyond core base");
+
+            var gate = _sim.World.Create();
+            _sim.JumpGates.Add(gate, new JumpGate { OwnerPlayerId = Me, HomeSite = _core, FarSite = outpost });
+            Assert.AreEqual(limit, _sim.Lending.CreditLimitCents(_hq), "dormant gate adds nothing");
+            var lane = _sim.World.Create();
+            _sim.JumpGates.Get(gate).Lane = lane;
+            limit += Rules.OpenGateCreditCents;
+            Assert.AreEqual(limit, _sim.Lending.CreditLimitCents(_hq), "open jump gate");
+
+            var neutral = _sim.World.Create();
+            _sim.Sites.Add(neutral, new SiteInfo { OwnerPlayerId = 0 });
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = neutral, Output = ItemId.ItemSteel });
+            Assert.AreEqual(limit, _sim.Lending.CreditLimitCents(_hq), "unowned refinery adds nothing");
+
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = _core, Output = ItemId.ItemSteel });
+            _sim.Refineries.Add(_sim.World.Create(), new Refinery { Site = outpost, Output = ItemId.ItemAlloy });
+            limit += 2 * Rules.CreditPerRefineryCents;
+            Assert.AreEqual(limit, _sim.Lending.CreditLimitCents(_hq), "owned refineries");
+
+            Send(CommandType.Borrow, 1_000_000, tick: 100);
+            Assert.AreEqual(limit, Cash, "lends up to the raised limit");
+            Assert.AreEqual(limit, Loan.PrincipalCents);
+            Assert.AreEqual(0, _sim.Lending.HeadroomCents(_hq, 100));
+        }
     }
 }

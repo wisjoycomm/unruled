@@ -1,13 +1,16 @@
 using System;
+using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Military;
+using Unruled.Core.Research;
 using Unruled.Core.Simulation;
 
 namespace Unruled.Core.Economy
 {
     /// <summary>
     /// Owns <see cref="Loan"/>: THE SYSTEM's credit line, the one source of new money in play (players start with none).
-    /// Borrow (target: any site, for latency; ParamA credits) lends up to the credit limit, never while overdue.
+    /// Borrow (target: any site, for latency; ParamA credits) lends up to the dynamic credit limit (base limit plus tech
+    /// milestones and productive infrastructure collateral), never while overdue.
     /// Repay (ParamA credits) pays interest first, into the WTO fee pool (it returns as leaderboard dividends), then the
     /// principal, which is burned. Every day after the interest-free start, interest accrues on the principal; a debt
     /// falls due a loan term after interest starts on it. On each day it is overdue THE SYSTEM takes the player's credits,
@@ -22,10 +25,16 @@ namespace Unruled.Core.Economy
         private readonly EntityId _interestPool;
         private readonly WtoMarketEngine _market;
         private readonly LedgerBalance _balance;
+        private readonly ComponentStore<SiteInfo> _sites;
+        private readonly ComponentStore<Refinery> _refineries;
+        private readonly ComponentStore<TechProgress> _techProgress;
+        private readonly ComponentStore<JumpGate> _jumpGates;
 
         public LoanSystem(
             ComponentStore<Loan> loans, ComponentStore<PlayerHq> players, ComponentStore<Stockpile> stockpiles, Ledger ledger,
-            EntityId interestPool, WtoMarketEngine market, LedgerBalance balance)
+            EntityId interestPool, WtoMarketEngine market, LedgerBalance balance, ComponentStore<SiteInfo> sites = null,
+            ComponentStore<Refinery> refineries = null, ComponentStore<TechProgress> techProgress = null,
+            ComponentStore<JumpGate> jumpGates = null)
         {
             _loans = loans ?? throw new ArgumentNullException(nameof(loans));
             _players = players ?? throw new ArgumentNullException(nameof(players));
@@ -35,6 +44,60 @@ namespace Unruled.Core.Economy
             _interestPool = interestPool;
             _market = market ?? throw new ArgumentNullException(nameof(market));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
+            _sites = sites;
+            _refineries = refineries;
+            _techProgress = techProgress;
+            _jumpGates = jumpGates;
+        }
+
+        /// <summary>
+        /// Total credit limit for a player HQ: base limit plus tech progression (branch tiers unlocked above Tier 1 and an
+        /// open jump gate) and productive infrastructure collateral (owned outposts beyond the core base and refineries).
+        /// </summary>
+        public long CreditLimitCents(EntityId hq)
+        {
+            if (_balance.CreditLimitCents <= 0 || !_players.Has(hq))
+                return _balance.CreditLimitCents;
+            ref var player = ref _players.Get(hq);
+            int pid = player.PlayerId;
+            int techSteps = 0;
+            if (_techProgress != null && _techProgress.Has(hq))
+            {
+                ref var tech = ref _techProgress.Get(hq);
+                techSteps = Math.Max(0, tech.TechTier - 1) + Math.Max(0, tech.IndustryTier - 1) +
+                            Math.Max(0, tech.LogisticsTier - 1) + Math.Max(0, tech.SignalsTier - 1);
+            }
+            bool gateOpen = false;
+            if (_jumpGates != null)
+            {
+                for (int i = 0; i < _jumpGates.Count; i++)
+                {
+                    ref var gate = ref _jumpGates.At(i);
+                    if (gate.OwnerPlayerId == pid && gate.IsOpen)
+                    {
+                        gateOpen = true;
+                        break;
+                    }
+                }
+            }
+            int outposts = 0;
+            if (_sites != null)
+            {
+                for (int i = 0; i < _sites.Count; i++)
+                    if (_sites.At(i).OwnerPlayerId == pid && _sites.EntityAt(i) != player.CoreBase)
+                        outposts++;
+            }
+            int refineries = 0;
+            if (_refineries != null && _sites != null)
+            {
+                for (int i = 0; i < _refineries.Count; i++)
+                {
+                    var site = _refineries.At(i).Site;
+                    if (_sites.Has(site) && _sites.Get(site).OwnerPlayerId == pid)
+                        refineries++;
+                }
+            }
+            return _balance.DynamicCreditLimitCents(techSteps, gateOpen, outposts, refineries);
         }
 
         /// <summary>What the player may still borrow now: 0 while overdue.</summary>
@@ -43,7 +106,7 @@ namespace Unruled.Core.Economy
             if (!_loans.Has(hq))
                 return 0;
             ref var loan = ref _loans.Get(hq);
-            return IsOverdue(in loan, tick) ? 0 : Math.Max(0, _balance.CreditLimitCents - loan.DebtCents);
+            return IsOverdue(in loan, tick) ? 0 : Math.Max(0, CreditLimitCents(hq) - loan.DebtCents);
         }
 
         public static bool IsOverdue(in Loan loan, long tick) => loan.DebtCents > 0 && tick >= loan.DueTick;

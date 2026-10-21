@@ -136,7 +136,7 @@ namespace Unruled.SimLab
             const int fuel = (int)Unruled.Core.Economy.ItemId.ItemFuel - 1;
             const int oxygen = (int)Unruled.Core.Economy.ItemId.ItemOxygen - 1;
             const int rations = (int)Unruled.Core.Economy.ItemId.ItemRations - 1;
-            long limit = game.Sim.Balance.Ledger.CreditLimitCents / Unruled.Core.Economy.Wallet.CentsPerCredit;
+            long baseLimit = game.Sim.Balance.Ledger.CreditLimitCents / Unruled.Core.Economy.Wallet.CentsPerCredit;
             var h = new Health();
             foreach (var s in game.History)
             {
@@ -149,7 +149,8 @@ namespace Unruled.SimLab
                 h.MinOxygen = Math.Min(h.MinOxygen, p.Stock[oxygen]);
                 h.MinRations = Math.Min(h.MinRations, p.Stock[rations]);
                 if (p.Stock[fuel] == 0 || p.Stock[oxygen] == 0 || p.Stock[rations] == 0) h.DryHours++;
-                if (p.Debt >= limit) h.LimitHours++;
+                long limit = p.CreditLimit > 0 ? p.CreditLimit : baseLimit;
+                if (limit > 0 && p.Debt >= limit) h.LimitHours++;
                 for (int b = 0; b < 4; b++)
                     if (h.T5Day[b] < 0 && p.Tiers[b] >= 5) h.T5Day[b] = s.Tick / (double)SimTick.TicksPerDay;
             }
