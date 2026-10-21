@@ -15,6 +15,7 @@ namespace Unruled.Core.Simulation
 
         public long CurrentTick { get; private set; }
         public int PendingCommandCount => _queue.Count;
+        public int Version { get; private set; }
 
         /// <summary>Read access to the queue, in execution order (orders still in signal latency).</summary>
         public DelayedPlayerCommand PendingAt(int index) => _queue[index];
@@ -44,6 +45,7 @@ namespace Unruled.Core.Simulation
             while (index > 0 && _queue[index - 1].ExecuteAtTick > command.ExecuteAtTick)
                 index--;
             _queue.Insert(index, command);
+            Version++;
         }
 
         public void Advance(long ticks)
@@ -66,7 +68,10 @@ namespace Unruled.Core.Simulation
                 _handler.Handle(in command, CurrentTick);
             }
             if (due > 0)
+            {
                 _queue.RemoveRange(0, due);
+                Version++;
+            }
 
             for (int i = 0; i < _systems.Count; i++)
                 _systems[i].OnTick(CurrentTick);

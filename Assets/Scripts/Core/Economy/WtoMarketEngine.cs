@@ -42,6 +42,8 @@ namespace Unruled.Core.Economy
         private readonly ITradeSettlement _settlement;
         private readonly IMarketAccess _access;
         private readonly WtoBalance _balance;
+        private int _dirtyItems = ~0;
+        private int _lastOrderCount = -1;
 
         public WtoMarketEngine(
             World world, ComponentStore<WtoOrder> orders, ComponentStore<ItemMarket> markets,
@@ -112,13 +114,26 @@ namespace Unruled.Core.Economy
 
         public void OnTick(long tick)
         {
+            if (_orders.Count != _lastOrderCount)
+                _dirtyItems = ~0;
+            if (_dirtyItems == 0 || _orders.Count == 0)
+            {
+                _dirtyItems = 0;
+                _lastOrderCount = _orders.Count;
+                return;
+            }
+            int mask = _dirtyItems;
+            _dirtyItems = 0;
             for (int slot = 0; slot < ItemIds.Count; slot++)
             {
+                if ((mask & (1 << slot)) == 0)
+                    continue;
                 var item = ItemIds.FromSlot(slot);
                 while (TryFindBest(item, OrderSide.Buy, out var buy) && TryFindBest(item, OrderSide.Sell, out var sell) &&
                        _orders.Get(buy).PriceCents >= _orders.Get(sell).PriceCents)
                     Match(buy, sell, tick);
             }
+            _lastOrderCount = _orders.Count;
         }
 
         private void Place(in DelayedPlayerCommand command, OrderSide side, long tick)
@@ -155,6 +170,8 @@ namespace Unruled.Core.Economy
                 OwnerPlayerId = command.PlayerId, Item = item, Side = side, PriceCents = price, Remaining = quantity,
                 Site = site, PlacedTick = tick, DepositCents = deposit
             });
+            _dirtyItems |= 1 << ItemIds.ToSlot(item);
+            _lastOrderCount = _orders.Count;
         }
 
         private void SellToSystem(in DelayedPlayerCommand command, long tick)
@@ -214,6 +231,7 @@ namespace Unruled.Core.Economy
             else
                 Pay(_escrow, Wallet(o.OwnerPlayerId), o.PriceCents * o.Remaining);
             _world.Destroy(order);
+            _lastOrderCount = _orders.Count;
         }
 
         private void Match(EntityId buyOrder, EntityId sellOrder, long tick)
@@ -270,6 +288,9 @@ namespace Unruled.Core.Economy
 
         private EntityId Market(ItemId item)
         {
+            int slot = ItemIds.ToSlot(item);
+            if (slot >= 0 && slot < _markets.Count && _markets.At(slot).Item == item)
+                return _markets.EntityAt(slot);
             for (int i = 0; i < _markets.Count; i++)
                 if (_markets.At(i).Item == item)
                     return _markets.EntityAt(i);

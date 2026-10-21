@@ -100,18 +100,89 @@ namespace Unruled.Core.Military
 
             command.IssuedAtTick = _clock.CurrentTick;
             command.ExecuteAtTick = _clock.CurrentTick + latency;
+            bool wasSynced = _syncedVersion == _clock.Version;
             _clock.Enqueue(command);
+            if (wasSynced)
+            {
+                AppendIndexed(in command);
+                _syncedVersion = _clock.Version;
+            }
             executeAtTick = command.ExecuteAtTick;
             return IssueResult.Issued;
+        }
+
+        private int _syncedVersion = -1;
+        private int _indexStamp;
+        private int[] _playerStamp = Array.Empty<int>();
+        private int[] _firstByPlayer = Array.Empty<int>();
+        private DelayedPlayerCommand[] _indexed = Array.Empty<DelayedPlayerCommand>();
+        private int[] _nextInPlayer = Array.Empty<int>();
+        private int[] _orderInPlayer = Array.Empty<int>();
+        private int _indexedCount;
+
+        private int FirstForPlayer(int playerId)
+        {
+            if (playerId <= 0 || _clock.PendingCommandCount == 0)
+                return -1;
+            if (_syncedVersion != _clock.Version)
+                RebuildIndex();
+            return playerId < _playerStamp.Length && _playerStamp[playerId] == _indexStamp ? _firstByPlayer[playerId] : -1;
+        }
+
+        private void RebuildIndex()
+        {
+            if (++_indexStamp == int.MaxValue)
+            {
+                Array.Clear(_playerStamp, 0, _playerStamp.Length);
+                _indexStamp = 1;
+            }
+            _indexedCount = 0;
+            int n = _clock.PendingCommandCount;
+            for (int i = 0; i < n; i++)
+            {
+                var cmd = _clock.PendingAt(i);
+                AppendIndexed(in cmd);
+            }
+            _syncedVersion = _clock.Version;
+        }
+
+        private void AppendIndexed(in DelayedPlayerCommand cmd)
+        {
+            int pid = cmd.PlayerId;
+            if (pid <= 0)
+                return;
+            if (pid >= _playerStamp.Length)
+            {
+                int cap = Math.Max(pid + 1, _playerStamp.Length == 0 ? 32 : _playerStamp.Length * 2);
+                Array.Resize(ref _playerStamp, cap);
+                Array.Resize(ref _firstByPlayer, cap);
+            }
+            if (_playerStamp[pid] != _indexStamp)
+            {
+                _playerStamp[pid] = _indexStamp;
+                _firstByPlayer[pid] = -1;
+            }
+            if (_indexedCount == _indexed.Length)
+            {
+                int cap = _indexed.Length == 0 ? 64 : _indexed.Length * 2;
+                Array.Resize(ref _indexed, cap);
+                Array.Resize(ref _nextInPlayer, cap);
+                Array.Resize(ref _orderInPlayer, cap);
+            }
+            int slot = _indexedCount++;
+            _indexed[slot] = cmd;
+            _orderInPlayer[slot] = slot;
+            _nextInPlayer[slot] = _firstByPlayer[pid];
+            _firstByPlayer[pid] = slot;
         }
 
         /// <summary>True while an order of this type from the player for this target waits out its latency.</summary>
         public bool IsInFlight(int playerId, CommandType type, EntityId target)
         {
-            for (int i = 0; i < _clock.PendingCommandCount; i++)
+            for (int s = FirstForPlayer(playerId); s >= 0; s = _nextInPlayer[s])
             {
-                var pending = _clock.PendingAt(i);
-                if (pending.PlayerId == playerId && pending.CommandType == type && pending.Target == target)
+                ref var pending = ref _indexed[s];
+                if (pending.CommandType == type && pending.Target == target)
                     return true;
             }
             return false;
@@ -120,26 +191,33 @@ namespace Unruled.Core.Military
         /// <summary>True while a Move from the player to this destination site waits out its latency; gives its fleet.</summary>
         public bool IsMoveInFlight(int playerId, EntityId destination, out EntityId fleet)
         {
-            for (int i = 0; i < _clock.PendingCommandCount; i++)
+            fleet = default;
+            long bestTick = long.MaxValue;
+            int bestOrder = int.MaxValue;
+            for (int s = FirstForPlayer(playerId); s >= 0; s = _nextInPlayer[s])
             {
-                var pending = _clock.PendingAt(i);
-                if (pending.PlayerId == playerId && pending.CommandType == CommandType.Move && pending.ParamEntity == destination)
+                ref var pending = ref _indexed[s];
+                if (pending.CommandType == CommandType.Move && pending.ParamEntity == destination)
                 {
-                    fleet = pending.Target;
-                    return true;
+                    int ord = _orderInPlayer[s];
+                    if (pending.ExecuteAtTick < bestTick || (pending.ExecuteAtTick == bestTick && ord < bestOrder))
+                    {
+                        bestTick = pending.ExecuteAtTick;
+                        bestOrder = ord;
+                        fleet = pending.Target;
+                    }
                 }
             }
-            fleet = default;
-            return false;
+            return bestOrder != int.MaxValue;
         }
 
         /// <summary>True while a command of this type from the player naming this entity (ParamEntity) waits out its latency.</summary>
         public bool IsInFlightTo(int playerId, CommandType type, EntityId paramEntity)
         {
-            for (int i = 0; i < _clock.PendingCommandCount; i++)
+            for (int s = FirstForPlayer(playerId); s >= 0; s = _nextInPlayer[s])
             {
-                var pending = _clock.PendingAt(i);
-                if (pending.PlayerId == playerId && pending.CommandType == type && pending.ParamEntity == paramEntity)
+                ref var pending = ref _indexed[s];
+                if (pending.CommandType == type && pending.ParamEntity == paramEntity)
                     return true;
             }
             return false;
@@ -147,6 +225,8 @@ namespace Unruled.Core.Military
 
         private bool IsParalysed(int playerId)
         {
+            if (_relocations.Count == 0)
+                return false;
             for (int i = 0; i < _players.Count; i++)
             {
                 if (_players.At(i).PlayerId != playerId)

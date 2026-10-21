@@ -42,16 +42,24 @@
 - [x] **D1:** 100% `StressTest` upgrade + tech-scaled RNG yield odds (capped at 99%) for storm telemetry, rare-ore mining, and high-tier refining; Tier 5 kept ultra-hard.
 - [x] **D2:** Uninhabited star systems (`UninhabitedClustersPerParticipant = 1`), AI neutral-first expansion (`ores > 0`), and `RoutePlanner` + `UtilityAiEngine` indexing for 100+ bots.
 - [x] **E1–E2:** All-branch Tier 4 prerequisite before Tier 5 tests; post-Citadel battle fleet wake/mothball cycle.
+- [x] **F1. Run 100+ & 500-Bot Simulations in SimLab (Ryzen 9 7945HX, 16C/32T):**
+  - Eliminated remaining $O(N^2)$ / $O(P \times S)$ / $O(S \times F)$ scaling bottlenecks across `StarlaneGraph` ($O(1)$ connected-component IDs), `RoutePlanner` (`4096`-slot incremental Dijkstra cache, `SameComponent` & `maxLanes` early-outs), `SignalLatencySolver` ($O(1)$ HQ cache + target early-out), `CommandIssuer` (per-player pending order buckets), `Ledger` / `TechGates` / `ResearchSystem` ($O(1)$ player caches), `NoaaWeatherEngine` (per-cluster site index + dirty-weather lane skip), `WtoMarketEngine` (dirty-item bitmask), `NewGameSetup` / `StarlaneGenerator` (single `Graph.Rebuild`), and `UtilityAiEngine` (per-player fleet/deposit/site/WTO linked lists, packed `_siteOreCounts`, `_armedSites`, `_clusterFirstNeutralSite` / `_compFirstOpenSite` siege candidate lists, $O(1)$ rival ask lookup, and `FuelToLoad` siege target reuse).
+  - Verified 100% bit-for-bit deterministic equivalence on `5 bots x 5 days` (`orders = 57,649`), `100 bots x 1 day` (`orders = 296,181`, runtime `25.4s -> 7.9s`), and `100 bots x 5 days` (`orders = 1,385,390`, `58.4s`).
+  - **100 bots x 90 days (`seed 1234`):** completed in **`773.6s` (`12.9 min`)** (`25,403,871` orders).
+  - **500 bots x 10 days (`seed 1234`, `1,001` star clusters, `4,180` sites):** completed in **`1,663.2s` (`27.7 min`)** (`11,349,562` orders).
+- [x] **F2. Analyze 100-Bot (90-Day) & 500-Bot (10-Day) Results:**
+  - **Survival & Expansion (`D2`):**
+    - **100 bots x 90 days:** `100/100` bots alive (`0` `NO-FLEET`, `0` `BROKE`, `0` `STALLED-T1`, `0` `NO-EXPANSION`), `91/100` Jump Gates `open`, `468` player-owned sites across the 100 home + 100 uninhabited star systems (`2–7` sites/bot).
+    - **500 bots x 10 days:** `438/500` (`87.6%`) `ok`, `0/500` `BROKE`, `0/500` `NO-FLEET`, `0/500` `NO-EXPANSION`, `27/500` (`5.4%`) spent `> 1 day` at the loan limit.
+  - **Tech Tier Distribution at Day 90 (`D1` / `E1`):**
+    - `0/100` reached Tier 5 by Day 90 (confirming Tier 5 remains an ultra-hard long-term goal).
+    - `3/100` bots (`P30 Warlord_Conqueror`, `P78 Industrialist_Trader`, `P98 Industrialist_Trader`) reached **`4/4/4/4` (Tier 4 across all 4 branches)**.
+    - `55/100` bots reached Tier 4 in at least 1 branch (and built 80–86 ship Tier-4 battle lines); `62/100` reached Tier 3+.
+  - **Loan / Credit Flow (`C1`):**
+    - At Day 90, `0/100` bots are `BROKE` (all hold `1,002–4,315` cash), `27/100` have `0` debt, only `1/100` (`P92` at `9,963`) is near the `10,000` credit limit, and mean debt across all 100 bots is ~`4,160` credits (`57/100` briefly touched the limit for `> 24h` during mid-game expansion before paying debt down).
+  - **Late-Game Supply Observation (for optional `C2`):**
+    - `43/100` bots at Day 90 were flagged `STARVING` on `ItemFuel` (`minFuel = 0`) after reaching `MIL 4` (`80–86` ships) and depleting their Core Base surface/deep `RawWater` reserve before securing an active water outpost convoy or `IND 4` Core Fracture mining (`17/20` `Sentinel_Defender` bots at `80` ships stayed `ok` with `dryHrs = 0`).
 
-### Remaining Steps (To Run on Stronger PC)
-- [ ] **F1. Run 100+ Bot Simulation in SimLab:**
-  ```powershell
-  dotnet test .temp/coretest/CoreTests.csproj
-  dotnet run --project tools/simlab -c Release -- batch --seeds 1 --days 90 --bots 100 --parallel 1 --seed 1234 --csv .temp/sim-90d-100bots.csv
-  ```
-- [ ] **F2. Analyze 100-Bot Results:**
-  - Check completion time, memory usage, expansion across the 100 uninhabited star systems, WTO market trade volume, loan/credit flow (`C1`), and tech tier distribution at Day 30 / Day 60 / Day 90.
-- [ ] **C1 / C2 / D3 (If needed after 100-bot data):**
-  - `C1`: Tune AI loan repayment / spending if bots stay pinned at the loan limit in a 100-bot market.
-  - `C2`: Optional empire-size upkeep scaling (requires user OK).
-  - `D3`: Post-Citadel endgame loop (requires user OK).
+### Optional Follow-Ups (Requires User OK)
+- [ ] **C2:** Optional empire-size / battle-line upkeep scaling or earlier water-outpost prioritization when Core Base water drops low.
+- [ ] **D3:** Post-Citadel endgame loop.

@@ -153,9 +153,48 @@ namespace Unruled.SimLab
         private void TakeSample()
         {
             long tick = Tick;
-            var sample = new Sample { Tick = tick, Players = new List<PlayerSample>() };
-            for (int i = 0; i < Sim.Players.Count; i++)
-                sample.Players.Add(SamplePlayer(Sim.Players.EntityAt(i), Sim.Players.At(i).PlayerId));
+            int playerCount = Sim.Players.Count;
+            var players = new List<PlayerSample>(playerCount);
+            int maxPid = 0;
+            for (int i = 0; i < playerCount; i++)
+                if (Sim.Players.At(i).PlayerId > maxPid)
+                    maxPid = Sim.Players.At(i).PlayerId;
+            var byPid = new PlayerSample[maxPid + 1];
+
+            for (int i = 0; i < playerCount; i++)
+            {
+                var hq = Sim.Players.EntityAt(i);
+                int pid = Sim.Players.At(i).PlayerId;
+                var p = CreateBaseSample(hq, pid);
+                players.Add(p);
+                if (pid >= 0 && pid < byPid.Length)
+                    byPid[pid] = p;
+            }
+            for (int i = 0; i < Sim.Fleets.Count; i++)
+            {
+                ref var fleet = ref Sim.Fleets.At(i);
+                int pid = fleet.OwnerPlayerId;
+                if (pid <= 0 || pid >= byPid.Length || byPid[pid] == null) continue;
+                var p = byPid[pid];
+                p.Fleets++;
+                p.Ships += fleet.TotalShips;
+                p.LineShips += fleet.LineShips;
+            }
+            for (int i = 0; i < Sim.Sites.Count; i++)
+            {
+                int pid = Sim.Sites.At(i).OwnerPlayerId;
+                if (pid > 0 && pid < byPid.Length && byPid[pid] != null)
+                    byPid[pid].Sites++;
+            }
+            for (int i = 0; i < Sim.JumpGates.Count; i++)
+            {
+                ref var gate = ref Sim.JumpGates.At(i);
+                int pid = gate.OwnerPlayerId;
+                if (gate.IsOpen && pid > 0 && pid < byPid.Length && byPid[pid] != null)
+                    byPid[pid].GateOpen = true;
+            }
+
+            var sample = new Sample { Tick = tick, Players = players };
             if (Sim.Citadels.Count > 0)
             {
                 ref var citadel = ref Sim.Citadels.At(0);
@@ -174,7 +213,7 @@ namespace Unruled.SimLab
             History.Add(sample);
         }
 
-        public PlayerSample SamplePlayer(EntityId hq, int playerId)
+        private PlayerSample CreateBaseSample(EntityId hq, int playerId)
         {
             var p = new PlayerSample { PlayerId = playerId };
             p.Cash = Sim.Wallets.Has(hq) ? Sim.Wallets.Get(hq).Cents / Wallet.CentsPerCredit : 0;
@@ -190,6 +229,21 @@ namespace Unruled.SimLab
             }
             else
                 p.Tiers = new int[4];
+            var core = Sim.Players.Get(hq).CoreBase;
+            p.Stock = new int[ItemIds.Count];
+            if (!core.IsNull && Sim.Stockpiles.Has(core))
+            {
+                ref var stock = ref Sim.Stockpiles.Get(core);
+                for (int s = 0; s < ItemIds.Count; s++)
+                    p.Stock[s] = stock.Get(ItemIds.FromSlot(s));
+            }
+            p.Preset = Sim.AiControllers.Has(hq) ? Sim.AiControllers.Get(hq).Archetype : (byte)0;
+            return p;
+        }
+
+        public PlayerSample SamplePlayer(EntityId hq, int playerId)
+        {
+            var p = CreateBaseSample(hq, playerId);
             for (int i = 0; i < Sim.Fleets.Count; i++)
             {
                 ref var fleet = ref Sim.Fleets.At(i);
@@ -204,15 +258,6 @@ namespace Unruled.SimLab
             for (int i = 0; i < Sim.JumpGates.Count; i++)
                 if (Sim.JumpGates.At(i).OwnerPlayerId == playerId && Sim.JumpGates.At(i).IsOpen)
                     p.GateOpen = true;
-            var core = Sim.Players.Get(hq).CoreBase;
-            p.Stock = new int[ItemIds.Count];
-            if (!core.IsNull && Sim.Stockpiles.Has(core))
-            {
-                ref var stock = ref Sim.Stockpiles.Get(core);
-                for (int s = 0; s < ItemIds.Count; s++)
-                    p.Stock[s] = stock.Get(ItemIds.FromSlot(s));
-            }
-            p.Preset = PresetOf(playerId);
             return p;
         }
     }

@@ -11,6 +11,7 @@ namespace Unruled.Core.Economy
     public sealed class Ledger
     {
         private readonly ComponentStore<Wallet> _wallets;
+        private EntityId[] _byPlayer = new EntityId[16];
 
         public Ledger(ComponentStore<Wallet> wallets)
         {
@@ -54,11 +55,26 @@ namespace Unruled.Core.Economy
         {
             if (playerId != 0)
             {
+                if (playerId > 0 && playerId < _byPlayer.Length)
+                {
+                    var cached = _byPlayer[playerId];
+                    if (!cached.IsNull && _wallets.Has(cached) && _wallets.Get(cached).OwnerPlayerId == playerId)
+                    {
+                        wallet = cached;
+                        return true;
+                    }
+                }
                 for (int i = 0; i < _wallets.Count; i++)
                 {
                     if (_wallets.At(i).OwnerPlayerId == playerId)
                     {
                         wallet = _wallets.EntityAt(i);
+                        if (playerId > 0)
+                        {
+                            if (playerId >= _byPlayer.Length)
+                                Array.Resize(ref _byPlayer, Math.Max(playerId + 1, _byPlayer.Length * 2));
+                            _byPlayer[playerId] = wallet;
+                        }
                         return true;
                     }
                 }

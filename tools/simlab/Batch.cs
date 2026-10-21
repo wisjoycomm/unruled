@@ -119,18 +119,19 @@ namespace Unruled.SimLab
                 Players = new List<PlayerResult>()
             };
             var last = game.History[game.History.Count - 1];
-            foreach (var p in last.Players)
+            for (int idx = 0; idx < last.Players.Count; idx++)
             {
+                var p = last.Players[idx];
                 string code = p.Preset == 0 ? "human (idle)" : game.Sim.Balance.Ai.Preset(p.Preset).Code;
                 r.Players.Add(new PlayerResult
                 {
-                    Last = p, PresetCode = code, Verdict = Verdict(game, p), History = game.History, Health = MeasureHealth(game, p.PlayerId)
+                    Last = p, PresetCode = code, Verdict = Verdict(game, p), History = game.History, Health = MeasureHealth(game, idx, p.PlayerId)
                 });
             }
             return r;
         }
 
-        private static Health MeasureHealth(LabGame game, int playerId)
+        private static Health MeasureHealth(LabGame game, int playerIndex, int playerId)
         {
             const int fuel = (int)Unruled.Core.Economy.ItemId.ItemFuel - 1;
             const int oxygen = (int)Unruled.Core.Economy.ItemId.ItemOxygen - 1;
@@ -139,8 +140,11 @@ namespace Unruled.SimLab
             var h = new Health();
             foreach (var s in game.History)
             {
-                var p = s.Players.Find(q => q.PlayerId == playerId);
-                if (p == null || s.Tick == 0) continue;
+                if (s.Tick == 0) continue;
+                var p = playerIndex < s.Players.Count && s.Players[playerIndex].PlayerId == playerId
+                    ? s.Players[playerIndex]
+                    : s.Players.Find(q => q.PlayerId == playerId);
+                if (p == null) continue;
                 h.MinFuel = Math.Min(h.MinFuel, p.Stock[fuel]);
                 h.MinOxygen = Math.Min(h.MinOxygen, p.Stock[oxygen]);
                 h.MinRations = Math.Min(h.MinRations, p.Stock[rations]);
@@ -191,8 +195,12 @@ namespace Unruled.SimLab
                     foreach (var p in s.Players)
                         sb.Append($"{r.Seed},{s.Tick / (double)SimTick.TicksPerDay:0.###},{p.PlayerId},{p.Preset},{p.Cash},{p.Debt}," +
                                   $"{p.Tiers[0]},{p.Tiers[1]},{p.Tiers[2]},{p.Tiers[3]},{p.Ships},{p.Sites},{(p.GateOpen ? 1 : 0)},{s.CitadelIntegrity}\n");
-            File.WriteAllText(path, sb.ToString());
-            Console.WriteLine("CSV: " + Path.GetFullPath(path));
+            string fullPath = Path.GetFullPath(path);
+            string dir = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+            File.WriteAllText(fullPath, sb.ToString());
+            Console.WriteLine("CSV: " + fullPath);
         }
 
         private static string Day(long tick) => tick == 0 ? "-" : "day " + (tick / (double)SimTick.TicksPerDay).ToString("0.0");

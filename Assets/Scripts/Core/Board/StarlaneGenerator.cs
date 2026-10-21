@@ -16,14 +16,19 @@ namespace Unruled.Core.Board
 
         public static void LinkSystem(
             World world, ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes,
-            StarlaneBalance balance, ulong systemSeed, int clusterId)
+            StarlaneBalance balance, ulong systemSeed, int clusterId) =>
+            LinkSystem(world, sites, lanes, balance, systemSeed, clusterId, 0);
+
+        internal static void LinkSystem(
+            World world, ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes,
+            StarlaneBalance balance, ulong systemSeed, int clusterId, int startIndex)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (sites == null) throw new ArgumentNullException(nameof(sites));
             if (lanes == null) throw new ArgumentNullException(nameof(lanes));
             if (balance == null) throw new ArgumentNullException(nameof(balance));
 
-            var orbits = CollectOrbits(sites, clusterId);
+            var orbits = CollectOrbits(sites, clusterId, startIndex);
             var rng = new ChaCha8(systemSeed ^ StreamSalt);
 
             for (int i = 0; i + 1 < orbits.Length; i++)
@@ -42,15 +47,15 @@ namespace Unruled.Core.Board
             }
         }
 
-        private static EntityId[] CollectOrbits(ComponentStore<SiteInfo> sites, int clusterId)
+        private static EntityId[] CollectOrbits(ComponentStore<SiteInfo> sites, int clusterId, int startIndex)
         {
             int count = 0;
-            for (int i = 0; i < sites.Count; i++)
+            for (int i = startIndex; i < sites.Count; i++)
                 if (sites.At(i).ClusterId == clusterId)
                     count++;
 
             var orbits = new EntityId[count];
-            for (int i = 0; i < sites.Count; i++)
+            for (int i = startIndex; i < sites.Count; i++)
             {
                 ref var site = ref sites.At(i);
                 if (site.ClusterId != clusterId)

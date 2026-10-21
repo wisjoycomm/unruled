@@ -29,6 +29,14 @@ namespace Unruled.Core.Board
         private readonly ulong _worldSeed;
 
         private EntityId[] _expired = new EntityId[16];
+        private int _indexedSiteCount = -1;
+        private int _maxCluster = -1;
+        private int[] _clusterFirstSite = Array.Empty<int>();
+        private int[] _clusterSiteCount = Array.Empty<int>();
+        private int[] _siteNextInCluster = Array.Empty<int>();
+        private SiteWeather[] _prevWeather = Array.Empty<SiteWeather>();
+        private int _lastLaneCount = -1;
+        private int _lastLaneWeatherCount = -1;
 
         public NoaaWeatherEngine(
             World world, ComponentStore<StormFront> fronts, ComponentStore<SiteInfo> sites,
@@ -51,11 +59,60 @@ namespace Unruled.Core.Board
 
         public void OnTick(long tick)
         {
+            EnsureClusterIndex();
             ExpireFronts(tick);
             if (tick % _balance.RollIntervalTicks == 0)
                 RollFronts(tick);
-            UpdateSiteWeather(tick);
-            UpdateLaneWeather();
+            bool changed = UpdateSiteWeather(tick);
+            if (changed || _lanes.Count != _lastLaneCount || _laneWeather.Count != _lastLaneWeatherCount)
+            {
+                UpdateLaneWeather();
+                _lastLaneCount = _lanes.Count;
+                _lastLaneWeatherCount = _laneWeather.Count;
+            }
+        }
+
+        private void EnsureClusterIndex()
+        {
+            if (_indexedSiteCount == _sites.Count)
+                return;
+            _indexedSiteCount = _sites.Count;
+            int maxCluster = -1;
+            for (int i = 0; i < _sites.Count; i++)
+            {
+                int c = _sites.At(i).ClusterId;
+                if (c > maxCluster)
+                    maxCluster = c;
+            }
+            _maxCluster = maxCluster;
+            if (maxCluster < 0)
+                return;
+            int clusterCap = maxCluster + 1;
+            if (_clusterFirstSite.Length < clusterCap)
+            {
+                int cap = Math.Max(clusterCap, _clusterFirstSite.Length == 0 ? 32 : _clusterFirstSite.Length * 2);
+                Array.Resize(ref _clusterFirstSite, cap);
+                Array.Resize(ref _clusterSiteCount, cap);
+            }
+            for (int c = 0; c <= maxCluster; c++)
+            {
+                _clusterFirstSite[c] = -1;
+                _clusterSiteCount[c] = 0;
+            }
+            if (_siteNextInCluster.Length < _sites.Count)
+                Array.Resize(ref _siteNextInCluster, Math.Max(_sites.Count, _siteNextInCluster.Length == 0 ? 64 : _siteNextInCluster.Length * 2));
+            for (int i = _sites.Count - 1; i >= 0; i--)
+            {
+                int c = _sites.At(i).ClusterId;
+                if (c < 0)
+                {
+                    _siteNextInCluster[i] = -1;
+                    continue;
+                }
+                _siteNextInCluster[i] = _clusterFirstSite[c];
+                _clusterFirstSite[c] = i;
+                _clusterSiteCount[c]++;
+            }
         }
 
         private void ExpireFronts(long tick)
@@ -85,10 +142,8 @@ namespace Unruled.Core.Board
 
         public int MaxClusterId()
         {
-            int maxCluster = -1;
-            for (int i = 0; i < _sites.Count; i++)
-                maxCluster = Math.Max(maxCluster, _sites.At(i).ClusterId);
-            return maxCluster;
+            EnsureClusterIndex();
+            return _maxCluster;
         }
 
         /// <summary>The front a star system spawns on a roll tick, if any. Pure: the same map, seed and tick give the same front.</summary>
@@ -97,10 +152,8 @@ namespace Unruled.Core.Board
             front = default;
             if (tick % _balance.RollIntervalTicks != 0)
                 return false;
-            int siteCount = 0;
-            for (int i = 0; i < _sites.Count; i++)
-                if (_sites.At(i).ClusterId == cluster)
-                    siteCount++;
+            EnsureClusterIndex();
+            int siteCount = cluster >= 0 && cluster <= _maxCluster ? _clusterSiteCount[cluster] : 0;
             if (siteCount == 0)
                 return false;
 
@@ -137,37 +190,46 @@ namespace Unruled.Core.Board
 
         private ref SiteInfo SiteOfCluster(int cluster, int ordinal)
         {
-            for (int i = 0; i < _sites.Count; i++)
+            for (int i = _clusterFirstSite[cluster]; i >= 0; i = _siteNextInCluster[i])
             {
-                if (_sites.At(i).ClusterId != cluster)
-                    continue;
                 if (ordinal-- == 0)
                     return ref _sites.At(i);
             }
             throw new InvalidOperationException($"Cluster {cluster} has fewer sites than expected.");
         }
 
-        private void UpdateSiteWeather(long tick)
+        private bool UpdateSiteWeather(long tick)
         {
-            for (int i = 0; i < _siteWeather.Count; i++)
+            int count = _siteWeather.Count;
+            if (_prevWeather.Length < count)
+                Array.Resize(ref _prevWeather, Math.Max(count, _prevWeather.Length == 0 ? 64 : _prevWeather.Length * 2));
+            for (int i = 0; i < count; i++)
             {
+                _prevWeather[i] = _siteWeather.At(i);
                 var siteId = _siteWeather.EntityAt(i);
                 ref var weather = ref _siteWeather.At(i);
                 weather = default;
-                if (!_sites.Has(siteId))
-                    continue;
+                if (_sites.Has(siteId) && _sites.Get(siteId).IsIrradiated(tick))
+                    weather.SolarRadiationLevel = _irradiationSolarLevel;
+            }
 
-                ref var site = ref _sites.Get(siteId);
-                for (int f = 0; f < _fronts.Count; f++)
+            for (int f = 0; f < _fronts.Count; f++)
+            {
+                ref var front = ref _fronts.At(f);
+                if (front.ClusterId < 0 || front.ClusterId > _maxCluster)
+                    continue;
+                long r2 = (long)front.Radius * front.Radius;
+                for (int s = _clusterFirstSite[front.ClusterId]; s >= 0; s = _siteNextInCluster[s])
                 {
-                    ref var front = ref _fronts.At(f);
-                    if (front.ClusterId != site.ClusterId)
-                        continue;
+                    ref var site = ref _sites.At(s);
                     long dx = site.PosX - front.CenterX;
                     long dy = site.PosY - front.CenterY;
-                    if (dx * dx + dy * dy > (long)front.Radius * front.Radius)
+                    if (dx * dx + dy * dy > r2)
                         continue;
-
+                    var siteId = _sites.EntityAt(s);
+                    if (!_siteWeather.Has(siteId))
+                        continue;
+                    ref var weather = ref _siteWeather.Get(siteId);
                     switch (front.Scale)
                     {
                         case StormScale.Radio:
@@ -181,10 +243,22 @@ namespace Unruled.Core.Board
                             break;
                     }
                 }
-
-                if (site.IsIrradiated(tick))
-                    weather.SolarRadiationLevel = Math.Max(weather.SolarRadiationLevel, _irradiationSolarLevel);
             }
+
+            bool changed = false;
+            for (int i = 0; i < count; i++)
+            {
+                ref var cur = ref _siteWeather.At(i);
+                ref var prev = ref _prevWeather[i];
+                if (cur.RadioBlackoutLevel != prev.RadioBlackoutLevel ||
+                    cur.SolarRadiationLevel != prev.SolarRadiationLevel ||
+                    cur.GeomagneticStormLevel != prev.GeomagneticStormLevel)
+                {
+                    changed = true;
+                    break;
+                }
+            }
+            return changed;
         }
 
         private void UpdateLaneWeather()

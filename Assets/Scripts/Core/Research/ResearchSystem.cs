@@ -36,6 +36,7 @@ namespace Unruled.Core.Research
         private readonly IResearchIncidentLog _incidents;
         private readonly ResearchBalance _balance;
         private readonly ulong _worldSeed;
+        private EntityId[] _hqByPlayer = new EntityId[16];
 
         public ResearchSystem(
             ComponentStore<TechProgress> progress, ComponentStore<PlayerHq> players, ComponentStore<FleetUnit> units,
@@ -206,9 +207,26 @@ namespace Unruled.Core.Research
 
         private EntityId FindHq(int playerId)
         {
+            if (playerId > 0 && playerId < _hqByPlayer.Length)
+            {
+                var cached = _hqByPlayer[playerId];
+                if (!cached.IsNull && _players.Has(cached) && _players.Get(cached).PlayerId == playerId)
+                    return cached;
+            }
             for (int i = 0; i < _players.Count; i++)
+            {
                 if (_players.At(i).PlayerId == playerId)
-                    return _players.EntityAt(i);
+                {
+                    var hq = _players.EntityAt(i);
+                    if (playerId > 0)
+                    {
+                        if (playerId >= _hqByPlayer.Length)
+                            Array.Resize(ref _hqByPlayer, Math.Max(playerId + 1, _hqByPlayer.Length * 2));
+                        _hqByPlayer[playerId] = hq;
+                    }
+                    return hq;
+                }
+            }
             return default;
         }
     }

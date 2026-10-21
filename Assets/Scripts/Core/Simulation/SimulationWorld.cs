@@ -312,18 +312,24 @@ namespace Unruled.Core.Simulation
         /// World setup: generates one star system's sites and lanes from its seed, gives them weather components,
         /// then reindexes the graph.
         /// </summary>
-        public void GenerateSystem(ulong systemSeed, int clusterId)
-        {
-            SystemSeedGenerator.GenerateSystem(World, Sites, Balance.Universe, systemSeed, clusterId);
-            StarlaneGenerator.LinkSystem(World, Sites, Starlanes, Balance.Starlanes, systemSeed, clusterId);
+        public void GenerateSystem(ulong systemSeed, int clusterId) =>
+            GenerateSystem(systemSeed, clusterId, rebuildGraph: true);
 
-            for (int i = 0; i < Sites.Count; i++)
+        internal void GenerateSystem(ulong systemSeed, int clusterId, bool rebuildGraph)
+        {
+            int firstSite = Sites.Count;
+            int firstLane = Starlanes.Count;
+            SystemSeedGenerator.GenerateSystem(World, Sites, Balance.Universe, systemSeed, clusterId);
+            StarlaneGenerator.LinkSystem(World, Sites, Starlanes, Balance.Starlanes, systemSeed, clusterId, firstSite);
+
+            for (int i = firstSite; i < Sites.Count; i++)
                 if (!Weather.Has(Sites.EntityAt(i)))
                     Weather.Add(Sites.EntityAt(i), default);
-            for (int i = 0; i < Starlanes.Count; i++)
+            for (int i = firstLane; i < Starlanes.Count; i++)
                 if (!LaneWeather.Has(Starlanes.EntityAt(i)))
                     LaneWeather.Add(Starlanes.EntityAt(i), default);
-            Graph.Rebuild(Starlanes);
+            if (rebuildGraph)
+                Graph.Rebuild(Starlanes);
         }
     }
 }

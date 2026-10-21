@@ -27,6 +27,7 @@ namespace Unruled.Core.Research
         private readonly ComponentStore<TechProgress> _progress;
         private readonly ComponentStore<PlayerHq> _players;
         private readonly ResearchBalance _balance;
+        private EntityId[] _byPlayer = new EntityId[16];
 
         public TechGates(ComponentStore<TechProgress> progress, ComponentStore<PlayerHq> players, ResearchBalance balance)
         {
@@ -43,11 +44,20 @@ namespace Unruled.Core.Research
         {
             if (playerId <= 0)
                 return 1;
+            if (playerId < _byPlayer.Length)
+            {
+                var cached = _byPlayer[playerId];
+                if (!cached.IsNull && _players.Has(cached) && _players.Get(cached).PlayerId == playerId)
+                    return _progress.Has(cached) ? _progress.Get(cached).Tier(branch) : (byte)1;
+            }
             for (int i = 0; i < _players.Count; i++)
             {
                 if (_players.At(i).PlayerId != playerId)
                     continue;
                 var hq = _players.EntityAt(i);
+                if (playerId >= _byPlayer.Length)
+                    Array.Resize(ref _byPlayer, Math.Max(playerId + 1, _byPlayer.Length * 2));
+                _byPlayer[playerId] = hq;
                 return _progress.Has(hq) ? _progress.Get(hq).Tier(branch) : (byte)1;
             }
             return 1;

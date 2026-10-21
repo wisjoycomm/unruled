@@ -10,11 +10,27 @@ namespace Unruled.Core.Board
     public sealed class StarlaneGraph
     {
         private int[] _offsets = new int[1];
+        private int[] _cursor = Array.Empty<int>();
+        private int[] _componentOf = Array.Empty<int>();
         private EntityId[] _neighbors = Array.Empty<EntityId>();
         private EntityId[] _edges = Array.Empty<EntityId>();
         private int _siteCapacity;
+        private int _componentCount;
+        private int _version;
 
         public int SiteCapacity => _siteCapacity;
+        public int ComponentCount => _componentCount;
+        public int Version => _version;
+
+        /// <summary>Connected component id (1..ComponentCount), or 0 if the site has no incident lanes.</summary>
+        public int ComponentOf(EntityId site) =>
+            site.Index >= 0 && site.Index < _siteCapacity ? _componentOf[site.Index] : 0;
+
+        /// <summary>True when both sites belong to the same connected component of the graph.</summary>
+        public bool SameComponent(EntityId a, EntityId b) =>
+            a.Index == b.Index ||
+            (a.Index >= 0 && a.Index < _siteCapacity && b.Index >= 0 && b.Index < _siteCapacity &&
+             _componentOf[a.Index] != 0 && _componentOf[a.Index] == _componentOf[b.Index]);
 
         /// <summary>Total adjacency slots (twice the lane count).</summary>
         public int SlotCount => _offsets[_siteCapacity];
@@ -22,6 +38,7 @@ namespace Unruled.Core.Board
         public void Rebuild(ComponentStore<StarlaneEdge> lanes)
         {
             if (lanes == null) throw new ArgumentNullException(nameof(lanes));
+            _version++;
 
             int capacity = 0;
             for (int i = 0; i < lanes.Count; i++)
@@ -49,19 +66,48 @@ namespace Unruled.Core.Board
             for (int s = 0; s < capacity; s++)
                 _offsets[s + 1] += _offsets[s];
 
-            var cursor = new int[capacity];
-            Array.Copy(_offsets, cursor, capacity);
+            if (_cursor.Length < capacity)
+                _cursor = new int[capacity];
+            Array.Copy(_offsets, _cursor, capacity);
             for (int i = 0; i < lanes.Count; i++)
             {
                 ref var lane = ref lanes.At(i);
                 var edge = lanes.EntityAt(i);
-                int a = cursor[lane.SiteA.Index]++;
+                int a = _cursor[lane.SiteA.Index]++;
                 _neighbors[a] = lane.SiteB;
                 _edges[a] = edge;
-                int b = cursor[lane.SiteB.Index]++;
+                int b = _cursor[lane.SiteB.Index]++;
                 _neighbors[b] = lane.SiteA;
                 _edges[b] = edge;
             }
+
+            if (_componentOf.Length < capacity)
+                _componentOf = new int[capacity];
+            Array.Clear(_componentOf, 0, capacity);
+            int comp = 0;
+            for (int s = 0; s < capacity; s++)
+            {
+                if (_componentOf[s] != 0 || _offsets[s] == _offsets[s + 1])
+                    continue;
+                comp++;
+                _componentOf[s] = comp;
+                int head = 0, tail = 0;
+                _cursor[tail++] = s;
+                while (head < tail)
+                {
+                    int cur = _cursor[head++];
+                    for (int slot = _offsets[cur]; slot < _offsets[cur + 1]; slot++)
+                    {
+                        int nb = _neighbors[slot].Index;
+                        if (nb < capacity && _componentOf[nb] == 0)
+                        {
+                            _componentOf[nb] = comp;
+                            _cursor[tail++] = nb;
+                        }
+                    }
+                }
+            }
+            _componentCount = comp;
         }
 
         /// <summary>First adjacency slot of the site; iterate slots up to <see cref="End"/>.</summary>

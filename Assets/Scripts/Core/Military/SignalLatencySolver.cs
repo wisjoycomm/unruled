@@ -42,6 +42,7 @@ namespace Unruled.Core.Military
         private long[] _heapDist = new long[64];
         private int[] _heapSlotSite = new int[64];
         private int _heapCount;
+        private EntityId[] _hqByPlayer = new EntityId[16];
 
         public SignalLatencySolver(
             StarlaneGraph graph, ComponentStore<StarlaneEdge> lanes, ComponentStore<SiteWeather> siteWeather,
@@ -67,8 +68,14 @@ namespace Unruled.Core.Military
             if (_siteWeather.Has(site) && _siteWeather.Get(site).RadioBlackoutLevel >= _balance.BlackoutRadioLevel &&
                 !_tech.Unlocks(playerId, TechGate.LaserComms))
                 return LatencyStatus.Blackout;
-            if (!Prepare(playerId, out var hq))
+            if (!TryGetHq(playerId, out var hq))
                 return LatencyStatus.NoHq;
+            if (site == hq.CoreBase)
+            {
+                latencyTicks = Total(0, hq);
+                return LatencyStatus.Ok;
+            }
+            PrepareAndRun(playerId, in hq, site.Index, -1);
 
             long hops = DistanceTo(site.Index);
             if (hops == long.MaxValue)
@@ -86,10 +93,11 @@ namespace Unruled.Core.Military
             if (_laneWeather.Has(lane) && _laneWeather.Get(lane).RadioBlackoutLevel >= _balance.BlackoutRadioLevel &&
                 !_tech.Unlocks(playerId, TechGate.LaserComms))
                 return LatencyStatus.Blackout;
-            if (!Prepare(playerId, out var hq))
+            if (!TryGetHq(playerId, out var hq))
                 return LatencyStatus.NoHq;
 
             ref var edge = ref _lanes.Get(lane);
+            PrepareAndRun(playerId, in hq, edge.SiteA.Index, edge.SiteB.Index);
             long nearest = Math.Min(DistanceTo(edge.SiteA.Index), DistanceTo(edge.SiteB.Index));
             if (nearest == long.MaxValue)
                 return LatencyStatus.Unreachable;
@@ -104,22 +112,42 @@ namespace Unruled.Core.Military
             return (int)Math.Min(int.MaxValue, total);
         }
 
-        private bool Prepare(int playerId, out PlayerHq hq)
+        private bool TryGetHq(int playerId, out PlayerHq hq)
         {
-            hq = default;
-            bool found = false;
+            if (playerId > 0 && playerId < _hqByPlayer.Length)
+            {
+                var cached = _hqByPlayer[playerId];
+                if (!cached.IsNull && _players.Has(cached) && _players.Get(cached).PlayerId == playerId)
+                {
+                    hq = _players.Get(cached);
+                    return !hq.CoreBase.IsNull;
+                }
+            }
             for (int i = 0; i < _players.Count; i++)
             {
                 if (_players.At(i).PlayerId != playerId)
                     continue;
                 hq = _players.At(i);
-                found = true;
-                break;
+                if (playerId > 0)
+                {
+                    Grow(ref _hqByPlayer, playerId + 1);
+                    _hqByPlayer[playerId] = _players.EntityAt(i);
+                }
+                return !hq.CoreBase.IsNull;
             }
-            if (!found || hq.CoreBase.IsNull)
-                return false;
+            hq = default;
+            return false;
+        }
 
-            _stamp++;
+        private void PrepareAndRun(int playerId, in PlayerHq hq, int targetA, int targetB)
+        {
+            if (++_stamp == int.MaxValue)
+            {
+                Array.Clear(_distStamp, 0, _distStamp.Length);
+                Array.Clear(_relaySiteStamp, 0, _relaySiteStamp.Length);
+                Array.Clear(_relayLaneStamp, 0, _relayLaneStamp.Length);
+                _stamp = 1;
+            }
             int capacity = Math.Max(_graph.SiteCapacity, hq.CoreBase.Index + 1);
             Grow(ref _distStamp, capacity);
             Grow(ref _dist, capacity);
@@ -144,21 +172,25 @@ namespace Unruled.Core.Military
                     Stamp(ref _relayLaneStamp, motion.Lane.Index);
             }
 
-            RunDijkstra(hq.CoreBase);
-            return true;
+            RunDijkstra(hq.CoreBase, targetA, targetB);
         }
 
-        private void RunDijkstra(EntityId source)
+        private void RunDijkstra(EntityId source, int targetA, int targetB)
         {
             _heapCount = 0;
             SetDistance(source.Index, 0);
             Push(0, source.Index);
+            bool settledA = false, settledB = targetB < 0 || targetB == targetA;
 
             while (_heapCount > 0)
             {
                 Pop(out long dist, out int siteIndex);
                 if (dist > _dist[siteIndex])
                     continue;
+                if (siteIndex == targetA) settledA = true;
+                if (siteIndex == targetB) settledB = true;
+                if (settledA && settledB)
+                    break;
                 for (int k = _graph.Start(siteIndex); k < _graph.End(siteIndex); k++)
                 {
                     int next = _graph.NeighborAt(k).Index;

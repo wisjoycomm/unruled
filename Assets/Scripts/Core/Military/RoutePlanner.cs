@@ -12,21 +12,139 @@ namespace Unruled.Core.Military
     /// </summary>
     public sealed class RoutePlanner
     {
+        private const int MaxCachedStates = 4096;
+
         private readonly StarlaneGraph _graph;
         private readonly ComponentStore<StarlaneEdge> _lanes;
         private readonly StarlaneBalance _laneBalance;
         private readonly FleetBalance _fleetBalance;
 
-        private long[] _cost = Array.Empty<long>();
-        private int[] _costStamp = Array.Empty<int>();
-        private int[] _doneStamp = Array.Empty<int>();
-        private EntityId[] _viaLane = Array.Empty<EntityId>();
-        private int[] _viaSite = Array.Empty<int>();
-        private long[] _heapCost = new long[32];
-        private int[] _heapSite = new int[32];
-        private int _heapCount;
-        private int _stamp;
+        private readonly SearchState _avoided = new SearchState();
+        private readonly SearchState[] _states = new SearchState[MaxCachedStates];
+        private int _stateCount;
+        private int _evictCursor;
+        private int _cacheVersion = -1;
+        private int _cacheLaneCount = -1;
+        private int _cacheSiteCap = -1;
+        private int _cacheGen = 1;
+        private int[] _keyStamp = Array.Empty<int>();
+        private int[] _keySlot = Array.Empty<int>();
         private readonly EntityId[] _reversed = new EntityId[FleetRoute.MaxLanes];
+
+        public StarlaneGraph Graph => _graph;
+
+        private sealed class SearchState
+        {
+            public int CacheKey = -1;
+            public EntityId From;
+            public byte TechTier;
+            public int Avoided = -1;
+            public int GraphVersion = -1;
+            public int LaneCount = -1;
+            public int SiteCapacity = -1;
+
+            public long[] Cost = Array.Empty<long>();
+            public int[] CostStamp = Array.Empty<int>();
+            public int[] DoneStamp = Array.Empty<int>();
+            public EntityId[] ViaLane = Array.Empty<EntityId>();
+            public int[] ViaSite = Array.Empty<int>();
+            public int[] Hops = Array.Empty<int>();
+            public bool[] HasTolls = Array.Empty<bool>();
+            public long[] HeapCost = new long[32];
+            public int[] HeapSite = new int[32];
+            public int HeapCount;
+            public int Stamp;
+
+            public void EnsureCapacity(int n)
+            {
+                if (Cost.Length >= n)
+                    return;
+                int cap = Math.Max(n, Cost.Length == 0 ? 32 : Cost.Length * 2);
+                Array.Resize(ref Cost, cap);
+                Array.Resize(ref CostStamp, cap);
+                Array.Resize(ref DoneStamp, cap);
+                Array.Resize(ref ViaLane, cap);
+                Array.Resize(ref ViaSite, cap);
+                Array.Resize(ref Hops, cap);
+                Array.Resize(ref HasTolls, cap);
+            }
+
+            public void Begin(EntityId from, byte techTier, int avoided, int graphVersion, int laneCount, int siteCapacity)
+            {
+                From = from;
+                TechTier = techTier;
+                Avoided = avoided;
+                GraphVersion = graphVersion;
+                LaneCount = laneCount;
+                SiteCapacity = siteCapacity;
+                if (++Stamp == int.MaxValue)
+                {
+                    Array.Clear(CostStamp, 0, CostStamp.Length);
+                    Array.Clear(DoneStamp, 0, DoneStamp.Length);
+                    Stamp = 1;
+                }
+                HeapCount = 0;
+                SetCost(from.Index, 0);
+                ViaSite[from.Index] = -1;
+                Hops[from.Index] = 0;
+                HasTolls[from.Index] = false;
+                Push(0, from.Index);
+            }
+
+            public long CostTo(int siteIndex) =>
+                CostStamp[siteIndex] == Stamp ? Cost[siteIndex] : long.MaxValue;
+
+            public void SetCost(int siteIndex, long cost)
+            {
+                CostStamp[siteIndex] = Stamp;
+                Cost[siteIndex] = cost;
+            }
+
+            public void Push(long cost, int siteIndex)
+            {
+                if (HeapCount == HeapCost.Length)
+                {
+                    Array.Resize(ref HeapCost, HeapCount * 2);
+                    Array.Resize(ref HeapSite, HeapCount * 2);
+                }
+                int i = HeapCount++;
+                while (i > 0)
+                {
+                    int parent = (i - 1) / 2;
+                    if (!Less(cost, siteIndex, HeapCost[parent], HeapSite[parent]))
+                        break;
+                    HeapCost[i] = HeapCost[parent];
+                    HeapSite[i] = HeapSite[parent];
+                    i = parent;
+                }
+                HeapCost[i] = cost;
+                HeapSite[i] = siteIndex;
+            }
+
+            public void Pop(out long cost, out int siteIndex)
+            {
+                cost = HeapCost[0];
+                siteIndex = HeapSite[0];
+                long lastCost = HeapCost[--HeapCount];
+                int lastSite = HeapSite[HeapCount];
+                int i = 0;
+                while (true)
+                {
+                    int child = i * 2 + 1;
+                    if (child >= HeapCount)
+                        break;
+                    if (child + 1 < HeapCount && Less(HeapCost[child + 1], HeapSite[child + 1], HeapCost[child], HeapSite[child]))
+                        child++;
+                    if (!Less(HeapCost[child], HeapSite[child], lastCost, lastSite))
+                        break;
+                    HeapCost[i] = HeapCost[child];
+                    HeapSite[i] = HeapSite[child];
+                    i = child;
+                }
+                HeapCost[i] = lastCost;
+                HeapSite[i] = lastSite;
+            }
+        }
 
         public RoutePlanner(
             StarlaneGraph graph, ComponentStore<StarlaneEdge> lanes, StarlaneBalance laneBalance, FleetBalance fleetBalance)
@@ -66,140 +184,135 @@ namespace Unruled.Core.Military
 
         /// <summary>As <see cref="TryPlan(EntityId, EntityId, byte, bool, ref FleetRoute)"/>, never passing through
         /// <paramref name="avoid"/> (unless it is the destination; null avoids nothing).</summary>
-        public bool TryPlan(EntityId from, EntityId to, byte techTier, bool tollFree, EntityId avoid, ref FleetRoute route)
+        public bool TryPlan(EntityId from, EntityId to, byte techTier, bool tollFree, EntityId avoid, ref FleetRoute route) =>
+            TryPlan(from, to, techTier, tollFree, avoid, FleetRoute.MaxLanes, out _, ref route);
+
+        internal bool TryPlan(EntityId from, EntityId to, byte techTier, bool tollFree, EntityId avoid, int maxLanes,
+            out bool hasTolls, ref FleetRoute route)
         {
             route.Clear();
+            hasTolls = false;
             int avoided = avoid.IsNull || avoid == to ? -1 : avoid.Index;
             int n = _graph.SiteCapacity;
-            if (from == to || from.Index >= n || to.Index >= n)
+            if (maxLanes < 1 || from == to || from.Index >= n || to.Index >= n || !_graph.SameComponent(from, to))
                 return false;
-            EnsureCapacity(n);
-            if (++_stamp == int.MaxValue)
+            var state = AcquireState(from, techTier, tollFree, avoided, n);
+
+            if (state.DoneStamp[to.Index] != state.Stamp)
             {
-                Array.Clear(_costStamp, 0, _costStamp.Length);
-                Array.Clear(_doneStamp, 0, _doneStamp.Length);
-                _stamp = 1;
-            }
-
-            _heapCount = 0;
-            SetCost(from.Index, 0);
-            _viaSite[from.Index] = -1;
-            Push(0, from.Index);
-
-            bool reached = false;
-            while (_heapCount > 0)
-            {
-                Pop(out long currentCost, out int current);
-                if (_doneStamp[current] == _stamp || currentCost > CostTo(current))
-                    continue;
-                if (current == to.Index)
+                while (state.HeapCount > 0)
                 {
-                    reached = true;
-                    break;
-                }
-                _doneStamp[current] = _stamp;
+                    state.Pop(out long currentCost, out int current);
+                    if (state.DoneStamp[current] == state.Stamp || currentCost > state.CostTo(current))
+                        continue;
+                    state.DoneStamp[current] = state.Stamp;
+                    int nextHops = state.Hops[current] + 1;
+                    bool currentTolls = state.HasTolls[current];
 
-                for (int slot = _graph.Start(current); slot < _graph.End(current); slot++)
-                {
-                    var lane = _graph.EdgeAt(slot);
-                    ref var edge = ref _lanes.Get(lane);
-                    var rules = _laneBalance.Get(edge.Tier);
-                    if (techTier < rules.MinTechTier || (tollFree && rules.ChargesStaToll))
-                        continue;
-                    int next = _graph.NeighborAt(slot).Index;
-                    if (next == avoided || _doneStamp[next] == _stamp)
-                        continue;
-                    long cost = currentCost + TravelTicks(edge);
-                    if (cost >= CostTo(next))
-                        continue;
-                    SetCost(next, cost);
-                    _viaLane[next] = lane;
-                    _viaSite[next] = current;
-                    Push(cost, next);
+                    for (int slot = _graph.Start(current); slot < _graph.End(current); slot++)
+                    {
+                        var lane = _graph.EdgeAt(slot);
+                        ref var edge = ref _lanes.Get(lane);
+                        var rules = _laneBalance.Get(edge.Tier);
+                        if (techTier < rules.MinTechTier || (tollFree && rules.ChargesStaToll))
+                            continue;
+                        int next = _graph.NeighborAt(slot).Index;
+                        if (next == avoided || state.DoneStamp[next] == state.Stamp)
+                            continue;
+                        long cost = currentCost + TravelTicks(edge);
+                        if (cost >= state.CostTo(next))
+                            continue;
+                        state.SetCost(next, cost);
+                        state.ViaLane[next] = lane;
+                        state.ViaSite[next] = current;
+                        state.Hops[next] = nextHops;
+                        state.HasTolls[next] = currentTolls || rules.ChargesStaToll;
+                        state.Push(cost, next);
+                    }
+                    if (current == to.Index)
+                        break;
                 }
             }
-            if (!reached)
+            if (state.DoneStamp[to.Index] != state.Stamp)
+                return false;
+            hasTolls = state.HasTolls[to.Index];
+            int hops = state.Hops[to.Index];
+            if (hops > FleetRoute.MaxLanes || (!hasTolls && hops > maxLanes))
                 return false;
 
             int count = 0;
-            for (int s = to.Index; s != from.Index; s = _viaSite[s])
+            for (int s = to.Index; s != from.Index; s = state.ViaSite[s])
             {
                 if (count == FleetRoute.MaxLanes)
                     return false;
-                _reversed[count++] = _viaLane[s];
+                _reversed[count++] = state.ViaLane[s];
             }
             for (int k = 0; k < count; k++)
                 route.Append(_reversed[count - 1 - k]);
             return true;
         }
 
-        private long CostTo(int siteIndex) =>
-            _costStamp[siteIndex] == _stamp ? _cost[siteIndex] : long.MaxValue;
-
-        private void SetCost(int siteIndex, long cost)
+        private SearchState AcquireState(EntityId from, byte techTier, bool tollFree, int avoided, int n)
         {
-            _costStamp[siteIndex] = _stamp;
-            _cost[siteIndex] = cost;
-        }
-
-        private void Push(long cost, int siteIndex)
-        {
-            if (_heapCount == _heapCost.Length)
+            if (avoided >= 0)
             {
-                Array.Resize(ref _heapCost, _heapCount * 2);
-                Array.Resize(ref _heapSite, _heapCount * 2);
+                _avoided.EnsureCapacity(n);
+                _avoided.Begin(from, techTier, avoided, _graph.Version, _lanes.Count, n);
+                return _avoided;
             }
-            int i = _heapCount++;
-            while (i > 0)
+            if (_cacheVersion != _graph.Version || _cacheLaneCount != _lanes.Count || _cacheSiteCap != n)
             {
-                int parent = (i - 1) / 2;
-                if (!Less(cost, siteIndex, _heapCost[parent], _heapSite[parent]))
-                    break;
-                _heapCost[i] = _heapCost[parent];
-                _heapSite[i] = _heapSite[parent];
-                i = parent;
+                _cacheVersion = _graph.Version;
+                _cacheLaneCount = _lanes.Count;
+                _cacheSiteCap = n;
+                _stateCount = 0;
+                _evictCursor = 0;
+                if (++_cacheGen == int.MaxValue)
+                {
+                    Array.Clear(_keyStamp, 0, _keyStamp.Length);
+                    _cacheGen = 1;
+                }
             }
-            _heapCost[i] = cost;
-            _heapSite[i] = siteIndex;
-        }
-
-        private void Pop(out long cost, out int siteIndex)
-        {
-            cost = _heapCost[0];
-            siteIndex = _heapSite[0];
-            long lastCost = _heapCost[--_heapCount];
-            int lastSite = _heapSite[_heapCount];
-            int i = 0;
-            while (true)
+            int tiers = FleetBalance.TierCount + 2;
+            int tierSlot = techTier < tiers ? techTier : tiers - 1;
+            int key = (from.Index * tiers + tierSlot) * 2 + (tollFree ? 1 : 0);
+            if (key >= _keyStamp.Length)
             {
-                int child = i * 2 + 1;
-                if (child >= _heapCount)
-                    break;
-                if (child + 1 < _heapCount && Less(_heapCost[child + 1], _heapSite[child + 1], _heapCost[child], _heapSite[child]))
-                    child++;
-                if (!Less(_heapCost[child], _heapSite[child], lastCost, lastSite))
-                    break;
-                _heapCost[i] = _heapCost[child];
-                _heapSite[i] = _heapSite[child];
-                i = child;
+                int cap = Math.Max(key + 1, _keyStamp.Length == 0 ? 256 : _keyStamp.Length * 2);
+                Array.Resize(ref _keyStamp, cap);
+                Array.Resize(ref _keySlot, cap);
             }
-            _heapCost[i] = lastCost;
-            _heapSite[i] = lastSite;
+            if (_keyStamp[key] == _cacheGen)
+            {
+                var cached = _states[_keySlot[key]];
+                if (cached.From == from && cached.TechTier == techTier)
+                    return cached;
+            }
+            int slot;
+            if (_stateCount < MaxCachedStates)
+            {
+                slot = _stateCount++;
+                if (_states[slot] == null)
+                    _states[slot] = new SearchState();
+            }
+            else
+            {
+                slot = _evictCursor;
+                _evictCursor = (_evictCursor + 1) % MaxCachedStates;
+                int oldKey = _states[slot].CacheKey;
+                if (oldKey >= 0 && oldKey < _keyStamp.Length && _keySlot[oldKey] == slot)
+                    _keyStamp[oldKey] = 0;
+            }
+            var state = _states[slot];
+            state.CacheKey = key;
+            state.EnsureCapacity(n);
+            state.Begin(from, techTier, -1, _graph.Version, _lanes.Count, n);
+            _keyStamp[key] = _cacheGen;
+            _keySlot[key] = slot;
+            return state;
         }
 
         private static bool Less(long costA, int siteA, long costB, int siteB) =>
             costA < costB || (costA == costB && siteA < siteB);
-
-        private void EnsureCapacity(int n)
-        {
-            if (_cost.Length >= n)
-                return;
-            int cap = Math.Max(n, _cost.Length == 0 ? 32 : _cost.Length * 2);
-            Array.Resize(ref _cost, cap);
-            Array.Resize(ref _costStamp, cap);
-            Array.Resize(ref _doneStamp, cap);
-            Array.Resize(ref _viaLane, cap);
-            Array.Resize(ref _viaSite, cap);
-        }
     }
 }
