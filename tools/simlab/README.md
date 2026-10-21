@@ -41,6 +41,7 @@ dotnet run -c Release -- batch --seeds 10 --days 60 --first 1000 --human 4 --csv
 | `--days` | 30 | game days per seed |
 | `--first` | 1234 | first seed |
 | `--human` | 2 | preset for seat 1 (0 = idle human) |
+| `--parallel` | CPU count | games played at once (lower it when memory is short) |
 | `--csv` | none | hourly samples per seed and player |
 
 Each player gets a verdict: `ok`, or flags `NO-FLEET`, `BROKE` (no cash and in debt), `STALLED-T1`

@@ -10,7 +10,7 @@ using Unruled.Core.Simulation;
 namespace Unruled.SimLab
 {
     /// <summary>
-    /// `batch --seeds N --days D [--first S] [--human P] [--csv path]`: runs N seeds in parallel, all seats AI-run
+    /// `batch --seeds N --days D [--first S] [--human P] [--parallel K] [--csv path]`: runs N seeds in parallel, all seats AI-run
     /// (the human seat uses preset P, default 2), and prints a survival report per seed and player.
     /// </summary>
     public static class Batch
@@ -22,11 +22,12 @@ namespace Unruled.SimLab
             ulong first = (ulong)Arg(args, "--first", 1234);
             byte human = (byte)Arg(args, "--human", 2);
             string csv = ArgString(args, "--csv");
+            int parallel = Arg(args, "--parallel", Environment.ProcessorCount);
 
             Console.WriteLine($"Batch: {seeds} seeds x {days} days, seat 1 on preset {human}");
             var watch = Stopwatch.StartNew();
             var results = new Result[seeds];
-            Parallel.For(0, seeds, i =>
+            Parallel.For(0, seeds, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, parallel) }, i =>
             {
                 var game = new LabGame(first + (ulong)i, human);
                 long end = days * SimTick.TicksPerDay;
