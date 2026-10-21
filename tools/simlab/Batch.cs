@@ -61,13 +61,13 @@ namespace Unruled.SimLab
 
             Console.WriteLine();
             Console.WriteLine("LONG-RUN HEALTH (from hourly samples)");
-            Console.WriteLine("seed   player preset               minFuel  minO2 minRat  dryHrs limitHrs  fleets/ships  orders/d refused%  T5 day MIL IND LOG SIG");
+            Console.WriteLine("seed   player preset               minFuel  minO2 minRat  dryHrs limitHrs  fleets/ships  orders/d refused% blackout%  T5 day MIL IND LOG SIG");
             foreach (var r in results)
                 foreach (var p in r.Players)
                 {
                     var h = p.Health;
                     Console.WriteLine($"{r.Seed,-6} {p.Last.PlayerId,-6} {p.PresetCode,-20} {h.MinFuel,7} {h.MinOxygen,6} {h.MinRations,6} {h.DryHours,7} {h.LimitHours,8}  " +
-                        $"{p.Last.Fleets,5}/{p.Last.Ships,-6}  {h.OrdersPerDay,8:0} {h.RefusedPercent,7:0.0}  " +
+                        $"{p.Last.Fleets,5}/{p.Last.Ships,-6}  {h.OrdersPerDay,8:0} {h.RefusedPercent,7:0.0} {h.BlackoutPercent,9:0.0}  " +
                         $"{T5(h.T5Day[0]),7} {T5(h.T5Day[1]),3} {T5(h.T5Day[2]),3} {T5(h.T5Day[3]),3}");
                 }
             Console.WriteLine();
@@ -93,7 +93,7 @@ namespace Unruled.SimLab
         {
             public int MinFuel = int.MaxValue, MinOxygen = int.MaxValue, MinRations = int.MaxValue;
             public int DryHours, LimitHours;
-            public double OrdersPerDay, RefusedPercent;
+            public double OrdersPerDay, RefusedPercent, BlackoutPercent;
             public double[] T5Day = { -1, -1, -1, -1 }; // -1 = never
         }
 
@@ -147,8 +147,10 @@ namespace Unruled.SimLab
             double days = Math.Max(1, game.Tick / (double)SimTick.TicksPerDay);
             long orders = game.ActionCounts.TryGetValue(playerId, out var counts) ? counts.Sum(c => (long)c) : 0;
             long refused = game.Refused.TryGetValue(playerId, out long x) ? x : 0;
+            long blackedOut = game.BlackedOut.TryGetValue(playerId, out long y) ? y : 0;
             h.OrdersPerDay = orders / days;
             h.RefusedPercent = orders == 0 ? 0 : 100.0 * refused / orders;
+            h.BlackoutPercent = orders == 0 ? 0 : 100.0 * blackedOut / orders;
             return h;
         }
 

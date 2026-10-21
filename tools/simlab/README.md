@@ -48,6 +48,11 @@ Each player gets a verdict: `ok`, or flags `NO-FLEET`, `BROKE` (no cash and in d
 (still tier 1 after day 3), `STARVING` (core out of fuel, oxygen or rations), `NO-EXPANSION`
 (one site after day 5). Speed: about one 30-day seed per 2–4 minutes per core.
 
+A LONG-RUN HEALTH table follows, from the hourly samples: lowest core fuel / oxygen / rations, hours with one
+of them at 0, hours at the loan limit, fleets vs ships, AI orders per day, and the day each branch reached T5.
+`refused%` is orders turned down for any reason but a radio storm; `blackout%` is orders that hit a storm over
+their target and are simply retried next think until it clears (no cost, and the right call without LaserComms).
+
 ## How it fits the architecture
 
 - Tooling only: lives in `tools/`, not in the Unity project. It only links Core's `.cs` files, so Core

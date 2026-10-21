@@ -21,7 +21,8 @@ namespace Unruled.SimLab
         public readonly LinkedList<LogLine> Log = new LinkedList<LogLine>();
         public readonly Dictionary<int, int[]> ActionCounts = new Dictionary<int, int[]>();
         public long Orders;
-        public readonly Dictionary<int, long> Refused = new Dictionary<int, long>();
+        public readonly Dictionary<int, long> Refused = new Dictionary<int, long>(); // refused for any reason but a radio blackout
+        public readonly Dictionary<int, long> BlackedOut = new Dictionary<int, long>(); // waited out a storm (retried each think)
         public long CitadelFallTick;
         public long VictoryTick;
 
@@ -97,7 +98,9 @@ namespace Unruled.SimLab
                 int slot = (int)order.Action;
                 if (slot >= 0 && slot < counts.Length)
                     counts[slot]++;
-                if (order.Result != IssueResult.Issued)
+                if (order.Result == IssueResult.Blackout)
+                    BlackedOut[order.PlayerId] = (BlackedOut.TryGetValue(order.PlayerId, out long b) ? b : 0) + 1;
+                else if (order.Result != IssueResult.Issued)
                     Refused[order.PlayerId] = (Refused.TryGetValue(order.PlayerId, out long r) ? r : 0) + 1;
                 if (order.Action != AiAction.VentCoolant && order.Action != AiAction.Resupply)
                     AddLog(tick, order.PlayerId, order.Action + (order.Result == IssueResult.Issued ? "" : " (" + order.Result + ")"));
