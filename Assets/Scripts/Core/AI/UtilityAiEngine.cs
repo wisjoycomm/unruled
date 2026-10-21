@@ -1823,8 +1823,9 @@ namespace Unruled.Core.AI
         }
 
         // Branch order by preset and next needed gate: the preset's leading branch first, Logistics to the jump-gate tier
-        // when the player has a closed gate, Military to the Tier-4 ship and shortcut tier before any Tier-5 nuclear-core
-        // test, then the remaining branches.
+        // when the player has a closed gate, Military to the Tier-4 ship and shortcut tier, then every other branch to
+        // Tier 4 (laser comms, core-fracture mining: nuclear cores are scarce, and a player that can't make them would
+        // otherwise retry one Tier-5 test forever), then the Tier-5 nuclear-core tests.
         private ResearchBranch PickBranch(int playerId, AiPreset preset, in TechProgress progress)
         {
             var lead = LeadingBranch(preset);
@@ -1837,6 +1838,12 @@ namespace Unruled.Core.AI
                 return lead;
             if (progress.TechTier < preNuclear)
                 return ResearchBranch.Military;
+            for (int b = 0; b < TechProgress.BranchCount; b++)
+            {
+                var branch = (ResearchBranch)b;
+                if (progress.Tier(branch) < preNuclear)
+                    return branch;
+            }
             if (progress.TechTier < ResearchBalance.TopTier)
                 return ResearchBranch.Military;
             if (progress.Tier(lead) < ResearchBalance.TopTier)

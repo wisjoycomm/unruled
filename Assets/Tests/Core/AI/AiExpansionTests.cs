@@ -358,6 +358,13 @@ namespace Unruled.Tests.Core.AI
 
             _sim.TechProgress.Get(_hq).IndustryTier = 4;
             Assert.AreEqual(ResearchBranch.Military, NextBranch(Industrialist), "Military to Tier 4 before a Tier-5 nuclear test");
+
+            _sim.TechProgress.Get(_hq).TechTier = 4;
+            Assert.AreEqual(ResearchBranch.Logistics, NextBranch(Industrialist), "every branch to Tier 4 before a Tier-5 test");
+            _sim.TechProgress.Get(_hq).LogisticsTier = 4;
+            Assert.AreEqual(ResearchBranch.Signals, NextBranch(Industrialist));
+            _sim.TechProgress.Get(_hq).SignalsTier = 4;
+            Assert.AreEqual(ResearchBranch.Military, NextBranch(Industrialist), "then Tier 5, Military first");
         }
 
         private ResearchBranch NextBranch(byte archetype)
