@@ -329,6 +329,7 @@ namespace Unruled.Core.AI
             if (tick % _balance.ThinkIntervalTicks != 0)
                 return 0;
             _orderCount = 0;
+            IndexWorld();
             for (int c = 0; c < _controllers.Count; c++)
             {
                 var preset = _balance.Preset(_controllers.At(c).Archetype);
@@ -349,6 +350,90 @@ namespace Unruled.Core.AI
                 ThinkTrade(player, preset, _controllers.EntityAt(c), tick);
             }
             return _orderCount;
+        }
+
+        private int _thinkStamp;
+        private int[] _coreBaseStamp = Array.Empty<int>();
+        private int[] _homeClusterStamp = Array.Empty<int>();
+        private int[] _siteDepositStamp = Array.Empty<int>();
+        private int[] _siteFirstDeposit = Array.Empty<int>();
+        private int[] _depositNext = Array.Empty<int>();
+        private int[] _siteFleetStamp = Array.Empty<int>();
+        private int[] _siteFirstFleet = Array.Empty<int>();
+        private int[] _fleetNext = Array.Empty<int>();
+
+        private void IndexWorld()
+        {
+            if (++_thinkStamp == int.MaxValue)
+            {
+                Array.Clear(_coreBaseStamp, 0, _coreBaseStamp.Length);
+                Array.Clear(_homeClusterStamp, 0, _homeClusterStamp.Length);
+                Array.Clear(_siteDepositStamp, 0, _siteDepositStamp.Length);
+                Array.Clear(_siteFleetStamp, 0, _siteFleetStamp.Length);
+                _thinkStamp = 1;
+            }
+            int maxSiteIndex = 0;
+            int maxClusterId = 0;
+            for (int i = 0; i < _sites.Count; i++)
+            {
+                int idx = _sites.EntityAt(i).Index;
+                if (idx > maxSiteIndex) maxSiteIndex = idx;
+                int cid = _sites.At(i).ClusterId;
+                if (cid > maxClusterId) maxClusterId = cid;
+            }
+            int siteCap = maxSiteIndex + 1;
+            if (_coreBaseStamp.Length < siteCap)
+            {
+                int cap = Math.Max(siteCap, _coreBaseStamp.Length == 0 ? 64 : _coreBaseStamp.Length * 2);
+                Array.Resize(ref _coreBaseStamp, cap);
+                Array.Resize(ref _siteDepositStamp, cap);
+                Array.Resize(ref _siteFirstDeposit, cap);
+                Array.Resize(ref _siteFleetStamp, cap);
+                Array.Resize(ref _siteFirstFleet, cap);
+            }
+            int clusterCap = maxClusterId + 1;
+            if (_homeClusterStamp.Length < clusterCap)
+                Array.Resize(ref _homeClusterStamp, Math.Max(clusterCap, _homeClusterStamp.Length == 0 ? 32 : _homeClusterStamp.Length * 2));
+            for (int i = 0; i < _players.Count; i++)
+            {
+                var core = _players.At(i).CoreBase;
+                if (!_sites.Has(core))
+                    continue;
+                _coreBaseStamp[core.Index] = _thinkStamp;
+                int cid = _sites.Get(core).ClusterId;
+                if (cid >= 0)
+                    _homeClusterStamp[cid] = _thinkStamp;
+            }
+            if (_depositNext.Length < _deposits.Count)
+                Array.Resize(ref _depositNext, Math.Max(_deposits.Count, _depositNext.Length == 0 ? 64 : _depositNext.Length * 2));
+            for (int d = 0; d < _deposits.Count; d++)
+            {
+                var site = _deposits.At(d).Site;
+                if (!_sites.Has(site))
+                {
+                    _depositNext[d] = -1;
+                    continue;
+                }
+                int s = site.Index;
+                _depositNext[d] = _siteDepositStamp[s] == _thinkStamp ? _siteFirstDeposit[s] : -1;
+                _siteDepositStamp[s] = _thinkStamp;
+                _siteFirstDeposit[s] = d;
+            }
+            if (_fleetNext.Length < _units.Count)
+                Array.Resize(ref _fleetNext, Math.Max(_units.Count, _fleetNext.Length == 0 ? 64 : _fleetNext.Length * 2));
+            for (int f = 0; f < _units.Count; f++)
+            {
+                ref var motion = ref _motions.Get(_units.EntityAt(f));
+                if (motion.Site.IsNull || !_sites.Has(motion.Site))
+                {
+                    _fleetNext[f] = -1;
+                    continue;
+                }
+                int s = motion.Site.Index;
+                _fleetNext[f] = _siteFleetStamp[s] == _thinkStamp ? _siteFirstFleet[s] : -1;
+                _siteFleetStamp[s] = _thinkStamp;
+                _siteFirstFleet[s] = f;
+            }
         }
 
         private void ThinkFleet(in PlayerHq player, AiPreset preset, EntityId hq, EntityId fleet, long tick)
@@ -405,7 +490,7 @@ namespace Unruled.Core.AI
             int loadQuantity = 0;
             if (docked && motion.Site == player.CoreBase)
             {
-                bool telemetry = _progress.Has(hq) && _progress.Get(hq).Stage == ResearchStage.FieldTelemetry;
+                bool telemetry = NeedsTelemetry(hq);
                 if (TryPickLoad(in player, hq, preset, telemetry, in unit, ref hold, out loadItem, out loadQuantity,
                         out int shortage))
                 {
@@ -1334,13 +1419,18 @@ namespace Unruled.Core.AI
             return false;
         }
 
-        // Fill-up-to order for the hold: never below the core reserve of fuel and coolant, or the next stress test's cost.
+        // Fill-up-to order for the hold: never below the core reserve of fuel and coolant (or a life-support floor of oxygen
+        // and rations so loading a fleet never starves the core base), or the next stress test's cost.
         private bool TryLoad(
             ref Stockpile stock, EntityId hq, ref Stockpile hold, ItemId id, long target, ref ItemId item, ref int quantity,
             ref int shortage)
         {
             long gap = target - hold.Get(id);
-            long reserve = id == ItemId.ItemFuel || id == ItemId.ItemCoolant ? _balance.CoreSupplyReserve : 0;
+            long reserve = id == ItemId.ItemFuel || id == ItemId.ItemCoolant
+                ? _balance.CoreSupplyReserve
+                : id == ItemId.ItemOxygen || id == ItemId.ItemRations
+                    ? Math.Min(_balance.CoreSupplyReserve, 50)
+                    : 0;
             long available = stock.Get(id) - reserve - ProgressReserve(hq, id);
             if (gap <= 0 || available <= 0)
                 return false;
@@ -1351,8 +1441,8 @@ namespace Unruled.Core.AI
         }
 
         // Best site this fleet outguns and has the fuel to reach and come back from: a raid hunts rival fleets at a rival
-        // site; a siege takes a neutral or rival site, preferring the most ores the player mines nowhere yet. Never a
-        // core base or THE SYSTEM's site.
+        // site; a siege takes a neutral or rival site with new ore, preferring unclaimed neutral sites over rival outposts
+        // and skipping neutral sites inside another player's home system. Never a core base or THE SYSTEM's site.
         private bool FindTarget(in PlayerHq player, in FleetUnit unit, int fuel, bool raid, bool homeOnly, out EntityId target,
             out int edge)
         {
@@ -1363,6 +1453,7 @@ namespace Unruled.Core.AI
             int bestOres = 0;
             int mined = raid ? 0 : MinedOres(player.PlayerId);
             int feeds = raid ? 0 : NeededRaws(in player);
+            int homeCluster = _sites.Get(player.CoreBase).ClusterId;
             for (int i = 0; i < _sites.Count; i++)
             {
                 ref var site = ref _sites.At(i);
@@ -1370,17 +1461,25 @@ namespace Unruled.Core.AI
                 if (site.OwnerPlayerId < 0 || site.OwnerPlayerId == player.PlayerId || (raid && site.OwnerPlayerId == 0) ||
                     IsCoreBase(entity) || (homeOnly && !IsNeutralAtHome(entity, player.CoreBase)))
                     continue;
+                if (!raid && site.OwnerPlayerId == 0 && site.ClusterId != homeCluster && IsAnyHomeCluster(site.ClusterId))
+                    continue;
                 long hostile = Power(entity, player.PlayerId, mine: false);
                 if (hostile >= power || (raid && hostile == 0))
                     continue;
                 int advantage = Severity(power - hostile, power);
                 int ores = raid ? 0 : NewOres(entity, mined, feeds);
-                if (!raid && site.OwnerPlayerId == 0 && ores == 0)
-                    continue; // a neutral site with no new ore isn't worth the claim cost
-                if (ores < bestOres || (ores == bestOres && advantage < edge) ||
+                if (!raid && ores == 0)
+                    continue; // a site with no new ore isn't worth the claim cost
+                bool betterOres = ores > bestOres;
+                bool sameOres = ores == bestOres;
+                bool preferNeutral = !raid && sameOres && !target.IsNull &&
+                                     site.OwnerPlayerId == 0 && _sites.Get(target).OwnerPlayerId > 0;
+                bool worseOwner = !raid && sameOres && !target.IsNull &&
+                                  site.OwnerPlayerId > 0 && _sites.Get(target).OwnerPlayerId == 0;
+                if (worseOwner || (!betterOres && !preferNeutral && (!sameOres || advantage < edge)) ||
                     !PlanTrip(player.CoreBase, entity, in unit, trips: 2) || 2L * RouteFuel(in unit) > fuel)
                     continue;
-                if (ores == bestOres && advantage == edge && _route.Count >= bestLanes)
+                if (sameOres && !preferNeutral && advantage == edge && _route.Count >= bestLanes)
                     continue;
                 target = entity;
                 edge = advantage;
@@ -1389,6 +1488,9 @@ namespace Unruled.Core.AI
             }
             return !target.IsNull;
         }
+
+        private bool IsAnyHomeCluster(int clusterId) =>
+            clusterId >= 0 && clusterId < _homeClusterStamp.Length && _homeClusterStamp[clusterId] == _thinkStamp;
 
         // The nearest unthreatened own outpost with a bare deposit of ore worth rigging, whose rigs the hold and the site's
         // stock can pay together, within a round trip of fuel.
@@ -1710,12 +1812,14 @@ namespace Unruled.Core.AI
         // paid in it, so a player who settles elsewhere first can spend its starting steel and never claim the ore to make more.
         private int NewOres(EntityId site, int mined, int feeds)
         {
+            if (site.Index >= _siteDepositStamp.Length || _siteDepositStamp[site.Index] != _thinkStamp)
+                return 0;
             int count = 0;
-            for (int d = 0; d < _deposits.Count; d++)
+            for (int d = _siteFirstDeposit[site.Index]; d >= 0; d = _depositNext[d])
             {
                 ref var deposit = ref _deposits.At(d);
                 int bit = 1 << ItemIds.ToSlot(deposit.RawItem);
-                if (deposit.Site == site && HasOre(in deposit) && (mined & bit) == 0)
+                if (HasOre(in deposit) && (mined & bit) == 0)
                     count += (_expansionRaws & bit) != 0 ? 2 * ItemIds.Count : (feeds & bit) != 0 ? 2 : 1;
             }
             return count;
@@ -1808,7 +1912,7 @@ namespace Unruled.Core.AI
                 return;
             ref var stock = ref _stockpiles.Get(player.CoreBase);
             if (_progress.Has(hq) && _progress.Get(hq).Stage == ResearchStage.StressTest && preset.RadarBeltScanWeight > 0 &&
-                TryNextStressTest(hq, out var branch, out var cost))
+                TryNextStressTest(hq, out var branch, out var cost) && HasBranchTelemetry(in _progress.Get(hq), branch))
             {
                 bool affordable = true;
                 for (int i = 0; i < cost.Length; i++)
@@ -1856,6 +1960,22 @@ namespace Unruled.Core.AI
             branch = PickBranch(playerId, preset, in p);
             cost = _researchBalance.Tier((byte)(p.Tier(branch) + 1)).StressTestCost;
             return true;
+        }
+
+        private bool HasBranchTelemetry(in TechProgress p, ResearchBranch branch) =>
+            p.TelemetryMilli == 0 ||
+            p.TelemetryMilli >= _researchBalance.TierTelemetryTargetMilli((byte)(p.Tier(branch) + 1));
+
+        private bool NeedsTelemetry(EntityId hq)
+        {
+            if (!_progress.Has(hq))
+                return false;
+            ref var p = ref _progress.Get(hq);
+            if (p.Stage == ResearchStage.FieldTelemetry)
+                return true;
+            if (p.Stage == ResearchStage.StressTest && TryNextStressTest(hq, out var branch, out _))
+                return p.TelemetryMilli < _researchBalance.TierTelemetryTargetMilli((byte)(p.Tier(branch) + 1));
+            return false;
         }
 
         // Branch order by preset and next needed gate: the preset's leading branch first, Logistics to the jump-gate tier
@@ -1970,13 +2090,8 @@ namespace Unruled.Core.AI
             return owner >= 0 && owner != playerId && !IsCoreBase(site);
         }
 
-        private bool IsCoreBase(EntityId site)
-        {
-            for (int i = 0; i < _players.Count; i++)
-                if (_players.At(i).CoreBase == site)
-                    return true;
-            return false;
-        }
+        private bool IsCoreBase(EntityId site) =>
+            site.Index < _coreBaseStamp.Length && _coreBaseStamp[site.Index] == _thinkStamp;
 
         private long FleetPower(in FleetUnit unit) =>
             (long)unit.LineShips * _combatBalance.LineAlpha + (long)unit.EwShips * _combatBalance.EwBeta;
@@ -2178,11 +2293,13 @@ namespace Unruled.Core.AI
 
         private long Power(EntityId site, int playerId, bool mine)
         {
+            if (site.IsNull || site.Index >= _siteFleetStamp.Length || _siteFleetStamp[site.Index] != _thinkStamp)
+                return 0;
             long power = 0;
-            for (int i = 0; i < _units.Count; i++)
+            for (int i = _siteFirstFleet[site.Index]; i >= 0; i = _fleetNext[i])
             {
                 ref var unit = ref _units.At(i);
-                if ((unit.OwnerPlayerId == playerId) != mine || _motions.Get(_units.EntityAt(i)).Site != site)
+                if ((unit.OwnerPlayerId == playerId) != mine)
                     continue;
                 power += FleetPower(in unit);
             }

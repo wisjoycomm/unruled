@@ -18,9 +18,14 @@ namespace Unruled.Core.Military
         private readonly FleetBalance _fleetBalance;
 
         private long[] _cost = Array.Empty<long>();
+        private int[] _costStamp = Array.Empty<int>();
+        private int[] _doneStamp = Array.Empty<int>();
         private EntityId[] _viaLane = Array.Empty<EntityId>();
         private int[] _viaSite = Array.Empty<int>();
-        private bool[] _done = Array.Empty<bool>();
+        private long[] _heapCost = new long[32];
+        private int[] _heapSite = new int[32];
+        private int _heapCount;
+        private int _stamp;
         private readonly EntityId[] _reversed = new EntityId[FleetRoute.MaxLanes];
 
         public RoutePlanner(
@@ -69,25 +74,30 @@ namespace Unruled.Core.Military
             if (from == to || from.Index >= n || to.Index >= n)
                 return false;
             EnsureCapacity(n);
-            for (int s = 0; s < n; s++)
+            if (++_stamp == int.MaxValue)
             {
-                _cost[s] = long.MaxValue;
-                _done[s] = false;
-                _viaSite[s] = -1;
+                Array.Clear(_costStamp, 0, _costStamp.Length);
+                Array.Clear(_doneStamp, 0, _doneStamp.Length);
+                _stamp = 1;
             }
-            _cost[from.Index] = 0;
 
-            while (true)
+            _heapCount = 0;
+            SetCost(from.Index, 0);
+            _viaSite[from.Index] = -1;
+            Push(0, from.Index);
+
+            bool reached = false;
+            while (_heapCount > 0)
             {
-                int current = -1;
-                for (int s = 0; s < n; s++)
-                    if (!_done[s] && _cost[s] != long.MaxValue && (current < 0 || _cost[s] < _cost[current]))
-                        current = s;
-                if (current < 0)
-                    return false;
+                Pop(out long currentCost, out int current);
+                if (_doneStamp[current] == _stamp || currentCost > CostTo(current))
+                    continue;
                 if (current == to.Index)
+                {
+                    reached = true;
                     break;
-                _done[current] = true;
+                }
+                _doneStamp[current] = _stamp;
 
                 for (int slot = _graph.Start(current); slot < _graph.End(current); slot++)
                 {
@@ -97,16 +107,19 @@ namespace Unruled.Core.Military
                     if (techTier < rules.MinTechTier || (tollFree && rules.ChargesStaToll))
                         continue;
                     int next = _graph.NeighborAt(slot).Index;
-                    if (next == avoided)
+                    if (next == avoided || _doneStamp[next] == _stamp)
                         continue;
-                    long cost = _cost[current] + TravelTicks(edge);
-                    if (_done[next] || cost >= _cost[next])
+                    long cost = currentCost + TravelTicks(edge);
+                    if (cost >= CostTo(next))
                         continue;
-                    _cost[next] = cost;
+                    SetCost(next, cost);
                     _viaLane[next] = lane;
                     _viaSite[next] = current;
+                    Push(cost, next);
                 }
             }
+            if (!reached)
+                return false;
 
             int count = 0;
             for (int s = to.Index; s != from.Index; s = _viaSite[s])
@@ -120,14 +133,73 @@ namespace Unruled.Core.Military
             return true;
         }
 
+        private long CostTo(int siteIndex) =>
+            _costStamp[siteIndex] == _stamp ? _cost[siteIndex] : long.MaxValue;
+
+        private void SetCost(int siteIndex, long cost)
+        {
+            _costStamp[siteIndex] = _stamp;
+            _cost[siteIndex] = cost;
+        }
+
+        private void Push(long cost, int siteIndex)
+        {
+            if (_heapCount == _heapCost.Length)
+            {
+                Array.Resize(ref _heapCost, _heapCount * 2);
+                Array.Resize(ref _heapSite, _heapCount * 2);
+            }
+            int i = _heapCount++;
+            while (i > 0)
+            {
+                int parent = (i - 1) / 2;
+                if (!Less(cost, siteIndex, _heapCost[parent], _heapSite[parent]))
+                    break;
+                _heapCost[i] = _heapCost[parent];
+                _heapSite[i] = _heapSite[parent];
+                i = parent;
+            }
+            _heapCost[i] = cost;
+            _heapSite[i] = siteIndex;
+        }
+
+        private void Pop(out long cost, out int siteIndex)
+        {
+            cost = _heapCost[0];
+            siteIndex = _heapSite[0];
+            long lastCost = _heapCost[--_heapCount];
+            int lastSite = _heapSite[_heapCount];
+            int i = 0;
+            while (true)
+            {
+                int child = i * 2 + 1;
+                if (child >= _heapCount)
+                    break;
+                if (child + 1 < _heapCount && Less(_heapCost[child + 1], _heapSite[child + 1], _heapCost[child], _heapSite[child]))
+                    child++;
+                if (!Less(_heapCost[child], _heapSite[child], lastCost, lastSite))
+                    break;
+                _heapCost[i] = _heapCost[child];
+                _heapSite[i] = _heapSite[child];
+                i = child;
+            }
+            _heapCost[i] = lastCost;
+            _heapSite[i] = lastSite;
+        }
+
+        private static bool Less(long costA, int siteA, long costB, int siteB) =>
+            costA < costB || (costA == costB && siteA < siteB);
+
         private void EnsureCapacity(int n)
         {
             if (_cost.Length >= n)
                 return;
-            _cost = new long[n];
-            _viaLane = new EntityId[n];
-            _viaSite = new int[n];
-            _done = new bool[n];
+            int cap = Math.Max(n, _cost.Length == 0 ? 32 : _cost.Length * 2);
+            Array.Resize(ref _cost, cap);
+            Array.Resize(ref _costStamp, cap);
+            Array.Resize(ref _doneStamp, cap);
+            Array.Resize(ref _viaLane, cap);
+            Array.Resize(ref _viaSite, cap);
         }
     }
 }

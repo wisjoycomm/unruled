@@ -172,7 +172,7 @@ namespace Unruled.Core.Simulation
                 balance.Lifecycle, worldSeed);
             Clock.Register(WeatherEngine);
             Forecast = new NoaaForecast(WeatherEngine, Rates);
-            var mining = new MiningSystem(Deposits, Sites, Stockpiles, balance.Mining, TechGates);
+            var mining = new MiningSystem(Deposits, Sites, Stockpiles, balance.Mining, TechGates, balance.Recipes, worldSeed);
             Clock.Register(mining);
             Commands.Register(CommandType.RetractDrills, mining);
             Commands.Register(CommandType.PauseDrills, mining);
@@ -181,7 +181,7 @@ namespace Unruled.Core.Simulation
             Clock.Register(Lifecycle);
             Commands.Register(CommandType.Terraform, Lifecycle);
             var refineries = new RefinerySystem(
-                World, Refineries, Stockpiles, Weather, Sites, Ledger, balance.Recipes, balance.Refinery);
+                World, Refineries, Stockpiles, Weather, Sites, Ledger, balance.Recipes, balance.Refinery, worldSeed, TechGates);
             Clock.Register(refineries);
             Commands.Register(CommandType.BuildRefinery, refineries);
             Commands.Register(CommandType.SetRefineryCap, refineries);

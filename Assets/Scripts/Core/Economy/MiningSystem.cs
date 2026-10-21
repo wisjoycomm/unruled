@@ -20,6 +20,8 @@ namespace Unruled.Core.Economy
     /// </summary>
     public sealed class MiningSystem : ISimSystem, ICommandHandler
     {
+        private const ulong RollSalt = 0x4D494E45524F4C4CUL;
+
         private enum Depth : byte { Surface, DeepCrust, CoreFracture }
 
         private readonly ComponentStore<MineralDeposit> _deposits;
@@ -27,16 +29,20 @@ namespace Unruled.Core.Economy
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly MiningBalance _balance;
         private readonly ITechGates _tech;
+        private readonly RecipeDatabase _recipes;
+        private readonly ulong _worldSeed;
 
         public MiningSystem(
             ComponentStore<MineralDeposit> deposits, ComponentStore<SiteInfo> sites, ComponentStore<Stockpile> stockpiles,
-            MiningBalance balance, ITechGates tech)
+            MiningBalance balance, ITechGates tech, RecipeDatabase recipes = null, ulong worldSeed = 0)
         {
             _deposits = deposits ?? throw new ArgumentNullException(nameof(deposits));
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
             _tech = tech ?? throw new ArgumentNullException(nameof(tech));
+            _recipes = recipes;
+            _worldSeed = worldSeed;
         }
 
         public void OnTick(long tick)
@@ -56,7 +62,7 @@ namespace Unruled.Core.Economy
                     continue;
                 }
                 if (cycle && !deposit.IsPaused)
-                    MineDeposit(ref deposit);
+                    MineDeposit(ref deposit, _deposits.EntityAt(i), tick);
             }
         }
 
@@ -108,7 +114,7 @@ namespace Unruled.Core.Economy
             deposit.RigCount += rigs;
         }
 
-        private void MineDeposit(ref MineralDeposit deposit)
+        private void MineDeposit(ref MineralDeposit deposit, EntityId depositEntity, long tick)
         {
             Depth depth;
             MiningDepth rules;
@@ -147,9 +153,23 @@ namespace Unruled.Core.Economy
             if (!stock.Has(ItemId.ItemFuel, fuel) || !stock.Has(ItemId.ItemCoolant, coolant))
                 return;
 
-            int mined = Math.Min(yield, reserve);
             stock.Add(ItemId.ItemFuel, -fuel);
             stock.Add(ItemId.ItemCoolant, -coolant);
+
+            byte industryTier = _sites.Has(deposit.Site)
+                ? _tech.TechTierOf(_sites.Get(deposit.Site).OwnerPlayerId, ResearchBranch.Industry)
+                : (byte)1;
+            int chance = _recipes != null
+                ? _recipes.GetItem(deposit.RawItem).EffectiveMiningChancePermille(industryTier)
+                : 1000;
+            if (chance < 1000)
+            {
+                var rng = new SplitMix64(_worldSeed ^ RollSalt ^ ((ulong)(uint)depositEntity.Index << 32) ^ (ulong)tick);
+                if (rng.NextInt(0, 999) >= chance)
+                    return;
+            }
+
+            int mined = Math.Min(yield, reserve);
             stock.Add(deposit.RawItem, mined);
 
             switch (depth)

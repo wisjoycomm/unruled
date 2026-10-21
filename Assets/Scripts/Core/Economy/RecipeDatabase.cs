@@ -10,6 +10,8 @@ namespace Unruled.Core.Economy
         public readonly bool HasPreferredEsi;
         public readonly int PreferredEsiMinMilli;
         public readonly int PreferredEsiMaxMilli;
+        public readonly int MiningChancePermille;
+        public readonly int MiningChanceBonusPerTierPermille;
 
         public ItemDefinition(ItemId id, int baseWtoPrice)
         {
@@ -18,19 +20,30 @@ namespace Unruled.Core.Economy
             HasPreferredEsi = false;
             PreferredEsiMinMilli = 0;
             PreferredEsiMaxMilli = 0;
+            MiningChancePermille = 1000;
+            MiningChanceBonusPerTierPermille = 0;
         }
 
-        public ItemDefinition(ItemId id, int baseWtoPrice, int preferredEsiMinMilli, int preferredEsiMaxMilli)
+        public ItemDefinition(ItemId id, int baseWtoPrice, int preferredEsiMinMilli, int preferredEsiMaxMilli,
+            int miningChancePermille = 1000, int miningChanceBonusPerTierPermille = 0)
         {
             Id = id;
             BaseWtoPrice = baseWtoPrice;
             HasPreferredEsi = true;
             PreferredEsiMinMilli = preferredEsiMinMilli;
             PreferredEsiMaxMilli = preferredEsiMaxMilli;
+            MiningChancePermille = miningChancePermille;
+            MiningChanceBonusPerTierPermille = miningChanceBonusPerTierPermille;
         }
+
+        public int EffectiveMiningChancePermille(byte industryTier) =>
+            MiningChancePermille >= 1000
+                ? 1000
+                : Math.Min(RecipeDatabase.MaxScaledChancePermille,
+                    MiningChancePermille + Math.Max(0, industryTier - 1) * MiningChanceBonusPerTierPermille);
     }
 
-    /// <summary>Leontief recipe: Qty1 x Input1 + Qty2 x Input2 -> OutputQty x Output.</summary>
+    /// <summary>Leontief recipe: Qty1 x Input1 + Qty2 x Input2 -> OutputQty x Output, with CraftChancePermille yield odds.</summary>
     public readonly struct Recipe
     {
         public readonly ItemId Output;
@@ -39,8 +52,11 @@ namespace Unruled.Core.Economy
         public readonly int Qty1;
         public readonly ItemId Input2;
         public readonly int Qty2;
+        public readonly int CraftChancePermille;
+        public readonly int CraftChanceBonusPerTierPermille;
 
-        public Recipe(ItemId output, ItemId input1, int qty1, ItemId input2, int qty2, int outputQty = 1)
+        public Recipe(ItemId output, ItemId input1, int qty1, ItemId input2, int qty2, int outputQty = 1,
+            int craftChancePermille = 1000, int craftChanceBonusPerTierPermille = 0)
         {
             Output = output;
             OutputQty = outputQty;
@@ -48,12 +64,22 @@ namespace Unruled.Core.Economy
             Qty1 = qty1;
             Input2 = input2;
             Qty2 = qty2;
+            CraftChancePermille = craftChancePermille;
+            CraftChanceBonusPerTierPermille = craftChanceBonusPerTierPermille;
         }
+
+        public int EffectiveCraftChancePermille(byte industryTier) =>
+            CraftChancePermille >= 1000
+                ? 1000
+                : Math.Min(RecipeDatabase.MaxScaledChancePermille,
+                    CraftChancePermille + Math.Max(0, industryTier - 1) * CraftChanceBonusPerTierPermille);
     }
 
     /// <summary>Validated, read-only lookup of the 20 item definitions and the 10 refined-item recipes.</summary>
     public sealed class RecipeDatabase
     {
+        public const int MaxScaledChancePermille = 990;
+
         private readonly ItemDefinition[] _items = new ItemDefinition[ItemIds.Count];
         private readonly Recipe[] _recipes = new Recipe[ItemIds.Count];
         private readonly bool[] _hasRecipe = new bool[ItemIds.Count];
@@ -78,6 +104,8 @@ namespace Unruled.Core.Economy
                     (item.PreferredEsiMinMilli < 0 || item.PreferredEsiMaxMilli > 1000 ||
                      item.PreferredEsiMinMilli > item.PreferredEsiMaxMilli))
                     throw new ArgumentException($"{item.Id} has an invalid ESI range.", nameof(items));
+                if (item.MiningChancePermille < 1 || item.MiningChancePermille > 1000 || item.MiningChanceBonusPerTierPermille < 0)
+                    throw new ArgumentOutOfRangeException(nameof(items), $"{item.Id} mining chance must be in 1..1000 with non-negative tier bonus.");
                 _items[i] = item;
             }
 
@@ -90,6 +118,8 @@ namespace Unruled.Core.Economy
                     throw new ArgumentException($"Recipe for {recipe.Output} needs two different raw inputs.", nameof(recipes));
                 if (recipe.Qty1 <= 0 || recipe.Qty2 <= 0 || recipe.OutputQty <= 0)
                     throw new ArgumentException($"Recipe for {recipe.Output} needs positive quantities.", nameof(recipes));
+                if (recipe.CraftChancePermille < 1 || recipe.CraftChancePermille > 1000 || recipe.CraftChanceBonusPerTierPermille < 0)
+                    throw new ArgumentOutOfRangeException(nameof(recipes), $"Recipe for {recipe.Output} craft chance must be in 1..1000 with non-negative tier bonus.");
 
                 int slot = ItemIds.ToSlot(recipe.Output);
                 if (_hasRecipe[slot])

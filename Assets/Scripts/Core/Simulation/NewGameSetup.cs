@@ -28,9 +28,10 @@ namespace Unruled.Core.Simulation
     /// after the roll goes to the non-core site nearest its ESI window). The core base is the home's
     /// highest-ESI site: it is owned, rigged, given refineries and stock, and a fleet starts there. Rivals are AI-run.
     /// Then the neutral contested cluster (cluster = participant count) is generated with every raw item (filled in the
-    /// same way), and each home
-    /// gets a dormant jump gate from its outermost orbit to its own contested orbit (GDD §1.2). THE SYSTEM holds the
-    /// contested cluster's outermost orbit, which no gate lands on, as its Citadel.
+    /// same way), each home gets a dormant jump gate from its outermost orbit to its own contested orbit (GDD §1.2), and
+    /// uninhabited star systems (clusters = participant count + 1 ..) are generated with every raw item and no native life,
+    /// linked from the contested entry orbits and in an outer ring. THE SYSTEM holds the contested cluster's outermost
+    /// orbit, which no gate lands on, as its Citadel.
     /// Runs once, before the clock starts.
     /// </summary>
     public static class NewGameSetup
@@ -51,12 +52,17 @@ namespace Unruled.Core.Simulation
                 byte archetype = (byte)((i - 1) % sim.Balance.Ai.Count + 1);
                 sim.Ai.Assign(rival.PlayerHq, archetype);
             }
-            SetUpContestedCluster(sim, ref rng, playerId, 1 + rules.RivalCount);
+            int participants = 1 + rules.RivalCount;
+            SetUpContestedCluster(sim, ref rng, playerId, participants);
+            SetUpUninhabitedClusters(sim, ref rng, participants);
             return player;
         }
 
         /// <summary>The contested cluster's id in a game with this many participants.</summary>
         public static int ContestedClusterId(int participants) => participants;
+
+        /// <summary>The first uninhabited cluster's id in a game with this many participants.</summary>
+        public static int FirstUninhabitedClusterId(int participants) => ContestedClusterId(participants) + 1;
 
         private static void SetUpContestedCluster(SimulationWorld sim, ref SplitMix64 rng, int firstPlayerId, int participants)
         {
@@ -79,13 +85,70 @@ namespace Unruled.Core.Simulation
             for (int p = 0; p < participants; p++)
             {
                 var home = OuterOrbit(sim, p);
-                var far = SiteAtOrbit(sim, contested, (int)((long)p * orbits / participants));
+                var far = SiteAtOrbit(sim, contested, participants < orbits ? (int)((long)p * orbits / participants) : p % Math.Max(1, orbits - 1));
                 sim.JumpGates.Add(sim.World.Create(), new JumpGate { OwnerPlayerId = firstPlayerId + p, HomeSite = home, FarSite = far });
             }
             for (int g = 0; g < sim.JumpGates.Count; g++)
                 if (sim.JumpGates.At(g).FarSite == citadel)
                     throw new InvalidOperationException($"{participants} participants leave no free orbit for the Citadel.");
             sim.Defense.CreateCitadel(citadel);
+        }
+
+        private static void SetUpUninhabitedClusters(SimulationWorld sim, ref SplitMix64 rng, int participants)
+        {
+            int perParticipant = sim.Balance.NewGame.UninhabitedClustersPerParticipant;
+            if (perParticipant <= 0)
+                return;
+            int firstCluster = FirstUninhabitedClusterId(participants);
+            int count = participants * perParticipant;
+            for (int u = 0; u < count; u++)
+            {
+                ulong systemSeed = rng.NextULong();
+                int firstSite = sim.Sites.Count;
+                int clusterId = firstCluster + u;
+                sim.GenerateSystem(systemSeed, clusterId);
+                var siteRng = new SplitMix64(systemSeed);
+                for (int i = firstSite; i < sim.Sites.Count; i++)
+                {
+                    var site = sim.Sites.EntityAt(i);
+                    if (!sim.Stockpiles.Has(site))
+                        sim.Stockpiles.Add(site, default);
+                    AddDeposits(sim, ref siteRng, site, sim.Sites.At(i).BaseEsiMilli, home: false);
+                }
+                AddMissingRaws(sim, firstSite, clusterId, default, default, home: false);
+            }
+
+            int length = sim.Balance.JumpGates.LaneLength;
+            for (int p = 0; p < participants; p++)
+            {
+                var far = sim.JumpGates.At(p).FarSite;
+                int baseCluster = firstCluster + p * perParticipant;
+                AddInterSystemLane(sim, far, SiteAtOrbit(sim, baseCluster, 0), StarlaneTier.StaHighway, length);
+                for (int k = 1; k < perParticipant; k++)
+                    AddInterSystemLane(sim, OuterOrbit(sim, baseCluster + k - 1), SiteAtOrbit(sim, baseCluster + k, 0),
+                        StarlaneTier.StaHighway, length);
+            }
+            if (count > 1)
+                for (int u = 0; u < count; u++)
+                    AddInterSystemLane(sim, OuterOrbit(sim, firstCluster + u),
+                        OuterOrbit(sim, firstCluster + (u + 1) % count), StarlaneTier.OuterRimBypass, length);
+            sim.Graph.Rebuild(sim.Starlanes);
+        }
+
+        private static void AddInterSystemLane(SimulationWorld sim, EntityId siteA, EntityId siteB, StarlaneTier tier, int length)
+        {
+            if (siteA == siteB)
+                return;
+            for (int i = 0; i < sim.Starlanes.Count; i++)
+            {
+                ref var existing = ref sim.Starlanes.At(i);
+                if ((existing.SiteA == siteA && existing.SiteB == siteB) ||
+                    (existing.SiteA == siteB && existing.SiteB == siteA))
+                    return;
+            }
+            var lane = sim.World.Create();
+            sim.Starlanes.Add(lane, new StarlaneEdge { SiteA = siteA, SiteB = siteB, Tier = tier, Length = length });
+            sim.LaneWeather.Add(lane, default);
         }
 
         private static EntityId OuterOrbit(SimulationWorld sim, int clusterId)

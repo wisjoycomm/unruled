@@ -1,6 +1,7 @@
 using System;
 using NUnit.Framework;
 using Unruled.Core.Economy;
+using Unruled.Core.Military;
 using Unruled.Core.Simulation;
 
 namespace Unruled.Tests.Core.Simulation
@@ -16,11 +17,45 @@ namespace Unruled.Tests.Core.Simulation
             var rules = sim.Balance.NewGame;
             NewGameSetup.Create(sim, 1);
 
-            Assert.AreEqual(1 + rules.RivalCount, sim.Players.Count);
+            int participants = 1 + rules.RivalCount;
+            int totalClusters = participants + 1 + participants * rules.UninhabitedClustersPerParticipant;
+            Assert.AreEqual(participants, sim.Players.Count);
             Assert.AreEqual(rules.RivalCount, sim.AiControllers.Count);
-            Assert.AreEqual((2 + rules.RivalCount) * sim.Balance.Universe.SitesPerSystem, sim.Sites.Count, "homes + contested");
+            Assert.AreEqual(totalClusters * sim.Balance.Universe.SitesPerSystem, sim.Sites.Count, "homes + contested + uninhabited");
             for (int i = 0; i < sim.Sites.Count; i++)
                 Assert.IsTrue(sim.Stockpiles.Has(sim.Sites.EntityAt(i)), "every site has a stockpile");
+        }
+
+        [Test]
+        public void Create_UninhabitedClustersAreLifelessNeutralAndReachableFromContestedGate()
+        {
+            var sim = NewWorld();
+            var rules = sim.Balance.NewGame;
+            NewGameSetup.Create(sim, 1);
+
+            int participants = 1 + rules.RivalCount;
+            int firstUninhabited = NewGameSetup.FirstUninhabitedClusterId(participants);
+            int totalClusters = firstUninhabited + participants * rules.UninhabitedClustersPerParticipant;
+            for (int i = 0; i < sim.Sites.Count; i++)
+            {
+                ref var site = ref sim.Sites.At(i);
+                if (site.ClusterId >= firstUninhabited && site.ClusterId < totalClusters)
+                    Assert.AreEqual(0, site.OwnerPlayerId, $"uninhabited cluster {site.ClusterId} must start neutral");
+            }
+
+            var route = default(FleetRoute);
+            var gateFar = sim.JumpGates.At(0).FarSite;
+            bool foundRoute = false;
+            for (int i = 0; i < sim.Sites.Count; i++)
+            {
+                if (sim.Sites.At(i).ClusterId == firstUninhabited &&
+                    sim.Routes.TryPlan(gateFar, sim.Sites.EntityAt(i), 1, ref route))
+                {
+                    foundRoute = true;
+                    break;
+                }
+            }
+            Assert.IsTrue(foundRoute, "uninhabited system is reachable from the participant's contested gate endpoint");
         }
 
         [Test]
@@ -72,10 +107,11 @@ namespace Unruled.Tests.Core.Simulation
             var sim = NewWorld(seed);
             var rules = sim.Balance.NewGame;
             NewGameSetup.Create(sim, 1);
-            int clusters = 2 + rules.RivalCount;
+            int participants = 1 + rules.RivalCount;
+            int clusters = participants + 1 + participants * rules.UninhabitedClustersPerParticipant;
             for (int cluster = 0; cluster < clusters; cluster++)
             {
-                bool home = cluster < clusters - 1;
+                bool home = cluster < participants;
                 for (int slot = 0; slot < ItemIds.RawCount; slot++)
                 {
                     var raw = ItemIds.FromSlot(slot);

@@ -74,14 +74,14 @@ namespace Unruled.Core.Simulation
             buildTicksPerShip: new[] { 30, 45, 60, 90, 120 });
 
         /// <summary>
-        /// GDD §2.3: P_base tier 2/3/4/5 = 60/45/30/20%, +18% per failed test; gates from GDD §1.2 / §2.1 B / tab 02:
-        /// laser comms (Signals) and core-fracture mining (Industry) at Tier 4, terraforming (Industry) at Tier 5, the home
-        /// jump gate (Logistics) at Tier 2 (§1.2); stress-test items follow tab 03's Build_And_Repair_Items per tier.
-        /// 1,000 milli of telemetry at 1 milli per storm level per tick (about 17 min in a level-1 storm), 5 microchips
-        /// aboard to measure, 10 of each test item, retooling 1/2/4/8 h for tiers 2..5.
+        /// GDD §2.3: 100% upgrade success once telemetry and materials are gathered; RNG lives in storm-telemetry sampling
+        /// (20% per storm level each tick, 5 microchips aboard to measure) and in rare-ore mining and high-tier refining.
+        /// Gates from GDD §1.2 / §2.1 B / tab 02: laser comms (Signals) and core-fracture mining (Industry) at Tier 4,
+        /// terraforming (Industry) at Tier 5, the home jump gate (Logistics) at Tier 2 (§1.2).
+        /// Per-tier telemetry targets 20,000 / 140,000 / 650,000 / 1,500,000 milli and retooling 2 / 8 / 24 / 72 h for tiers 2..5.
         /// </summary>
         public static ResearchBalance CreateResearchBalance() => new ResearchBalance(
-            telemetryTargetMilli: 1_000,
+            telemetryTargetMilli: 20_000,
             telemetryMilliPerStormLevel: 1,
             telemetryMinMicrochips: 5,
             pityPermillePerFailure: 180,
@@ -91,15 +91,23 @@ namespace Unruled.Core.Simulation
             jumpGateTier: 2,
             tiers: new[]
             {
-                new TierResearchRules(600, new[] { new ItemStack(ItemId.ItemSteel, 10), new ItemStack(ItemId.ItemBattery, 10) },
-                    SimTick.TicksPerHour),
-                new TierResearchRules(450, new[] { new ItemStack(ItemId.ItemAlloy, 10), new ItemStack(ItemId.ItemAmmo, 10) },
-                    2 * SimTick.TicksPerHour),
-                new TierResearchRules(300, new[] { new ItemStack(ItemId.ItemAlloy, 10), new ItemStack(ItemId.ItemMicrochip, 10) },
-                    4 * SimTick.TicksPerHour),
-                new TierResearchRules(200, new[] { new ItemStack(ItemId.ItemNuclearCore, 10), new ItemStack(ItemId.ItemAlloy, 10) },
-                    8 * SimTick.TicksPerHour)
-            });
+                new TierResearchRules(1000, new[] { new ItemStack(ItemId.ItemSteel, 20), new ItemStack(ItemId.ItemBattery, 20) },
+                    2 * SimTick.TicksPerHour, telemetryTargetMilli: 20_000),
+                new TierResearchRules(1000, new[] { new ItemStack(ItemId.ItemAlloy, 60), new ItemStack(ItemId.ItemMicrochip, 40) },
+                    8 * SimTick.TicksPerHour, telemetryTargetMilli: 140_000),
+                new TierResearchRules(1000, new[]
+                {
+                    new ItemStack(ItemId.ItemAlloy, 200), new ItemStack(ItemId.ItemMicrochip, 150),
+                    new ItemStack(ItemId.ItemAmmo, 200)
+                }, 24 * SimTick.TicksPerHour, telemetryTargetMilli: 650_000),
+                new TierResearchRules(1000, new[]
+                {
+                    new ItemStack(ItemId.ItemNuclearCore, 200), new ItemStack(ItemId.ItemAlloy, 300),
+                    new ItemStack(ItemId.ItemMicrochip, 200)
+                }, 72 * SimTick.TicksPerHour, telemetryTargetMilli: 1_500_000)
+            },
+            telemetryChancePermillePerLevel: 200,
+            telemetryChanceBonusPerTierPermille: 50);
 
         /// <summary>
         /// GDD §1 and §2.1 A: own home system with no tungsten or uranium, deposits by preferred ESI window.
@@ -142,7 +150,8 @@ namespace Unruled.Core.Simulation
             {
                 new ItemStack(ItemId.ItemAmmo, 120), new ItemStack(ItemId.ItemFuel, 600), new ItemStack(ItemId.ItemCoolant, 60),
                 new ItemStack(ItemId.ItemRations, 40)
-            });
+            },
+            uninhabitedClustersPerParticipant: 1);
 
         /// <summary>
         /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,
@@ -283,7 +292,7 @@ namespace Unruled.Core.Simulation
         /// and 1,500 fuel (or a round trip to its next settle target); 2 rigs per bare deposit of a claimed site;
         /// 2 cargo convoys running batches of 500 per outpost; a new refinery once 100 of both its inputs sit at the core base;
         /// fleets leave 500 fuel and 500 coolant at the core base for its drills; drills pause at 5,000 ore in stock;
-        /// besieging presets send Tier 3+ fleets at the Citadel; on the WTO it sells stock above 20 into rivals' bids,
+        /// besieging presets send Tier 3+ fleets at the Citadel; on the WTO it sells stock above 3,000 into rivals' bids,
         /// lists 500-unit batches of stock above 3,000 at 5% under the reference price, bids 5% over it (with at most half
         /// its credits) for what its next stress test lacks, and cancels orders still open after an hour; presets that never
         /// conquer still settle neutral sites of their home system at weight 1.0; from Tier 3 the shipyard refits docked battle
@@ -456,9 +465,9 @@ namespace Unruled.Core.Simulation
                 new ItemDefinition(ItemId.RawIron, 14, 300, 850),
                 new ItemDefinition(ItemId.RawCopper, 20, 300, 800),
                 new ItemDefinition(ItemId.RawSilicon, 22, 200, 900),
-                new ItemDefinition(ItemId.RawTitanium, 45, 150, 450),
-                new ItemDefinition(ItemId.RawTungsten, 65, 100, 350),
-                new ItemDefinition(ItemId.RawUranium, 150, 0, 200),
+                new ItemDefinition(ItemId.RawTitanium, 45, 150, 450, miningChancePermille: 600, miningChanceBonusPerTierPermille: 100),
+                new ItemDefinition(ItemId.RawTungsten, 65, 100, 350, miningChancePermille: 250, miningChanceBonusPerTierPermille: 150),
+                new ItemDefinition(ItemId.RawUranium, 150, 0, 200, miningChancePermille: 100, miningChanceBonusPerTierPermille: 100),
                 new ItemDefinition(ItemId.ItemOxygen, 30),
                 new ItemDefinition(ItemId.ItemRations, 55),
                 new ItemDefinition(ItemId.ItemCoolant, 35),
@@ -478,11 +487,11 @@ namespace Unruled.Core.Simulation
                 new Recipe(ItemId.ItemCoolant, ItemId.RawNitrogen, 1, ItemId.RawWater, 1),
                 new Recipe(ItemId.ItemFuel, ItemId.RawMethane, 1, ItemId.RawWater, 1),
                 new Recipe(ItemId.ItemSteel, ItemId.RawIron, 2, ItemId.RawMethane, 1),
-                new Recipe(ItemId.ItemAlloy, ItemId.RawTitanium, 2, ItemId.RawIron, 1),
-                new Recipe(ItemId.ItemMicrochip, ItemId.RawSilicon, 1, ItemId.RawCopper, 1),
+                new Recipe(ItemId.ItemAlloy, ItemId.RawTitanium, 2, ItemId.RawIron, 1, craftChancePermille: 700, craftChanceBonusPerTierPermille: 100),
+                new Recipe(ItemId.ItemMicrochip, ItemId.RawSilicon, 1, ItemId.RawCopper, 1, craftChancePermille: 700, craftChanceBonusPerTierPermille: 100),
                 new Recipe(ItemId.ItemBattery, ItemId.RawCopper, 2, ItemId.RawSilicon, 1),
-                new Recipe(ItemId.ItemAmmo, ItemId.RawTungsten, 1, ItemId.RawNitrogen, 1),
-                new Recipe(ItemId.ItemNuclearCore, ItemId.RawUranium, 2, ItemId.RawTungsten, 1)
+                new Recipe(ItemId.ItemAmmo, ItemId.RawTungsten, 1, ItemId.RawNitrogen, 1, craftChancePermille: 400, craftChanceBonusPerTierPermille: 150),
+                new Recipe(ItemId.ItemNuclearCore, ItemId.RawUranium, 2, ItemId.RawTungsten, 1, craftChancePermille: 150, craftChanceBonusPerTierPermille: 100)
             };
 
             return new RecipeDatabase(items, recipes);

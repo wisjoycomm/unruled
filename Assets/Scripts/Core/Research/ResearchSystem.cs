@@ -10,18 +10,20 @@ namespace Unruled.Core.Research
     /// <summary>
     /// Owns <see cref="TechProgress"/>: a player climbs one tech tier at a time through three steps (GDD §2.3).
     /// <list type="bullet">
-    /// <item>Field telemetry: every tick, each of the player's fleets carrying enough microchips in a NOAA storm adds
-    /// (highest R/S/G level at its site or lane) × the rate, until the target is reached.</item>
-    /// <item>Stress test (command <see cref="CommandType.StressTest"/>, target: the player's core base): pays the
-    /// tier's cost from the core base, then succeeds with P_base + 18% per earlier failure. A failure is reported
-    /// as a prototype blast bulletin.</item>
+    /// <item>Field telemetry: every tick, each of the player's fleets carrying enough microchips in a NOAA storm rolls
+    /// to capture storm telemetry (chance and yield scale with the highest R/S/G level at its site or lane), up to the
+    /// highest next-tier target across incomplete branches.</item>
+    /// <item>Stress test (command <see cref="CommandType.StressTest"/>, target: the player's core base): once the branch's
+    /// next-tier telemetry target is reached, pays the tier's cost from the core base and enters retooling (or rolls
+    /// against <see cref="ResearchBalance.StressChancePermille"/> when configured below 100%).</item>
     /// <item>Retooling: after a successful test the tier unlocks once the retool time has passed.</item>
     /// </list>
-    /// Rolls are stateless per (world seed, tick, player), so saves need no RNG state.
+    /// Rolls are stateless per (world seed, tick, entity), so saves need no RNG state.
     /// </summary>
     public sealed class ResearchSystem : ISimSystem, ICommandHandler
     {
         private const ulong RollSalt = 0x5EA2C47E57UL;
+        private const ulong TelemetrySalt = 0x7E1E4E7299UL;
 
         private readonly ComponentStore<TechProgress> _progress;
         private readonly ComponentStore<PlayerHq> _players;
@@ -64,10 +66,15 @@ namespace Unruled.Core.Research
                 var branch = p.ActiveBranch;
                 byte next = (byte)Math.Min((int)ResearchBalance.TopTier, p.Tier(branch) + 1);
                 p.SetTier(branch, next);
-                p.Stage = p.AllAtOrAbove(ResearchBalance.TopTier) ? ResearchStage.Complete : ResearchStage.FieldTelemetry;
-                p.TelemetryMilli = 0;
+                p.TelemetryMilli = Math.Max(0, p.TelemetryMilli - _balance.TierTelemetryTargetMilli(next));
                 p.FailedTests = 0;
                 p.RetoolUntilTick = 0;
+                if (p.AllAtOrAbove(ResearchBalance.TopTier))
+                    p.Stage = ResearchStage.Complete;
+                else if (p.TelemetryMilli >= MinTargetMilli(in p))
+                    p.Stage = ResearchStage.StressTest;
+                else
+                    p.Stage = ResearchStage.FieldTelemetry;
             }
 
             for (int i = 0; i < _units.Count; i++)
@@ -81,12 +88,22 @@ namespace Unruled.Core.Research
                 if (hq.IsNull || !_progress.Has(hq))
                     continue;
                 ref var p = ref _progress.Get(hq);
-                if (p.Stage != ResearchStage.FieldTelemetry)
+                if (p.Stage != ResearchStage.FieldTelemetry && p.Stage != ResearchStage.StressTest)
                     continue;
-                p.TelemetryMilli = Math.Min(_balance.TelemetryTargetMilli,
+                int maxTarget = MaxTargetMilli(in p);
+                if (p.TelemetryMilli >= maxTarget)
+                    continue;
+                int chance = _balance.EffectiveTelemetryChancePermille(level, p.Tier(ResearchBranch.Signals));
+                if (chance < 1000)
+                {
+                    var rng = new SplitMix64(_worldSeed ^ TelemetrySalt ^ ((ulong)(uint)fleet.Index << 32) ^ (ulong)tick);
+                    if (rng.NextInt(0, 999) >= chance)
+                        continue;
+                }
+                p.TelemetryMilli = Math.Min(maxTarget,
                     p.TelemetryMilli + level * _balance.TelemetryMilliPerStormLevel);
                 p.LastTelemetryFleet = fleet;
-                if (p.TelemetryMilli >= _balance.TelemetryTargetMilli)
+                if (p.Stage == ResearchStage.FieldTelemetry && p.TelemetryMilli >= MinTargetMilli(in p))
                     p.Stage = ResearchStage.StressTest;
             }
         }
@@ -110,6 +127,8 @@ namespace Unruled.Core.Research
                 return;
 
             byte tier = (byte)(currentTier + 1);
+            if (p.TelemetryMilli > 0 && p.TelemetryMilli < _balance.TierTelemetryTargetMilli(tier))
+                return;
             var rules = _balance.Tier(tier);
             ref var stock = ref _stockpiles.Get(coreBase);
             for (int i = 0; i < rules.StressTestCost.Length; i++)
@@ -133,6 +152,38 @@ namespace Unruled.Core.Research
             }
             p.FailedTests++;
             _incidents.ReportPrototypeBlast(command.PlayerId, coreBase, tick);
+        }
+
+        private int MinTargetMilli(in TechProgress p)
+        {
+            int min = int.MaxValue;
+            for (int b = 0; b < TechProgress.BranchCount; b++)
+            {
+                byte current = p.Tier((ResearchBranch)b);
+                if (current < ResearchBalance.TopTier)
+                {
+                    int target = _balance.TierTelemetryTargetMilli((byte)(current + 1));
+                    if (target < min)
+                        min = target;
+                }
+            }
+            return min == int.MaxValue ? _balance.TelemetryTargetMilli : min;
+        }
+
+        private int MaxTargetMilli(in TechProgress p)
+        {
+            int max = _balance.TelemetryTargetMilli;
+            for (int b = 0; b < TechProgress.BranchCount; b++)
+            {
+                byte current = p.Tier((ResearchBranch)b);
+                if (current < ResearchBalance.TopTier)
+                {
+                    int target = _balance.TierTelemetryTargetMilli((byte)(current + 1));
+                    if (target > max)
+                        max = target;
+                }
+            }
+            return max;
         }
 
         private int StormLevelAt(EntityId fleet)

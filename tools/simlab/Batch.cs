@@ -25,14 +25,16 @@ namespace Unruled.SimLab
             int parallel = Arg(args, "--parallel", Environment.ProcessorCount);
             string creditArg = ArgString(args, "--credit");
             long? credit = creditArg == null ? (long?)null : long.Parse(creditArg);
+            string botsArg = ArgString(args, "--bots");
+            int? rivalCount = botsArg == null ? (int?)null : Math.Max(1, int.Parse(botsArg) - 1);
 
-            Console.WriteLine($"Batch: {seeds} seeds x {days} days, seat 1 on preset {human}" +
+            Console.WriteLine($"Batch: {seeds} seeds x {days} days, {(rivalCount == null ? 5 : 1 + rivalCount.Value)} bots (seat 1 on preset {human})" +
                 (credit == null ? "" : $", credit limit {credit} credits"));
             var watch = Stopwatch.StartNew();
             var results = new Result[seeds];
             Parallel.For(0, seeds, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, parallel) }, i =>
             {
-                var game = new LabGame(first + (ulong)i, human, credit);
+                var game = new LabGame(first + (ulong)i, human, credit, rivalCount);
                 long end = days * SimTick.TicksPerDay;
                 while (game.Tick < end)
                     game.Step();

@@ -25,6 +25,7 @@ namespace Unruled.Core.Simulation
     public sealed class NewGameBalance
     {
         public readonly int RivalCount;
+        public readonly int UninhabitedClustersPerParticipant;
         public readonly int DepositsPerSite;
         public readonly int SurfaceReserve;
         public readonly int DeepCrustReserve;
@@ -46,9 +47,11 @@ namespace Unruled.Core.Simulation
             int coreBaseReserveMultiplier,
             ItemStack[] coreBaseDeposits, byte fleetTechTier, int fleetLineShips, int fleetEwShips, int fleetSupplyTenders,
             int fleetCargoConvoys, ItemId[] homeExcludedRaws, ItemId[] startingRefineries, ItemStack[] coreBaseStock,
-            ItemStack[] fleetStock)
+            ItemStack[] fleetStock, int uninhabitedClustersPerParticipant = 1)
         {
             if (rivalCount < 0) throw new ArgumentOutOfRangeException(nameof(rivalCount));
+            if (uninhabitedClustersPerParticipant < 0)
+                throw new ArgumentOutOfRangeException(nameof(uninhabitedClustersPerParticipant));
             if (depositsPerSite < 1) throw new ArgumentOutOfRangeException(nameof(depositsPerSite));
             if (surfaceReserve < 0 || deepCrustReserve < 0 || coreFractureReserve < 0)
                 throw new ArgumentOutOfRangeException(nameof(surfaceReserve), "Reserves cannot be negative.");
@@ -69,6 +72,7 @@ namespace Unruled.Core.Simulation
                 if (!ItemIds.IsRefined(startingRefineries[i]))
                     throw new ArgumentException($"{startingRefineries[i]} is not a refined item.", nameof(startingRefineries));
             RivalCount = rivalCount;
+            UninhabitedClustersPerParticipant = uninhabitedClustersPerParticipant;
             DepositsPerSite = depositsPerSite;
             SurfaceReserve = surfaceReserve;
             DeepCrustReserve = deepCrustReserve;

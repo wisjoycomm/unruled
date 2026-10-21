@@ -94,16 +94,37 @@ namespace Unruled.Tests.Core.Research
         [Test]
         public void Telemetry_FleetWithMicrochipsInAStorm_FillsItAndMovesToStressTest()
         {
-            Storm(3);
+            Storm(5); // level 5 = capped at 99% sample chance (990 permille), 5 milli per sample
             _sim.Stockpiles.Get(_fleet).Add(ItemId.ItemMicrochip, _sim.Balance.Research.TelemetryMinMicrochips);
             Run(10);
-            Assert.AreEqual(30, Progress.TelemetryMilli, "3 milli per tick in a level-3 storm");
+            Assert.Greater(Progress.TelemetryMilli, 0);
             Assert.AreEqual(_fleet, Progress.LastTelemetryFleet);
 
-            Run(330);
-            Assert.AreEqual(_sim.Balance.Research.TelemetryTargetMilli, Progress.TelemetryMilli);
+            int target2 = _sim.Balance.Research.TierTelemetryTargetMilli(2);
+            Run(target2 / 5 - 10);
+            Assert.Less(Progress.TelemetryMilli, target2, "99% cap means exact ticks fall slightly short");
+            Run(200);
+            Assert.AreEqual(target2, Progress.TelemetryMilli);
             Assert.AreEqual(ResearchStage.StressTest, Progress.Stage);
             Assert.AreEqual(5, _sim.Stockpiles.Get(_fleet).Get(ItemId.ItemMicrochip), "the chips are not used up");
+        }
+
+        [Test]
+        public void Telemetry_KeepsBuildingTowardHigherTierBranches_AndEnforcesTierTarget()
+        {
+            Progress.TechTier = 2; // Military needs Tier 3 telemetry, others still need Tier 2
+            Storm(5);
+            _sim.Stockpiles.Get(_fleet).Add(ItemId.ItemMicrochip, _sim.Balance.Research.TelemetryMinMicrochips);
+            int target2 = _sim.Balance.Research.TierTelemetryTargetMilli(2);
+            Run(target2 / 5 + 200);
+            Assert.AreEqual(ResearchStage.StressTest, Progress.Stage, "Tier 2 branches can test");
+
+            StockTestItems(1, ResearchBranch.Military);
+            StressTest(ResearchBranch.Military);
+            Assert.AreEqual(ResearchStage.StressTest, Progress.Stage, "Military Tier 3 rejected until Tier 3 telemetry is gathered");
+
+            Run(20);
+            Assert.Greater(Progress.TelemetryMilli, target2, "telemetry keeps building past Tier 2 while in StressTest");
         }
 
         [Test]
@@ -120,34 +141,38 @@ namespace Unruled.Tests.Core.Research
         }
 
         [Test]
-        public void StressChance_FollowsCalibrationPity()
+        public void StressChance_DefaultIsGuaranteed_AndFormulaHonoursCalibrationPity()
         {
             var r = _sim.Balance.Research;
-            Assert.AreEqual(600, r.StressChancePermille(2, 0));
-            Assert.AreEqual(780, r.StressChancePermille(2, 1));
-            Assert.AreEqual(1000, r.StressChancePermille(2, 3));
-            Assert.AreEqual(200, r.StressChancePermille(5, 0));
-            Assert.AreEqual(920, r.StressChancePermille(5, 4));
-            Assert.AreEqual(1000, r.StressChancePermille(5, 5));
+            for (byte t = 2; t <= ResearchBalance.TopTier; t++)
+                Assert.AreEqual(1000, r.StressChancePermille(t, 0));
+
+            var cost = new[] { new ItemStack(ItemId.ItemSteel, 10) };
+            var custom = new ResearchBalance(1000, 1, 5, 180, 4, 4, 5, 2, new[]
+            {
+                new TierResearchRules(600, cost, 100),
+                new TierResearchRules(450, cost, 100),
+                new TierResearchRules(300, cost, 100),
+                new TierResearchRules(200, cost, 100)
+            });
+            Assert.AreEqual(600, custom.StressChancePermille(2, 0));
+            Assert.AreEqual(780, custom.StressChancePermille(2, 1));
+            Assert.AreEqual(1000, custom.StressChancePermille(2, 3));
+            Assert.AreEqual(200, custom.StressChancePermille(5, 0));
+            Assert.AreEqual(920, custom.StressChancePermille(5, 4));
+            Assert.AreEqual(1000, custom.StressChancePermille(5, 5));
         }
 
         [Test]
-        public void StressTest_RepeatsUntilSuccess_PayingEachTimeAndPublishingEachBlast()
+        public void StressTest_SucceedsImmediatelyWhenMaterialsArePaid()
         {
             Progress.Stage = ResearchStage.StressTest;
-            StockTestItems(4);
-            int attempts = 0;
-            while (Progress.Stage == ResearchStage.StressTest)
-            {
-                Assert.Less(attempts, 3, "tier 2 is certain by the 3rd failure's pity");
-                StressTest();
-                attempts++;
-            }
+            StockTestItems(1);
+            StressTest();
             Assert.AreEqual(ResearchStage.Retooling, Progress.Stage);
-            Assert.AreEqual(0, Progress.FailedTests, "pity resets for the next tier");
-            Assert.AreEqual(attempts - 1, Bulletins(BulletinKind.PrototypeBlast));
-            int steelLeft = _sim.Stockpiles.Get(_core).Get(ItemId.ItemSteel);
-            Assert.AreEqual(10 * (4 - attempts), steelLeft);
+            Assert.AreEqual(0, Progress.FailedTests);
+            Assert.AreEqual(0, Bulletins(BulletinKind.PrototypeBlast));
+            Assert.AreEqual(0, _sim.Stockpiles.Get(_core).Get(ItemId.ItemSteel));
         }
 
         [Test]
@@ -164,18 +189,18 @@ namespace Unruled.Tests.Core.Research
         public void StressTest_BeforeTelemetryIsDone_IsIgnored()
         {
             StockTestItems(1);
+            int expectedSteel = _sim.Balance.Research.Tier(2).StressTestCost[0].Quantity;
             StressTest();
             Assert.AreEqual(ResearchStage.FieldTelemetry, Progress.Stage);
-            Assert.AreEqual(10, _sim.Stockpiles.Get(_core).Get(ItemId.ItemSteel), "nothing paid");
+            Assert.AreEqual(expectedSteel, _sim.Stockpiles.Get(_core).Get(ItemId.ItemSteel), "nothing paid");
         }
 
         [Test]
         public void Retooling_UnlocksTheNextTierOnTheActiveBranchWhenItEnds()
         {
             Progress.Stage = ResearchStage.StressTest;
-            StockTestItems(4, ResearchBranch.Logistics);
-            while (Progress.Stage == ResearchStage.StressTest)
-                StressTest(ResearchBranch.Logistics);
+            StockTestItems(1, ResearchBranch.Logistics);
+            StressTest(ResearchBranch.Logistics);
             Assert.AreEqual(ResearchBranch.Logistics, Progress.ActiveBranch);
             Progress.RetoolUntilTick = _sim.Clock.CurrentTick + 50;
             Run(49);
@@ -207,6 +232,8 @@ namespace Unruled.Tests.Core.Research
             Run(1);
             Assert.AreEqual(5, Progress.SignalsTier);
             Assert.AreEqual(ResearchStage.Complete, Progress.Stage);
+            Assert.AreEqual(250, _sim.Balance.Research.EffectiveTelemetryChancePermille(1, 2));
+            Assert.AreEqual(990, _sim.Balance.Research.EffectiveTelemetryChancePermille(5, 5), "capped at 99%");
         }
     }
 }

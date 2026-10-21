@@ -174,6 +174,30 @@ namespace Unruled.Tests.Core.AI
         }
 
         [Test]
+        public void NobodyBesiegesARivalOutpost_WithNoNewOre_AndPrefersUnclaimedNeutralSites()
+        {
+            _sim.Sites.Get(_target).OwnerPlayerId = Rival;
+            Fleet(Me, _home, 4, loaded: true);
+            Assert.IsFalse(Find(Warlord, AiAction.Siege).HasValue, "rival outpost with no new ore is not besieged");
+
+            var neutral = Site(-200, 0);
+            var lane = _sim.World.Create();
+            _sim.Starlanes.Add(lane, new StarlaneEdge { SiteA = _home, SiteB = neutral, Tier = StarlaneTier.StaHighway, Length = 200 });
+            _sim.LaneWeather.Add(lane, default);
+            _sim.Graph.Rebuild(_sim.Starlanes);
+            Ore(_target, ItemId.RawIron);
+            Ore(neutral, ItemId.RawIron);
+
+            var order = Find(Warlord, AiAction.Siege);
+            Assert.IsTrue(order.HasValue);
+            DelayedPlayerCommand move = default;
+            for (int i = 0; i < _sim.Clock.PendingCommandCount; i++)
+                if (_sim.Clock.PendingAt(i).CommandType == CommandType.Move)
+                    move = _sim.Clock.PendingAt(i);
+            Assert.AreEqual(neutral, move.ParamEntity, "prefers unclaimed neutral site over rival outpost with the same ore");
+        }
+
+        [Test]
         public void AnOreMinedOnlyFromAMinedOutDeposit_IsNewOreAgain()
         {
             var deposit = _sim.World.Create();

@@ -17,7 +17,7 @@ Hệ thống vận hành trên đồng hồ thời gian thực tỷ lệ 1:1 (`1
 2. **Vòng lặp Trung mô — Hậu cần & Công nghiệp (`Meso Loop`: `1,800 – 14,400 Ticks` / 30 Phút đến 4 Giờ):**
    - Cân đối tỷ lệ khai thác 10 loại nguyên liệu thô (`RAW_*`) và vận hành dây chuyền nhà máy chế tạo 10 mặt hàng thành phẩm (`ITEM_*`) theo mô hình Input-Output Wassily Leontief.
    - Thiết lập các đoàn tàu vận tải (`CargoConvoys`) cấp `ITEM_OXYGEN`, `ITEM_RATIONS`, `ITEM_FUEL`, `ITEM_COOLANT` nuôi các mỏ xa và hạm đội tiền tuyến (nếu đứt `RAW_WATER` hoặc `ITEM_OXYGEN` quá `30 Ticks`, hành tinh bị `WHO` phong tỏa kiểm dịch `300 Ticks`).
-   - Đưa tàu thu thập dữ liệu bão thực địa (`TRL 1–3`), đốt vật tư chạy thử nghiệm nguyên mẫu tại xưởng (`TRL 4–6`) và gọi hạm đội đời cũ về cải hoán (`Retrofit TRL 7–9`).
+   - Đưa tàu thu thập dữ liệu bão thực địa (`TRL 1–3`), đóng nguyên mẫu tại xưởng khi gom đủ dữ liệu và vật tư (`TRL 4–6`, nâng cấp thành công `100%`) và gọi hạm đội đời cũ về cải hoán (`Retrofit TRL 7–9`).
 
 3. **Vòng lặp Vĩ mô — Địa chính trị & Bành trướng (`Macro Loop`: `86,400 – 604,800 Ticks` / Ngày đến Tuần):**
    - Chuyển dịch từ khai thác mỏ bề mặt (`Surface Vein`) sang khoan lõi sâu (`Deep Crust`) khi tài nguyên cạn kiệt.
@@ -25,18 +25,18 @@ Hệ thống vận hành trên đồng hồ thời gian thực tỷ lệ 1:1 (`1
    - Thao túng thanh khoản sàn `WTO`, nộp hồ sơ kiểm toán định kỳ đua **BXH Top 10,000** để hưởng chiết khấu cọc `Escrow` (từ `30%` xuống `15%`), hoặc liên minh đánh sập `System Citadel` lập Hội đồng Quản trị (`The Directorate`).
 
 ### 1.2. Tiến Trình 4 Giai Đoạn Của Một Đế Chế (4-Stage Progression)
-- **Giai đoạn 1 — Khai Hoang Trong Vỏ Bọc (`Tech Tier 1` | Giờ 1 – Giờ 12):**
+- **Giai đoạn 1 — Khai Hoang Trong Vỏ Bọc (`Tech Tier 1` | Ngày 1 – Ngày 2):**
   - Người chơi khởi đầu tại Hệ sao riêng (`Home Star System`) sinh từ `ulong SystemSeed`.
   - Nhờ lớp từ trường Nhật quyển (`Heliopause Cloaking`) và Cổng nhảy liên sao đang tắt (`Dormant`), hệ sao hoàn toàn vô hình và bất khả xâm phạm.
   - Xây dựng chuỗi `RAW_IRON -> ITEM_STEEL`, `RAW_WATER + RAW_NITROGEN -> ITEM_OXYGEN`, đóng các tàu `Tier 1` đầu tiên.
-- **Giai đoạn 2 — Mở Cổng & Xung Đột Vành Đai (`Tech Tier 2–3` | Ngày 1 – Ngày 7):**
-  - Hệ sao đầu không có `RAW_TUNGSTEN` và `RAW_URANIUM`; mỏ bề mặt cạn dần. Người chơi nâng lên `Tech Tier 2`, nạp năng lượng mở Cổng nhảy nối vào **Cụm Sao Chiến Trường Chung (`Contested Star Cluster`)** — chấm dứt bảo hộ vĩnh viễn.
+- **Giai đoạn 2 — Mở Cổng & Xung Đột Vành Đai (`Tech Tier 2–3` | Ngày 2 – Tuần 4):**
+  - Hệ sao đầu không có `RAW_TUNGSTEN` và `RAW_URANIUM`; mỏ bề mặt cạn dần. Người chơi nâng lên `Tech Tier 2` (~Ngày 2), nạp năng lượng mở Cổng nhảy nối vào **Cụm Sao Chiến Trường Chung (`Contested Star Cluster`)** — chấm dứt bảo hộ vĩnh viễn, và tiến lên `Tech Tier 3` (~Ngày 7+).
   - Sử dụng đường vòng Vành Đai (`Outer_Rim_Asteroid_Bypass`) để ẩn `90%` tín hiệu đi đánh lén mỏ lẻ; dựng chuỗi tàu `EwShips` làm trạm tiếp sóng (`Relay`) giảm độ trễ lệnh từ `35s/Hop` xuống `8s/Hop`.
-- **Giai đoạn 3 — Chiến Tranh Công Nghiệp & Dời Đô (`Tech Tier 4` | Tuần 2 – Tuần 3):**
-  - Mở khóa Liên lạc Laser xuyên bão `R-Scale` và Động cơ đi đường tắt xuyên tâm bão `G4/S4`.
+- **Giai đoạn 3 — Chiến Tranh Công Nghiệp & Dời Đô (`Tech Tier 4` | Tháng 1+):**
+  - Mở khóa Liên lạc Laser xuyên bão `R-Scale` và Động cơ đi đường tắt xuyên tâm bão `G4/S4` sau khi tích lũy dữ liệu bão dài hạn và làm chủ chuỗi khai thác/chế tạo `RAW_TUNGSTEN -> ITEM_AMMO`.
   - Tổ chức các chiến dịch **Hợp kích Đa Tuyến (`Multi-Lane Flanking`)** đánh chiếm hành tinh trung tâm và thực hiện **Chuyển Base Chính 3 Pha**.
-- **Giai đoạn 4 — Hạt Nhân Chiến Lược & Lật Đổ Hệ Thống (`Tech Tier 5` | Tuần 4+):**
-  - Đào `RAW_URANIUM`, đúc `ITEM_NUCLEAR_CORE` và đóng soái hạm `Tier 5` (chấp nhận bị `IAEA` phát sóng vị trí 24/7 trên toàn bản đồ).
+- **Giai đoạn 4 — Hạt Nhân Chiến Lược & Lật Đổ Hệ Thống (`Tech Tier 5` | Dài hạn):**
+  - Đào `RAW_URANIUM` (tỉ lệ trúng mạch quặng thấp), tinh luyện `ITEM_NUCLEAR_CORE` (tỉ lệ chế tạo khắt khe), săn bão cấp cao thu thập dữ liệu và đóng soái hạm `Tier 5` (chấp nhận bị `IAEA` phát sóng vị trí 24/7 trên toàn bản đồ).
   - Bắn hạt nhân làm nứt vỏ hành tinh lộ vỉa quặng lõi sâu hoặc tổng tấn công `System Citadel`.
 
 ---
@@ -92,12 +92,10 @@ Mỗi công trình chế tạo trên hành tinh chạy chu kỳ kiểm tra nguy�
 ---
 
 ### 2.3. Module Nghiên Cứu Công Nghệ Chuẩn `NASA TRL` (`Unruled.Core.Research`)
-Mỗi cấp công nghệ (`5 Tier x 4 Nhánh x 3 Giai đoạn = 60 Mốc TRL`) đòi hỏi 3 bước thực thi vật lý:
-1. **`TRL 1–3` (`Field Telemetry`):** Điều tàu gắn `ITEM_MICROCHIP` bay trực tiếp vào tâm bão `NOAA` thực tế để thu thập đủ `100%` dữ liệu đo đạc.
-2. **`TRL 4–6` (`Prototype Stress Test`):** Đốt vật tư chạy thử nghiệm nguyên mẫu tại xưởng. Xác suất thành công ở lần thử thứ $k$ ($k >= 1$) có bảo hiểm cộng dồn (`Calibration Pity`):
-   `P_success(k) = Min(1.0, P_base(Tier) + (k - 1) * 0.18)`
-   *(Với `P_base`: Tier 2 = `60%`, Tier 3 = `45%`, Tier 4 = `30%`, Tier 5 = `20%`. Mỗi lần nổ cộng `+18%` cho lần sau nhưng phát xung chấn động báo lên bản tin `NOAA/IAEA` trong bán kính 3 Hops).*
-3. **`TRL 7–9` (`Factory Retooling & Ship Retrofit`):** Nâng cấp xưởng đúc và gọi các Quân cờ đời cũ từ tiền tuyến quay về xưởng để cải hoán lên đời mới (`Retrofit`).
+Mỗi cấp công nghệ (`5 Tier x 4 Nhánh x 3 Giai đoạn = 60 Mốc TRL`) đòi hỏi 3 bước thực thi vật lý, trong đó xác suất nằm ở khâu thu thập dữ liệu bão, khai thác quặng hiếm và tinh luyện vật tư (khi đã gom đủ điều kiện thì nâng cấp thành công `100%`):
+1. **`TRL 1–3` (`Field Telemetry`):** Điều tàu gắn `ITEM_MICROCHIP` bay trực tiếp vào tâm bão `NOAA` thực tế để thu thập dữ liệu đo đạc theo mốc từng Tier (`20,000 / 140,000 / 650,000 / 1,500,000` cho Tier 2..5). Mỗi Tick trong bão cấp $L \in \{1..5\}$ có xác suất thu mẫu cơ bản `20% * L` (cộng thêm `+5%` mỗi cấp nhánh `Signals` trên Tier 1, tối đa **`99%`**) và thu được `+L` đơn vị dữ liệu; dữ liệu tiếp tục tích lũy xuyên suốt giữa các nhánh.
+2. **`TRL 4–6` (`Prototype Stress Test`):** Khi đạt đủ mốc `Telemetry` của Tier kế tiếp và đủ vật tư tại `Core Base`, chạy nguyên mẫu tại xưởng chuyển thẳng sang giai đoạn nâng cấp xưởng với xác suất thành công **`100%`** (tỉ lệ RNG cơ bản nằm ở việc khai thác quặng hiếm `Titanium 60% / Tungsten 25% / Uranium 10%` và tỉ lệ tinh luyện thành phẩm `Alloy 70% / Microchip 70% / Ammo 40% / Nuclear Core 15%`; khi công nghệ nhánh `Industry` càng cao thì tỉ lệ khai thác/chế tạo các bậc cũ càng tăng thêm `+10%..+15%/Tier`, tối đa lên tới **`99%`**).
+3. **`TRL 7–9` (`Factory Retooling & Ship Retrofit`):** Nâng cấp xưởng đúc (`2h / 8h / 24h / 72h` cho Tier 2..5) và gọi các Quân cờ đời cũ từ tiền tuyến quay về xưởng để cải hoán lên đời mới (`Retrofit`).
 
 ---
 

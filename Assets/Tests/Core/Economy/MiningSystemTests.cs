@@ -264,5 +264,25 @@ namespace Unruled.Tests.Core.Economy
             RunCycles(3);
             Assert.AreEqual(PlanetLifecycleState.PristineWorld, Site.LifecycleState);
         }
+
+        [Test]
+        public void RareOre_RollsMiningChanceEachCycle_AlwaysBurnsFuelAndCoolant_AndScalesWithIndustryTierUpTo99Percent()
+        {
+            var recipes = DefaultGameBalance.CreateRecipeDatabase();
+            Assert.AreEqual(600, recipes.GetItem(ItemId.RawTitanium).EffectiveMiningChancePermille(1));
+            Assert.AreEqual(900, recipes.GetItem(ItemId.RawTitanium).EffectiveMiningChancePermille(4));
+            Assert.AreEqual(990, recipes.GetItem(ItemId.RawTitanium).EffectiveMiningChancePermille(5), "capped at 99%");
+
+            _system = new MiningSystem(_deposits, _sites, _stockpiles, _balance, _tech, recipes, worldSeed: 42);
+            var deposit = AddDeposit(surface: 10_000, deep: 0, rigs: 1, raw: ItemId.RawUranium);
+
+            RunCycles(50);
+
+            int minedTier1 = Stock.Get(ItemId.RawUranium);
+            Assert.Greater(minedTier1, 0, "some cycles strike uranium");
+            Assert.Less(minedTier1, 50 * Yield(_balance.Surface, 1), "10% chance skips most cycles");
+            Assert.AreEqual(10_000 - minedTier1, _deposits.Get(deposit).SurfaceReserve);
+            Assert.AreEqual(1000 - 50 * Fuel(_balance.Surface, 1), Stock.Get(ItemId.ItemFuel), "drills always burn fuel");
+        }
     }
 }

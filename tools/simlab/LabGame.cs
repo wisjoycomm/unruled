@@ -27,28 +27,48 @@ namespace Unruled.SimLab
         public long VictoryTick;
 
         /// <param name="creditLimit">Credits a player may borrow from THE SYSTEM; null = the default balance's limit.</param>
-        public LabGame(ulong seed, byte humanPreset, long? creditLimit = null)
+        /// <param name="rivalCount">Number of AI rivals in addition to seat 1; null = the default balance's rivalCount (4).</param>
+        public LabGame(ulong seed, byte humanPreset, long? creditLimit = null, int? rivalCount = null)
         {
             Seed = seed;
-            Sim = new SimulationWorld(Balance(creditLimit), seed);
+            Sim = new SimulationWorld(Balance(creditLimit, rivalCount), seed);
             NewGameSetup.Create(Sim, HumanPlayerId);
             if (humanPreset != 0)
                 Sim.Ai.Assign(Hq(HumanPlayerId), humanPreset);
             TakeSample();
         }
 
-        // The default balance, with another credit limit for "can they live without loans" runs.
-        private static GameBalanceConfig Balance(long? creditLimit)
+        // The default balance, with another credit limit or rival count for custom batch runs.
+        private static GameBalanceConfig Balance(long? creditLimit, int? rivalCount)
         {
             var d = DefaultGameBalance.Create();
-            if (creditLimit == null)
+            if (creditLimit == null && rivalCount == null)
                 return d;
-            var ledger = new Unruled.Core.Economy.LedgerBalance(d.Ledger.StartingCents,
-                creditLimit.Value * Unruled.Core.Economy.Wallet.CentsPerCredit, d.Ledger.InterestFreeTicks,
-                d.Ledger.DailyInterestBasisPoints, d.Ledger.LoanTermTicks);
+            var ledger = creditLimit == null
+                ? d.Ledger
+                : new Unruled.Core.Economy.LedgerBalance(d.Ledger.StartingCents,
+                    creditLimit.Value * Unruled.Core.Economy.Wallet.CentsPerCredit, d.Ledger.InterestFreeTicks,
+                    d.Ledger.DailyInterestBasisPoints, d.Ledger.LoanTermTicks);
+            var ng = d.NewGame;
+            if (rivalCount != null)
+            {
+                var coreDeps = new ItemStack[ng.CoreBaseDepositCount];
+                for (int i = 0; i < coreDeps.Length; i++) coreDeps[i] = ng.CoreBaseDeposit(i);
+                var startRefs = new ItemId[ng.StartingRefineryCount];
+                for (int i = 0; i < startRefs.Length; i++) startRefs[i] = ng.StartingRefinery(i);
+                var coreStock = new ItemStack[ng.CoreBaseStockCount];
+                for (int i = 0; i < coreStock.Length; i++) coreStock[i] = ng.CoreBaseStock(i);
+                var fleetStock = new ItemStack[ng.FleetStockCount];
+                for (int i = 0; i < fleetStock.Length; i++) fleetStock[i] = ng.FleetStock(i);
+                ng = new NewGameBalance(
+                    rivalCount.Value, ng.DepositsPerSite, ng.SurfaceReserve, ng.DeepCrustReserve, ng.CoreFractureReserve,
+                    ng.CoreBaseReserveMultiplier, coreDeps, ng.FleetTechTier, ng.FleetLineShips, ng.FleetEwShips,
+                    ng.FleetSupplyTenders, ng.FleetCargoConvoys, new[] { ItemId.RawTungsten, ItemId.RawUranium },
+                    startRefs, coreStock, fleetStock, ng.UninhabitedClustersPerParticipant);
+            }
             return new GameBalanceConfig(d.Recipes, d.Universe, d.Starlanes, d.Weather, d.Refinery, d.Mining, d.Lifecycle,
                 d.Latency, d.Radar, d.Fleets, d.Combat, d.Relocation, ledger, d.Sta, d.Leaderboard, d.Wto, d.Contracts,
-                d.Authority, d.SystemFactions, d.Ai, d.NewGame, d.Research, d.Shipyard, d.SiteControl, d.JumpGates,
+                d.Authority, d.SystemFactions, d.Ai, ng, d.Research, d.Shipyard, d.SiteControl, d.JumpGates,
                 d.Convoys, d.Citadel);
         }
 

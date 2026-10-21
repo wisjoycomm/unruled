@@ -234,21 +234,24 @@ namespace Unruled.View.UI
             {
                 ref var progress = ref _sim.TechProgress.Get(_hq);
                 var picked = (ResearchBranch)_branchIndex;
-                long value = progress.Stage == ResearchStage.FieldTelemetry
-                    ? (long)progress.TelemetryMilli * 100 / _sim.Balance.Research.TelemetryTargetMilli
-                    : progress.Stage == ResearchStage.Retooling ? (progress.RetoolUntilTick - tick) : progress.FailedTests;
+                byte nextTier = (byte)System.Math.Min((int)ResearchBalance.TopTier, progress.Tier(picked) + 1);
+                int targetMilli = _sim.Balance.Research.TierTelemetryTargetMilli(nextTier);
+                bool ready = progress.Stage == ResearchStage.StressTest &&
+                             (progress.TelemetryMilli >= targetMilli || progress.TelemetryMilli == 0);
+                long value = progress.Stage == ResearchStage.Retooling
+                    ? (progress.RetoolUntilTick - tick)
+                    : ready ? progress.FailedTests : System.Math.Min(100L, (long)progress.TelemetryMilli * 100 / targetMilli);
                 long tiers = ((long)progress.TechTier << 24) | ((long)progress.IndustryTier << 16) |
                              ((long)progress.LogisticsTier << 8) | progress.SignalsTier;
                 long key = ((long)progress.Stage << 60) | ((long)_branchIndex << 56) |
-                           ((long)progress.ActiveBranch << 52) | (tiers << 20) | (value & 0xFFFFF);
+                           ((long)progress.ActiveBranch << 52) | (ready ? 1L << 51 : 0) | (tiers << 20) | (value & 0xFFFFF);
                 if (key != _cache[0])
                 {
                     for (int i = 0; i < _researchBranches.Length; i++)
                         _researchBranches[i].text = BranchCodes[i] + " T" + UiFormat.Number(progress.Tier((ResearchBranch)i));
-                    UiFormat.Set(_research, ref _cache[0], key, ResearchText(in progress, picked, value));
+                    UiFormat.Set(_research, ref _cache[0], key, ResearchText(in progress, picked, value, ready));
                 }
-                _stressTest.SetEnabled(progress.Stage == ResearchStage.StressTest &&
-                    progress.Tier(picked) < ResearchBalance.TopTier);
+                _stressTest.SetEnabled(ready && progress.Tier(picked) < ResearchBalance.TopTier);
             }
             _audit.text = IsAudited ? "Leave audit" : "Join audit";
             RefreshLoan(tick);
@@ -338,7 +341,7 @@ namespace Unruled.View.UI
             return debt + " · DUE IN " + UiFormat.Duration(loan.DueTick - tick) + free;
         }
 
-        private string ResearchText(in TechProgress progress, ResearchBranch picked, long value)
+        private string ResearchText(in TechProgress progress, ResearchBranch picked, long value, bool ready)
         {
             byte pickedTier = progress.Tier(picked);
             string head = BranchCodes[(int)picked] + " T" + UiFormat.Number(pickedTier) + " · ";
@@ -350,7 +353,7 @@ namespace Unruled.View.UI
             }
             if (pickedTier >= ResearchBalance.TopTier || progress.Stage == ResearchStage.Complete)
                 return head + "COMPLETE";
-            if (progress.Stage == ResearchStage.FieldTelemetry)
+            if (!ready)
                 return head + "TELEMETRY " + UiFormat.Number(value) + "%";
             var cost = _sim.Balance.Research.Tier((byte)(pickedTier + 1)).StressTestCost;
             string text = head + "TEST";
@@ -496,8 +499,8 @@ namespace Unruled.View.UI
 
         private string OwnerText(int owner)
         {
-            if (owner == _playerId) return "YOURS";
             if (owner == 0) return "NEUTRAL";
+            if (owner == _playerId) return "YOURS";
             if (owner < 0) return _sim.Citadels.Has(_site) ? "CITADEL" : "THE SYSTEM";
             return "RIVAL P" + UiFormat.Number(owner);
         }

@@ -224,6 +224,29 @@ namespace Unruled.Tests.Core.Economy
             Assert.AreEqual(0, _ledger.Balance(wallet));
         }
 
+        [Test]
+        public void HighTierRecipe_RollsCraftChancePerBatch_AlwaysConsumesInputs_AndScalesWithIndustryTierUpTo99Percent()
+        {
+            var recipes = DefaultGameBalance.CreateRecipeDatabase();
+            Assert.AreEqual(700, recipes.GetRecipe(ItemId.ItemAlloy).EffectiveCraftChancePermille(1));
+            Assert.AreEqual(900, recipes.GetRecipe(ItemId.ItemAlloy).EffectiveCraftChancePermille(3));
+            Assert.AreEqual(990, recipes.GetRecipe(ItemId.ItemAlloy).EffectiveCraftChancePermille(4), "capped at 99%");
+            Assert.AreEqual(990, recipes.GetRecipe(ItemId.ItemAlloy).EffectiveCraftChancePermille(5), "stays capped at 99%");
+            Assert.AreEqual(990, recipes.GetRecipe(ItemId.ItemAmmo).EffectiveCraftChancePermille(5), "ammo reaches 99% at tier 5");
+
+            Plant.Output = ItemId.ItemNuclearCore;
+            Stock.Add(ItemId.RawUranium, 200);
+            Stock.Add(ItemId.RawTungsten, 100);
+
+            RunCycles(25);
+
+            Assert.AreEqual(0, Stock.Get(ItemId.RawUranium), "all uranium consumed");
+            Assert.AreEqual(0, Stock.Get(ItemId.RawTungsten), "all tungsten consumed");
+            int cores = Stock.Get(ItemId.ItemNuclearCore);
+            Assert.Greater(cores, 0, "some batches succeed");
+            Assert.Less(cores, 100, "15% craft chance rejects most batches");
+        }
+
         private sealed class NoCommands : ICommandHandler
         {
             public void Handle(in DelayedPlayerCommand command, long tick) =>

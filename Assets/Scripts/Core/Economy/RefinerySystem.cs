@@ -1,6 +1,7 @@
 using System;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
+using Unruled.Core.Research;
 using Unruled.Core.Simulation;
 
 namespace Unruled.Core.Economy
@@ -18,6 +19,8 @@ namespace Unruled.Core.Economy
     /// </summary>
     public sealed class RefinerySystem : ISimSystem, ICommandHandler
     {
+        private const ulong RollSalt = 0x524546494E455259UL;
+
         private readonly World _world;
         private readonly ComponentStore<Refinery> _refineries;
         private readonly ComponentStore<Stockpile> _stockpiles;
@@ -26,11 +29,13 @@ namespace Unruled.Core.Economy
         private readonly Ledger _ledger;
         private readonly RecipeDatabase _recipes;
         private readonly RefineryBalance _balance;
+        private readonly ITechGates _tech;
+        private readonly ulong _worldSeed;
 
         public RefinerySystem(
             World world, ComponentStore<Refinery> refineries, ComponentStore<Stockpile> stockpiles,
             ComponentStore<SiteWeather> weather, ComponentStore<SiteInfo> sites, Ledger ledger, RecipeDatabase recipes,
-            RefineryBalance balance)
+            RefineryBalance balance, ulong worldSeed = 0, ITechGates tech = null)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _refineries = refineries ?? throw new ArgumentNullException(nameof(refineries));
@@ -40,6 +45,8 @@ namespace Unruled.Core.Economy
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             _recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
+            _tech = tech;
+            _worldSeed = worldSeed;
         }
 
         public void OnTick(long tick)
@@ -90,7 +97,26 @@ namespace Unruled.Core.Economy
 
                 stock.Add(recipe.Input1, -recipe.Qty1 * batches);
                 stock.Add(recipe.Input2, -recipe.Qty2 * batches);
-                stock.Add(recipe.Output, recipe.OutputQty * batches);
+
+                int succeeded = batches;
+                byte industryTier = _tech != null && _sites.Has(refinery.Site)
+                    ? _tech.TechTierOf(_sites.Get(refinery.Site).OwnerPlayerId, ResearchBranch.Industry)
+                    : (byte)1;
+                int chance = recipe.EffectiveCraftChancePermille(industryTier);
+                if (chance < 1000)
+                {
+                    succeeded = 0;
+                    var entity = _refineries.EntityAt(i);
+                    for (int b = 0; b < batches; b++)
+                    {
+                        var rng = new SplitMix64(_worldSeed ^ RollSalt ^ ((ulong)(uint)entity.Index << 32) ^ (ulong)(tick + b));
+                        if (rng.NextInt(0, 999) < chance)
+                            succeeded++;
+                    }
+                }
+                if (succeeded > 0)
+                    stock.Add(recipe.Output, recipe.OutputQty * succeeded);
+
                 refinery.State = RefineryState.ActiveProduction;
                 refinery.AccruedUpkeepCents += activeCents;
                 PayUpkeep(ref refinery);

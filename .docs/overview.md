@@ -96,9 +96,9 @@ methods, in this order (rule 4).
     seeded bypasses and shortcuts) and `StarlaneGraph` (CSR adjacency).
   - `StormFront`, `SiteWeather`, `LaneWeather`, `NoaaWeatherEngine` + `NoaaBalance`.
 - **Economy/**:
-  - `ItemId`, `Stockpile`, `RecipeDatabase`, `MiningSystem` + `MineralDeposit` (drill retract: rigs freed 180
+  - `ItemId`, `Stockpile`, `RecipeDatabase` (`MiningChancePermille` per raw item and `CraftChancePermille` per recipe, both scaling with `Industry` tier up to 99%), `MiningSystem` + `MineralDeposit` (stateless `SplitMix64` yield roll after fuel/coolant burn; drill retract: rigs freed 180
     ticks after `RetractDrills` and their build cost returned to the site; paused drills neither mine nor burn),
-    `RefinerySystem` + `Refinery` (idles in `IdleFull` while its site holds its output stock cap).
+    `RefinerySystem` + `Refinery` (stateless `SplitMix64` batch yield roll; idles in `IdleFull` while its site holds its output stock cap).
   - `Wallet` (credits as `long` cents on player HQs and the three pools: WTO fees, STA tolls, WTO escrow) and
     `Ledger` (`Transfer` never overdraws or creates money; `Grant` only for world setup, `Lend` for loans).
   - `LoanSystem` + `Loan` (on the HQ): THE SYSTEM's credit line, the only new money in play. `Borrow` / `Repay`
@@ -145,7 +145,7 @@ methods, in this order (rule 4).
   - `SystemDefenseEvaluator` + `CitadelBalance`: owns `SystemCitadel` (on THE SYSTEM's Citadel site, the contested
     cluster's outermost orbit) and `CitadelAssault` (on HQs); `VictoryEvaluator` owns `VictoryRecord` and
     `DirectorateSeat`. The HUD's citadel tag shows the shield and defence tier, then The Directorate.
-- **Research/**: `ResearchBranch` (`Military`, `Industry`, `Logistics`, `Signals`), `TechProgress` (on the HQ: per-branch tiers 1..5, active branch, stage, telemetry, failed tests, retool end), `ResearchSystem` (telemetry in storms, `StressTest` command with `ParamA` = branch and calibration pity, retooling) + `ResearchBalance`; blasts go to `IResearchIncidentLog` (THE SYSTEM's bulletins). `TechGates` (`ITechGates`, `sim.TechGates`) answers a player's per-branch tier (`Military` by default for shipyard/strike) and maps gates to their branches: jump gate on `Logistics` T2, core-fracture mining on `Industry` T4, terraforming on `Industry` T5, laser comms (orders through R3+ blackouts) on `Signals` T4.
+- **Research/**: `ResearchBranch` (`Military`, `Industry`, `Logistics`, `Signals`), `TechProgress` (on the HQ: per-branch tiers 1..5, active branch, stage, telemetry, failed tests, retool end), `ResearchSystem` (storm telemetry with stateless `SplitMix64` capture roll scaling with `Signals` tier up to 99% and accumulating up to the max remaining tier target, `StressTest` command with `ParamA` = branch and 100% success when tier telemetry and materials are met, retooling deducts the tier's telemetry target) + `ResearchBalance`; blasts go to `IResearchIncidentLog` (THE SYSTEM's bulletins). `TechGates` (`ITechGates`, `sim.TechGates`) answers a player's per-branch tier (`Military` by default for shipyard/strike) and maps gates to their branches: jump gate on `Logistics` T2, core-fracture mining on `Industry` T4, terraforming on `Industry` T5, laser comms (orders through R3+ blackouts) on `Signals` T4.
 - **AI/**: `UtilityAiEngine` + `AiController` (on an AI-run HQ) + `AiBalance` / `AiPreset` (tab 06).
 - **Persistence/**: `SaveGame.Write(sim)` / `SaveGame.Load(balance, bytes)` save the whole world as MessagePack
   (`SchemaVersion`, seed, tick, entity allocator, queued commands, then every store in a fixed, append-only order).

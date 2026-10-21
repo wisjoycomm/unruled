@@ -53,7 +53,7 @@ Every feature named in GDD §1, §2, §4 and §5, with the system that implement
 | Polar anchors, golden-angle spacing, ≥ 120 units apart | [x] | `SystemSeedGenerator` |
 | ESI from the habitable zone; rich and harsh ore bands | [x] | `SystemSeedGenerator` |
 | Three reserve pools per deposit | [x] | `MineralDeposit` |
-| ΔQ = rigs × rate × depth × ESI × storm | [x] | `MiningSystem` |
+| ΔQ = rigs × rate × depth × ESI × storm | [x] | `MiningSystem` (plus per-item `MiningChancePermille` yield roll scaling with `Industry` tier up to 99%) |
 | 1 Pristine, 2 Deep Core Stripping (×0.5, 2× burn, −0.05 ESI) | [x] | `PlanetLifecycleSystem` |
 | 3A Barren Husk (−0.20 ESI, node kept as depot/relay/fort) | [x] | `PlanetLifecycleSystem`; relays on any own site |
 | 3B Irradiated: biomass wiped, ESI 0, S4 radiation for 24–72 h, core fracture unlocked (4× burn, Tier 4–5 rigs) | [x] | `ApplyNuclearStrike`, `TechGate.CoreFractureMining` (`Industry` T4) |
@@ -63,7 +63,7 @@ Every feature named in GDD §1, §2, §4 and §5, with the system that implement
 
 | Feature | Status | Where |
 |---|---|---|
-| Refinery 10-tick cycle; idle starved at 20% upkeep | [x] | `RefinerySystem` |
+| Refinery 10-tick cycle; idle starved at 20% upkeep | [x] | `RefinerySystem` (plus per-recipe `CraftChancePermille` batch yield roll scaling with `Industry` tier up to 99%) |
 | G2–G5 brownout unless batteries are burnt | [x] | `RefinerySystem` (`BatteryPerBrownoutCycle`) |
 | WHO-quarantined state | [x] | `WhoQuarantineSystem` |
 | 100-tick VWAP | [x] | `WtoMarketEngine`, `ItemMarket` ring |
@@ -77,8 +77,8 @@ Every feature named in GDD §1, §2, §4 and §5, with the system that implement
 | Feature | Status | Where |
 |---|---|---|
 | 5 tiers × 4 branches × 3 stages | [x] | `ResearchBranch` (`Military`, `Industry`, `Logistics`, `Signals`), `TechProgress`, `ResearchSystem` |
-| TRL 1–3 field telemetry: microchip ships inside real storms | [x] | `ResearchSystem` |
-| TRL 4–6 stress test, pity +18% per failure, P_base 60/45/30/20% | [x] | `ResearchSystem` (`StressTest`) |
+| TRL 1–3 field telemetry: microchip ships inside real storms | [x] | `ResearchSystem` (per-tier telemetry target, storm level × 20% capture roll + `Signals` tier bonus up to 99%) |
+| TRL 4–6 stress test: 100% upgrade once telemetry and materials are met | [x] | `ResearchSystem` (`StressTest`) |
 | Failed test pulses a NOAA/IAEA bulletin | [x] | prototype blast bulletin via `SystemAuthorityManager` |
 | TRL 7–9 factory retooling and ship retrofit | [x] | `ResearchSystem` retool time, `ShipyardSystem` (`Retrofit`) |
 
