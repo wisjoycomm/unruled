@@ -411,6 +411,22 @@ namespace Unruled.Core.AI
                 {
                     Consider(AiAction.LoadCargo, Score(preset.ResupplyLogisticsWeight, shortage), ref best, ref bestScore);
                 }
+                else if (IsBattleFleet(in unit) && CitadelFallen())
+                {
+                    // With the Citadel down the battle line fights like any fleet, but only while it has a target: awake, it
+                    // owes five times the mothballed upkeep, so with nothing to raid, besiege or develop it goes back to sleep.
+                    var war = AiAction.VentCoolant;
+                    int warScore = 0;
+                    ConsiderRaidAndSiege(in player, preset, in unit, ref hold, ref war, ref warScore, out raidTarget,
+                        out siegeTarget, out developTarget);
+                    bool mothballed = _readiness.Has(fleet) && _readiness.Get(fleet).IsMothballed;
+                    if (mothballed && warScore > 0 && !_issuer.IsInFlight(player.PlayerId, CommandType.Activate, fleet))
+                        Consider(AiAction.Activate, warScore, ref best, ref bestScore);
+                    else if (ready && warScore > 0)
+                        Consider(war, warScore, ref best, ref bestScore);
+                    else if (ready && !_issuer.IsInFlight(player.PlayerId, CommandType.Mothball, fleet))
+                        Consider(AiAction.Mothball, Score(preset.ResupplyLogisticsWeight, Threshold), ref best, ref bestScore);
+                }
                 else if (IsBattleFleet(in unit))
                 {
                     // A full battle line that can't take the Citadel yet waits mothballed, at a fifth of the upkeep. It
@@ -430,19 +446,8 @@ namespace Unruled.Core.AI
                 }
                 else if (ready)
                 {
-                    int fuel = hold.Get(ItemId.ItemFuel);
-                    if (preset.StealthRaidWeight > 0 &&
-                        FindTarget(player, in unit, fuel, raid: true, homeOnly: false, out raidTarget, out int raidEdge))
-                        Consider(AiAction.StealthRaid, Score(preset.StealthRaidWeight, raidEdge), ref best, ref bestScore);
-                    // EW batteries ride along only while the core has batteries to give: a core out of them (no silicon to
-                    // make more) still sends the claim kit, or the empire never reaches the ore it lacks.
-                    int ewBatteries = _stockpiles.Get(player.CoreBase).Get(ItemId.ItemBattery) > 0 ? EwBatteries(in unit) : 0;
-                    if (SettleWeight(preset) > 0 && CarriesClaimCost(ref hold, ewBatteries) &&
-                        FindTarget(player, in unit, fuel, raid: false, homeOnly: IsHomeSettler(preset), out siegeTarget,
-                            out int siegeEdge))
-                        Consider(AiAction.Siege, Score(SettleWeight(preset), siegeEdge), ref best, ref bestScore);
-                    if (SettleWeight(preset) > 0 && FindOutpostToDevelop(player, in unit, fuel, ref hold, out developTarget))
-                        Consider(AiAction.DevelopOutpost, Score(SettleWeight(preset), Full), ref best, ref bestScore);
+                    ConsiderRaidAndSiege(in player, preset, in unit, ref hold, ref best, ref bestScore, out raidTarget,
+                        out siegeTarget, out developTarget);
                 }
             }
             else if (ready && motion.Site != player.CoreBase && FlankWeight(preset) > 0 &&
@@ -1649,6 +1654,37 @@ namespace Unruled.Core.AI
                 edge = advantage;
             }
             return !target.IsNull;
+        }
+
+        // A fleet ready at the core base: a stealth raid, a siege it carries the claim kit for, or an outpost to develop.
+        private void ConsiderRaidAndSiege(in PlayerHq player, AiPreset preset, in FleetUnit unit, ref Stockpile hold,
+            ref AiAction best, ref int bestScore, out EntityId raidTarget, out EntityId siegeTarget, out EntityId developTarget)
+        {
+            siegeTarget = default;
+            developTarget = default;
+            int fuel = hold.Get(ItemId.ItemFuel);
+            raidTarget = default;
+            if (preset.StealthRaidWeight > 0 &&
+                FindTarget(player, in unit, fuel, raid: true, homeOnly: false, out raidTarget, out int raidEdge))
+                Consider(AiAction.StealthRaid, Score(preset.StealthRaidWeight, raidEdge), ref best, ref bestScore);
+            // EW batteries ride along only while the core has batteries to give: a core out of them (no silicon to
+            // make more) still sends the claim kit, or the empire never reaches the ore it lacks.
+            int ewBatteries = _stockpiles.Get(player.CoreBase).Get(ItemId.ItemBattery) > 0 ? EwBatteries(in unit) : 0;
+            if (SettleWeight(preset) > 0 && CarriesClaimCost(ref hold, ewBatteries) &&
+                FindTarget(player, in unit, fuel, raid: false, homeOnly: IsHomeSettler(preset), out siegeTarget,
+                    out int siegeEdge))
+                Consider(AiAction.Siege, Score(SettleWeight(preset), siegeEdge), ref best, ref bestScore);
+            if (SettleWeight(preset) > 0 && FindOutpostToDevelop(player, in unit, fuel, ref hold, out developTarget))
+                Consider(AiAction.DevelopOutpost, Score(SettleWeight(preset), Full), ref best, ref bestScore);
+        }
+
+        // THE SYSTEM's Citadel has fallen (and with it the reason battle lines wait mothballed at home).
+        private bool CitadelFallen()
+        {
+            for (int c = 0; c < _citadels.Count; c++)
+                if (_citadels.At(c).FallenTick == 0)
+                    return false;
+            return _citadels.Count > 0;
         }
 
         private bool IsStandingCitadel(EntityId site) => _citadels.Has(site) && _citadels.Get(site).FallenTick == 0;

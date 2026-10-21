@@ -618,6 +618,29 @@ namespace Unruled.Tests.Core.AI
             Assert.IsTrue(_sim.FleetReadiness.Get(fleet).IsMothballed);
         }
 
+        [Test]
+        public void AfterTheCitadelFalls_AMothballedBattleLineWakes_OnlyForATarget()
+        {
+            var citadelSite = Site(-400, -1);
+            _sim.Defense.CreateCitadel(citadelSite);
+            var fleet = Fleet(Me, _home, _sim.Balance.Ai.BattleLineShips, loaded: true, tier: 3);
+            _sim.FleetReadiness.Get(fleet).IsMothballed = true;
+            Ore(_target, ItemId.RawIron);
+            Assert.IsFalse(Find(Warlord, AiAction.Activate).HasValue, "the Citadel stands out of reach: it waits");
+
+            _sim.Citadels.Get(citadelSite).FallenTick = 1;
+            var order = Find(Warlord, AiAction.Activate);
+            Assert.IsTrue(order.HasValue, "a site to take, and nothing left to wait for");
+            Assert.AreEqual(fleet, order.Value.Subject);
+            RunPendingOrders();
+            Assert.IsFalse(_sim.FleetReadiness.Get(fleet).IsMothballed);
+            while (!_sim.FleetReadiness.Get(fleet).CanAct(_sim.Clock.CurrentTick))
+                _sim.Clock.Advance(1); // reactors warming up
+
+            _sim.Sites.Get(_target).OwnerPlayerId = Me;
+            Assert.IsTrue(Find(Warlord, AiAction.Mothball).HasValue, "nothing to fight: back to the cheap upkeep");
+        }
+
         // Tops the hold up to the standard ammo load plus what bombarding the target Citadel's shield down takes.
         private void SiegeLoad(EntityId fleet)
         {
