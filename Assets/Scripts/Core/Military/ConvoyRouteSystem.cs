@@ -22,7 +22,9 @@ namespace Unruled.Core.Military
     /// without signal latency; at the hub it unloads even when no route out is open. Supplies are fuel, coolant, oxygen and rations (GDD §1); the fleet keeps a reserve of
     /// its own: the fuel for the trip ahead, and its oxygen and rations upkeep for the reserve intervals. At the hub it
     /// unloads everything else, takes on each supply up to the batch plus its reserve (even while grounded for unpaid
-    /// upkeep) from what the hub holds above its supply reserve, and leaves, once it can act, when it carries half a batch of a supply above its reserve for an outpost below half a batch of it (so a run never
+    /// upkeep) from what the hub holds above its supply reserve (fuel down to none while the hub has run out of a good
+    /// the outpost holds a batch of: fuel is refined from raws, so a hub out of one would otherwise never fuel the run that
+    /// brings it), and leaves, once it can act, when it carries half a batch of a supply above its reserve for an outpost below half a batch of it (so a run never
     /// burns more fuel than it hauls), or the
     /// outpost holds a batch of goods and what a run would load there is worth more than the fuel of the round trip (base
     /// WTO prices: hauling cheap ore down a long route would burn more value than it brings home), or the hub is short of
@@ -152,13 +154,14 @@ namespace Unruled.Core.Military
             if (oneWay < 0 || back < 0)
                 return;
             long roundTrip = oneWay + back;
+            ref var outpost = ref _stockpiles.Get(route.Outpost);
+            bool starved = IsOutOf(ref _stockpiles.Get(route.Hub), ref outpost, route.Batch);
             for (int s = 0; s < Supplies.Length; s++)
                 Fill(fleet, route.Hub, Supplies[s], (int)Math.Min(route.Batch + Reserve(fleet, Supplies[s], roundTrip), int.MaxValue),
-                    _balance.HubSupplyReserve);
+                    starved && Supplies[s] == ItemId.ItemFuel ? 0 : _balance.HubSupplyReserve);
 
             if (!_readiness.Get(fleet).CanAct(tick) || hold.Get(ItemId.ItemFuel) < roundTrip)
                 return;
-            ref var outpost = ref _stockpiles.Get(route.Outpost);
             bool run = Goods(ref outpost) >= route.Batch &&
                        (GoodsWorth(ref outpost, route.Batch) > roundTrip * _recipes.GetItem(ItemId.ItemFuel).BaseWtoPrice ||
                         IsShort(ref _stockpiles.Get(route.Hub), ref outpost, route.Batch));
@@ -256,6 +259,18 @@ namespace Unruled.Core.Military
             {
                 var item = ItemIds.FromSlot(slot);
                 if (!IsSupply(item) && outpost.Get(item) >= batch && hub.Get(item) < batch)
+                    return true;
+            }
+            return false;
+        }
+
+        // Whether the hub holds none of a good the outpost has a batch of.
+        private static bool IsOutOf(ref Stockpile hub, ref Stockpile outpost, int batch)
+        {
+            for (int slot = 0; slot < ItemIds.Count; slot++)
+            {
+                var item = ItemIds.FromSlot(slot);
+                if (!IsSupply(item) && outpost.Get(item) >= batch && hub.Get(item) == 0)
                     return true;
             }
             return false;

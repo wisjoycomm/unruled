@@ -142,6 +142,21 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
+        public void Route_OfAHubOutOfAGood_TakesTheHubsFuelReserve_ToFetchIt()
+        {
+            int hubReserve = _sim.Balance.Convoys.HubSupplyReserve;
+            int roundTrip = 2 * _sim.Movement.FuelFor(_sim.Fleets.Get(_fleet), _sim.Starlanes.At(0));
+            Assert.Less(roundTrip, hubReserve, "the trip fits in the reserve");
+            Hub.Add(ItemId.ItemFuel, hubReserve - Hub.Get(ItemId.ItemFuel)); // nothing above the reserve
+            Outpost.Add(ItemId.RawWater, Batch);
+            SetRoute(_fleet, _outpost, Batch);
+
+            Run(2_000);
+            Assert.AreEqual(Batch, Hub.Get(ItemId.RawWater), "water its fuel is refined from, fetched on the reserve");
+            Assert.AreEqual(0, Outpost.Get(ItemId.RawWater));
+        }
+
+        [Test]
         public void Route_CarriesLifeSupport_AndKeepsItsOwnUpkeep_EvenWhenGrounded()
         {
             Hub.Add(ItemId.ItemOxygen, 1_000);
