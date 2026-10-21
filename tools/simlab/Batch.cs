@@ -10,7 +10,7 @@ using Unruled.Core.Simulation;
 namespace Unruled.SimLab
 {
     /// <summary>
-    /// `batch --seeds N --days D [--first S] [--human P] [--parallel K] [--csv path]`: runs N seeds in parallel, all seats AI-run
+    /// `batch --seeds N --days D [--first S] [--human P] [--parallel K] [--credit C] [--csv path]`: runs N seeds in parallel, all seats AI-run
     /// (the human seat uses preset P, default 2), and prints a survival report per seed and player.
     /// </summary>
     public static class Batch
@@ -23,13 +23,16 @@ namespace Unruled.SimLab
             byte human = (byte)Arg(args, "--human", 2);
             string csv = ArgString(args, "--csv");
             int parallel = Arg(args, "--parallel", Environment.ProcessorCount);
+            string creditArg = ArgString(args, "--credit");
+            long? credit = creditArg == null ? (long?)null : long.Parse(creditArg);
 
-            Console.WriteLine($"Batch: {seeds} seeds x {days} days, seat 1 on preset {human}");
+            Console.WriteLine($"Batch: {seeds} seeds x {days} days, seat 1 on preset {human}" +
+                (credit == null ? "" : $", credit limit {credit} credits"));
             var watch = Stopwatch.StartNew();
             var results = new Result[seeds];
             Parallel.For(0, seeds, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, parallel) }, i =>
             {
-                var game = new LabGame(first + (ulong)i, human);
+                var game = new LabGame(first + (ulong)i, human, credit);
                 long end = days * SimTick.TicksPerDay;
                 while (game.Tick < end)
                     game.Step();

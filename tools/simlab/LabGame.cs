@@ -26,14 +26,30 @@ namespace Unruled.SimLab
         public long CitadelFallTick;
         public long VictoryTick;
 
-        public LabGame(ulong seed, byte humanPreset)
+        /// <param name="creditLimit">Credits a player may borrow from THE SYSTEM; null = the default balance's limit.</param>
+        public LabGame(ulong seed, byte humanPreset, long? creditLimit = null)
         {
             Seed = seed;
-            Sim = new SimulationWorld(DefaultGameBalance.Create(), seed);
+            Sim = new SimulationWorld(Balance(creditLimit), seed);
             NewGameSetup.Create(Sim, HumanPlayerId);
             if (humanPreset != 0)
                 Sim.Ai.Assign(Hq(HumanPlayerId), humanPreset);
             TakeSample();
+        }
+
+        // The default balance, with another credit limit for "can they live without loans" runs.
+        private static GameBalanceConfig Balance(long? creditLimit)
+        {
+            var d = DefaultGameBalance.Create();
+            if (creditLimit == null)
+                return d;
+            var ledger = new Unruled.Core.Economy.LedgerBalance(d.Ledger.StartingCents,
+                creditLimit.Value * Unruled.Core.Economy.Wallet.CentsPerCredit, d.Ledger.InterestFreeTicks,
+                d.Ledger.DailyInterestBasisPoints, d.Ledger.LoanTermTicks);
+            return new GameBalanceConfig(d.Recipes, d.Universe, d.Starlanes, d.Weather, d.Refinery, d.Mining, d.Lifecycle,
+                d.Latency, d.Radar, d.Fleets, d.Combat, d.Relocation, ledger, d.Sta, d.Leaderboard, d.Wto, d.Contracts,
+                d.Authority, d.SystemFactions, d.Ai, d.NewGame, d.Research, d.Shipyard, d.SiteControl, d.JumpGates,
+                d.Convoys, d.Citadel);
         }
 
         public long Tick => Sim.Clock.CurrentTick;
