@@ -179,6 +179,7 @@ namespace Unruled.Core.AI
         private AiOrder[] _orders = new AiOrder[16];
         private int _orderCount;
         private readonly int _expansionRaws; // bit per raw slot of the outpost currency (see OutpostCurrency)
+        private readonly int _lifelineRaws; // bit per raw slot of fuel and coolant
 
         public UtilityAiEngine(
             ComponentStore<AiController> controllers, ComponentStore<PlayerHq> players, ComponentStore<FleetUnit> units,
@@ -247,6 +248,7 @@ namespace Unruled.Core.AI
             var currency = OutpostCurrency();
             if (currency != ItemId.None)
                 _expansionRaws = ItemIds.IsRaw(currency) ? 1 << ItemIds.ToSlot(currency) : RecipeRaws(currency);
+            _lifelineRaws = RecipeRaws(ItemId.ItemFuel) | RecipeRaws(ItemId.ItemCoolant);
         }
 
         // The item a new outpost takes most of: its claim cost plus the rigs on one deposit (steel).
@@ -404,6 +406,7 @@ namespace Unruled.Core.AI
         private readonly long[] _bestAskPrice2 = new long[ItemIds.Count];
         private readonly int[] _bestAskRem2 = new int[ItemIds.Count];
         private int[] _playerMinedOres = Array.Empty<int>();
+        private int[] _playerLowCoreOres = Array.Empty<int>();
         private bool[] _playerDormantGate = Array.Empty<bool>();
         private EntityId[] _playerDormantGateSite = Array.Empty<EntityId>();
         private bool[] _playerOpenGate = Array.Empty<bool>();
@@ -451,6 +454,7 @@ namespace Unruled.Core.AI
                 Array.Resize(ref _playerFirstSite, cap);
                 Array.Resize(ref _playerFirstWtoOrder, cap);
                 Array.Resize(ref _playerMinedOres, cap);
+                Array.Resize(ref _playerLowCoreOres, cap);
                 Array.Resize(ref _playerDormantGate, cap);
                 Array.Resize(ref _playerDormantGateSite, cap);
                 Array.Resize(ref _playerOpenGate, cap);
@@ -475,6 +479,7 @@ namespace Unruled.Core.AI
                 _playerFirstSite[playerId] = -1;
                 _playerFirstWtoOrder[playerId] = -1;
                 _playerMinedOres[playerId] = 0;
+                _playerLowCoreOres[playerId] = 0;
                 _playerDormantGate[playerId] = false;
                 _playerDormantGateSite[playerId] = default;
                 _playerOpenGate[playerId] = false;
@@ -619,6 +624,8 @@ namespace Unruled.Core.AI
                 }
 
                 bool hasOre = HasOre(in deposit);
+                if (pid > 0 && IsCoreBase(site) && (!hasOre || OreLeft(in deposit) < _balance.CoreOreLowReserve))
+                    _playerLowCoreOres[pid] |= 1 << ItemIds.ToSlot(deposit.RawItem);
                 if (hasOre)
                 {
                     int rawSlot = ItemIds.ToSlot(deposit.RawItem);
@@ -1445,7 +1452,9 @@ namespace Unruled.Core.AI
             for (int o = FirstPlayerWtoOrder(player.PlayerId); o >= 0; o = _playerWtoOrderNext[o])
             {
                 ref var order = ref _wtoOrders.At(o);
-                if (tick - order.PlacedTick < _balance.TradeOrderTicks ||
+                bool lowFuel = order.Side == OrderSide.Sell && FirstPlayerDeposit(player.PlayerId) >= 0 &&
+                               _stockpiles.Has(order.Site) && _stockpiles.Get(order.Site).Get(ItemId.ItemFuel) <= _balance.CoreSupplyReserve;
+                if ((!lowFuel && tick - order.PlacedTick < _balance.TradeOrderTicks) ||
                     _issuer.IsInFlight(player.PlayerId, CommandType.CancelOrder, order.Site))
                     continue;
                 Issue(new DelayedPlayerCommand
@@ -1506,7 +1515,10 @@ namespace Unruled.Core.AI
             for (int slot = 0; slot < ItemIds.Count; slot++)
             {
                 var raw = ItemIds.FromSlot(slot);
-                if (Feeds(feeds, raw) && stock.Get(raw) < _balance.SellBatch &&
+                bool needSupply = FirstPlayerDeposit(player.PlayerId) >= 0 &&
+                                  (raw == ItemId.ItemFuel || raw == ItemId.ItemCoolant) &&
+                                  stock.Get(raw) < _balance.CoreSupplyReserve;
+                if (((Feeds(feeds, raw) && stock.Get(raw) < _balance.SellBatch) || needSupply) &&
                     (BuyFromSystem(player.PlayerId, player.CoreBase, raw, _balance.SellBatch, spare, tick, weight) ||
                      LiftListing(player.PlayerId, player.CoreBase, raw, spare, weight)))
                     return;
@@ -1608,7 +1620,13 @@ namespace Unruled.Core.AI
         }
 
         // What it keeps of an item before selling: a raw it feeds up to the stock its drills stop at, else the threshold.
-        private int Keep(int feeds, ItemId item, int threshold) => Feeds(feeds, item) ? _balance.RawStockCap : threshold;
+        private int Keep(int playerId, int feeds, ItemId item, int threshold) =>
+            Feeds(feeds, item) || (IsCoreSupply(item) && (LowCoreOres(playerId) & RecipeRaws(item)) != 0)
+                ? _balance.RawStockCap
+                : threshold;
+
+        private static bool IsCoreSupply(ItemId item) =>
+            item == ItemId.ItemFuel || item == ItemId.ItemCoolant || item == ItemId.ItemOxygen || item == ItemId.ItemRations;
 
         // A raw a core refinery or the next stress test takes in: kept, since a deposit runs out and its fuel is made from it.
         private static bool Feeds(int feeds, ItemId item) =>
@@ -1633,7 +1651,7 @@ namespace Unruled.Core.AI
                 ref var bid = ref _wtoOrders.At(_wtoBuyOrders[b]);
                 if (bid.OwnerPlayerId == player.PlayerId || bid.PriceCents <= price)
                     continue;
-                int surplus = Surplus(player.PlayerId, hq, ref stock, bid.Item, Keep(feeds, bid.Item, _balance.FillAbove));
+                int surplus = Surplus(player.PlayerId, hq, ref stock, bid.Item, Keep(player.PlayerId, feeds, bid.Item, _balance.FillAbove));
                 if (surplus <= 0 || HasOpenOrder(player.PlayerId, bid.Item, OrderSide.Sell) ||
                     !_routes.TryPlan(player.CoreBase, bid.Site, WtoContractSystem.ConvoyTier, ref _route) ||
                     stock.Get(ItemId.ItemFuel) - _balance.CoreSupplyReserve < RouteFuel(in ContractConvoy))
@@ -1656,7 +1674,8 @@ namespace Unruled.Core.AI
             if (playerId > 0 && playerId < _playerStamp.Length && _playerStamp[playerId] == _thinkStamp &&
                 _playerSellOrderMask[playerId] != 0)
                 return false;
-            if (!FindSurplus(playerId, hq, ref stock, feeds, out item))
+            if ((FirstPlayerDeposit(playerId) >= 0 && stock.Get(ItemId.ItemFuel) <= _balance.CoreSupplyReserve) ||
+                !FindSurplus(playerId, hq, ref stock, feeds, out item))
                 return false;
             price = TradePrice(item, tick, -_balance.TradePricePercent);
             wanted = _balance.SellBatch;
@@ -1669,7 +1688,7 @@ namespace Unruled.Core.AI
             for (int slot = 0; slot < ItemIds.Count; slot++)
             {
                 item = ItemIds.FromSlot(slot);
-                if (Surplus(playerId, hq, ref stock, item, Keep(feeds, item, _balance.SellAbove)) >= _balance.SellBatch)
+                if (Surplus(playerId, hq, ref stock, item, Keep(playerId, feeds, item, _balance.SellAbove)) >= _balance.SellBatch)
                     return true;
             }
             item = ItemId.None;
@@ -1871,7 +1890,7 @@ namespace Unruled.Core.AI
                 : id == ItemId.ItemOxygen || id == ItemId.ItemRations
                     ? Math.Min(_balance.CoreSupplyReserve, 50)
                     : 0;
-            long available = stock.Get(id) - reserve - ProgressReserve(hq, id);
+            long available = stock.Get(id) - reserve - ProgressReserve(hq, id) - PendingCoreLoad(hq, id);
             if (gap <= 0 || available <= 0)
                 return false;
             item = id;
@@ -1890,7 +1909,15 @@ namespace Unruled.Core.AI
                 : id == ItemId.ItemOxygen || id == ItemId.ItemRations
                     ? Math.Min(_balance.CoreSupplyReserve, 50)
                     : 0;
-            return stock.Get(id) > reserve + ProgressReserve(hq, id);
+            return stock.Get(id) > reserve + ProgressReserve(hq, id) + PendingCoreLoad(hq, id);
+        }
+
+        private long PendingCoreLoad(EntityId hq, ItemId id)
+        {
+            if (!_players.Has(hq))
+                return 0;
+            ref var player = ref _players.Get(hq);
+            return _issuer.PendingLoadAt(player.PlayerId, player.CoreBase, id, _stockpiles);
         }
 
         private bool FindTarget(in PlayerHq player, in FleetUnit unit, int fuel, bool raid, bool homeOnly, out EntityId target,
@@ -1913,6 +1940,7 @@ namespace Unruled.Core.AI
             int bestOres = 0;
             int mined = raid ? 0 : MinedOres(player.PlayerId);
             int feeds = raid ? 0 : NeededRaws(in player);
+            int urgent = raid ? 0 : _expansionRaws | (LowCoreOres(player.PlayerId) & _lifelineRaws);
             int homeCluster = _sites.Get(player.CoreBase).ClusterId;
             int raidIdx = 0;
             int iA = !raid && homeCluster >= 0 && homeCluster < _clusterNeutralStamp.Length &&
@@ -1953,7 +1981,7 @@ namespace Unruled.Core.AI
                     continue;
                 if (!raid && site.OwnerPlayerId == 0 && site.ClusterId != homeCluster && IsAnyHomeCluster(site.ClusterId))
                     continue;
-                int ores = raid ? 0 : NewOres(entity, mined, feeds);
+                int ores = raid ? 0 : NewOres(entity, mined, feeds, urgent);
                 if (!raid && (ores == 0 || ores < bestOres))
                     continue; // a site with no new ore isn't worth the claim cost
                 long hostile = Power(entity, player.PlayerId, mine: false);
@@ -2350,10 +2378,13 @@ namespace Unruled.Core.AI
         private int MinedOres(int playerId) =>
             playerId > 0 && playerId < _playerStamp.Length && _playerStamp[playerId] == _thinkStamp ? _playerMinedOres[playerId] : 0;
 
+        private int LowCoreOres(int playerId) =>
+            playerId > 0 && playerId < _playerStamp.Length && _playerStamp[playerId] == _thinkStamp ? _playerLowCoreOres[playerId] : 0;
+
         // Deposits at the site with ore left of a raw item outside the mined mask; one a core refinery needs counts double,
         // and one the outpost currency is made of (steel's iron) more than all the others together: every later outpost is
         // paid in it, so a player who settles elsewhere first can spend its starting steel and never claim the ore to make more.
-        private int NewOres(EntityId site, int mined, int feeds)
+        private int NewOres(EntityId site, int mined, int feeds, int urgent)
         {
             if (site.Index >= _siteDepositStamp.Length || _siteDepositStamp[site.Index] != _thinkStamp)
                 return 0;
@@ -2368,7 +2399,7 @@ namespace Unruled.Core.AI
                 if ((unmined & bit) == 0)
                     continue;
                 int depCount = (int)((counts >> (slot * 6)) & 0x3F);
-                count += depCount * ((_expansionRaws & bit) != 0 ? 2 * ItemIds.Count : (feeds & bit) != 0 ? 2 : 1);
+                count += depCount * ((urgent & bit) != 0 ? 2 * ItemIds.Count : (feeds & bit) != 0 ? 2 : 1);
             }
             return count;
         }
@@ -2484,7 +2515,8 @@ namespace Unruled.Core.AI
             if (expand == 0 || !HasClosedGate(player.PlayerId))
                 return;
             for (int i = 0; i < _gateBalance.OpenCostCount; i++)
-                if (!stock.Has(_gateBalance.OpenCost(i).Item, _gateBalance.OpenCost(i).Quantity))
+                if (!stock.Has(_gateBalance.OpenCost(i).Item,
+                        _gateBalance.OpenCost(i).Quantity + (_gateBalance.OpenCost(i).Item == ItemId.ItemFuel && FirstPlayerDeposit(player.PlayerId) >= 0 ? _balance.CoreSupplyReserve : 0)))
                     return;
             Issue(new DelayedPlayerCommand
             {
@@ -2727,7 +2759,13 @@ namespace Unruled.Core.AI
             if (stock.Get(ItemId.ItemFuel) >= _balance.CoreSupplyReserve && stock.Get(ItemId.ItemCoolant) >= _balance.CoreSupplyReserve)
                 return false;
             int lifeline = RecipeRaws(ItemId.ItemFuel) | RecipeRaws(ItemId.ItemCoolant);
-            return (lifeline & (1 << ItemIds.ToSlot(deposit.RawItem))) == 0;
+            if ((lifeline & (1 << ItemIds.ToSlot(deposit.RawItem))) == 0)
+                return true;
+            int partner = deposit.RawItem == ItemId.RawWater
+                ? stock.Get(ItemId.RawMethane) + stock.Get(ItemId.RawNitrogen)
+                : stock.Get(ItemId.RawWater);
+            int cap = deposit.IsPaused ? _balance.ConvoyBatch / 2 : _balance.ConvoyBatch;
+            return partner == 0 && stock.Get(deposit.RawItem) >= cap;
         }
 
         // Rigs back on a bare deposit with ore left, up to its target, when the site can pay for them all.

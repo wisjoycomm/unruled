@@ -158,7 +158,9 @@ namespace Unruled.Core.Military
             bool starved = IsOutOf(ref _stockpiles.Get(route.Hub), ref outpost, route.Batch);
             for (int s = 0; s < Supplies.Length; s++)
                 Fill(fleet, route.Hub, Supplies[s], (int)Math.Min(route.Batch + Reserve(fleet, Supplies[s], roundTrip), int.MaxValue),
-                    starved && Supplies[s] == ItemId.ItemFuel ? 0 : _balance.HubSupplyReserve);
+                    _balance.HubSupplyReserve);
+            if (starved && hold.Get(ItemId.ItemFuel) < roundTrip)
+                Fill(fleet, route.Hub, ItemId.ItemFuel, (int)roundTrip, _balance.HubSupplyReserve / 2);
 
             if (!_readiness.Get(fleet).CanAct(tick) || hold.Get(ItemId.ItemFuel) < roundTrip)
                 return;

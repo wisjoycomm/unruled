@@ -223,6 +223,29 @@ namespace Unruled.Core.Military
             return false;
         }
 
+        public long PendingLoadAt(int playerId, EntityId site, ItemId item, ComponentStore<Stockpile> stockpiles)
+        {
+            long total = 0;
+            for (int s = FirstForPlayer(playerId); s >= 0; s = _nextInPlayer[s])
+            {
+                ref var pending = ref _indexed[s];
+                if (pending.CommandType != CommandType.TransferCargo || pending.ParamA != (int)item || pending.ParamB <= 0 ||
+                    !_fleets.Has(pending.Target) || _fleets.Get(pending.Target).Site != site)
+                    continue;
+                if (pending.ParamC == 1)
+                {
+                    int inHold = stockpiles != null && stockpiles.Has(pending.Target) ? stockpiles.Get(pending.Target).Get(item) : 0;
+                    if (pending.ParamB > inHold)
+                        total += pending.ParamB - inHold;
+                }
+                else
+                {
+                    total += pending.ParamB;
+                }
+            }
+            return total;
+        }
+
         private bool IsParalysed(int playerId)
         {
             if (_relocations.Count == 0)

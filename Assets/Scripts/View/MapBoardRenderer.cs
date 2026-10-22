@@ -14,11 +14,11 @@ namespace Unruled.View
     /// <summary>
     /// Draws one star system on the single-layer board: orbits, lanes (STA highway solid, rim bypass dotted, storm
     /// shortcut zigzag), site glyphs (own, hostile, unclaimed, THE SYSTEM, core base, WHO lock, irradiated), fleets as
-    /// tier chevrons, and NOAA storm discs the player's bracket can see; a jump gate is a ring on its site.
-    /// The galaxy tab instead shows every star system: the contested cluster in the middle, homes around it, gate links
-    /// (open solid, dormant dashed) and own fleet counts; clicking a system opens it. One mesh, rebuilt only when the sim tick or
-    /// the board's screen area changes. Names are pooled UI Toolkit labels over the board view. Clicks select through
-    /// <see cref="MainScreenView"/>; this class never writes simulation state.
+    /// tier chevrons, and NOAA storm discs the player's bracket can see; a jump gate or inter-system lane is a ring on its site.
+    /// The galaxy tab instead shows every star system: the contested cluster in the middle, homes on the inner ring,
+    /// uninhabited frontier systems on the outer ring, gate/inter-system links and own fleet counts; clicking a system opens it.
+    /// One mesh, rebuilt only when the sim tick or the board's screen area changes. Names are pooled UI Toolkit labels over
+    /// the board view. Clicks select through <see cref="MainScreenView"/>; this class never writes simulation state.
     /// </summary>
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public sealed class MapBoardRenderer : MonoBehaviour
@@ -27,7 +27,8 @@ namespace Unruled.View
         private const float SitePickPx = 18f;
         private const float FleetPickPx = 20f;
         private const float FleetOffsetPx = 30f;
-        private const float GalaxyRadius = 1000f;
+        private const float GalaxyRadius = 850f;
+        private const float OuterGalaxyRadius = 1550f;
         private const float ClusterPickPx = 40f;
 
         private static readonly string[] StormLevelNames = { "", "MINOR", "MODERATE", "STRONG", "SEVERE", "EXTREME" };
@@ -40,12 +41,16 @@ namespace Unruled.View
         private readonly List<float> _orbits = new List<float>();
         private readonly List<Vector2> _clusterPos = new List<Vector2>();
         private readonly List<int> _clusterFleets = new List<int>();
+        private readonly Dictionary<int, int> _portalStack = new Dictionary<int, int>();
         private int _labelsUsed;
 
         private SimulationWorld _sim;
         private MainScreenView _screen;
         private VisualElement _boardView;
         private VisualElement _labelLayer;
+        private VisualElement _backdropLayer;
+        private VisualElement _sectorBadge;
+        private Label _sectorBadgeLabel;
         private int _playerId;
         private int _clusterId;
         private bool _galaxy;
@@ -80,6 +85,10 @@ namespace Unruled.View
                 _labelLayer.style.bottom = 0;
             }
             _boardView.Insert(0, _labelLayer);
+            EnsureTelemetryOverlays();
+            _contestedId = _sim.JumpGates.Count > 0 && _sim.Sites.Has(_sim.JumpGates.At(0).FarSite)
+                ? _sim.Sites.Get(_sim.JumpGates.At(0).FarSite).ClusterId
+                : -1;
             screen.SystemTab.clicked -= OnSystemTab;
             screen.SystemTab.clicked += OnSystemTab;
             screen.GalaxyTab.clicked -= ShowGalaxy;
@@ -111,6 +120,7 @@ namespace Unruled.View
             }
             _extent = max * FitMargin;
             _drawnTick = -1;
+            UpdateSectorBadge(false, clusterId);
         }
 
         /// <summary>Switches the board to the galaxy overview.</summary>
@@ -124,8 +134,19 @@ namespace Unruled.View
             for (int i = 0; i < _sim.Sites.Count; i++)
                 clusters = Mathf.Max(clusters, _sim.Sites.At(i).ClusterId + 1);
             _clusterPos.Clear();
-            int ring = _contestedId >= 0 ? clusters - 1 : clusters;
-            int slot = 0;
+            int homeCount = 0;
+            int frontierCount = 0;
+            for (int c = 0; c < clusters; c++)
+            {
+                if (c == _contestedId)
+                    continue;
+                if (ClusterCoreOwner(c) != 0)
+                    homeCount++;
+                else
+                    frontierCount++;
+            }
+            int homeSlot = 0;
+            int frontierSlot = 0;
             for (int c = 0; c < clusters; c++)
             {
                 if (c == _contestedId)
@@ -133,12 +154,21 @@ namespace Unruled.View
                     _clusterPos.Add(Vector2.zero);
                     continue;
                 }
-                float angle = Mathf.PI * 0.5f - 2f * Mathf.PI * slot++ / Mathf.Max(1, ring);
-                _clusterPos.Add(new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * GalaxyRadius);
+                if (ClusterCoreOwner(c) != 0)
+                {
+                    float angle = Mathf.PI * 0.5f - 2f * Mathf.PI * homeSlot++ / Mathf.Max(1, homeCount);
+                    _clusterPos.Add(new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * GalaxyRadius);
+                }
+                else
+                {
+                    float angle = Mathf.PI * 0.5f - 2f * Mathf.PI * frontierSlot++ / Mathf.Max(1, frontierCount);
+                    _clusterPos.Add(new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * OuterGalaxyRadius);
+                }
             }
-            _extent = GalaxyRadius * 1.35f;
+            _extent = (frontierCount > 0 ? OuterGalaxyRadius : GalaxyRadius) * 1.28f;
             _drawnTick = -1;
             _screen.ShowBoardTab(true, _clusterId);
+            UpdateSectorBadge(true, _clusterId);
         }
 
         private void OnSystemTab() => ShowCluster(_clusterId);
@@ -251,6 +281,7 @@ namespace Unruled.View
 
         private void DrawGates()
         {
+            _portalStack.Clear();
             for (int i = 0; i < _sim.JumpGates.Count; i++)
             {
                 ref var gate = ref _sim.JumpGates.At(i);
@@ -273,8 +304,32 @@ namespace Unruled.View
                 else
                     _mesh.DashedRing(p, 20f, 2f, 4f, 4f, UnruledPalette.Unclaimed);
                 string star = _sim.Sites.Has(there) ? UiFormat.StarName(_sim.Sites.Get(there).ClusterId) : "";
-                PlaceLabel(p + new Vector2(0f, 34f * _mesh.UnitsPerPixel), (gate.IsOpen ? "GATE → " : "GATE DORMANT → ") + star,
+                int stack = _portalStack.TryGetValue(here.Index, out int n) ? n : 0;
+                _portalStack[here.Index] = stack + 1;
+                PlaceLabel(p + new Vector2(0f, (34f + 16f * stack) * _mesh.UnitsPerPixel),
+                    (gate.IsOpen ? "GATE → " : "GATE DORMANT → ") + star,
                     gate.IsOpen ? UnruledPalette.Sta : UnruledPalette.InkSoft, true, false);
+            }
+
+            for (int i = 0; i < _sim.Starlanes.Count; i++)
+            {
+                var laneId = _sim.Starlanes.EntityAt(i);
+                if (IsJumpGateLane(laneId))
+                    continue;
+                ref var lane = ref _sim.Starlanes.At(i);
+                bool aIn = InCluster(lane.SiteA);
+                bool bIn = InCluster(lane.SiteB);
+                if (aIn == bIn)
+                    continue;
+                var here = aIn ? lane.SiteA : lane.SiteB;
+                var there = lane.OtherEnd(here);
+                var p = Pos(here);
+                var col = lane.Tier == StarlaneTier.StaHighway ? UnruledPalette.Sta : UnruledPalette.Safe;
+                _mesh.DashedRing(p, 24f, 2f, 5f, 3f, col);
+                string star = _sim.Sites.Has(there) ? UiFormat.StarName(_sim.Sites.Get(there).ClusterId) : "";
+                int stack = _portalStack.TryGetValue(here.Index, out int k) ? k : 0;
+                _portalStack[here.Index] = stack + 1;
+                PlaceLabel(p + new Vector2(0f, (34f + 16f * stack) * _mesh.UnitsPerPixel), "WARP → " + star, col, true, false);
             }
         }
 
@@ -306,18 +361,45 @@ namespace Unruled.View
                     _mesh.DashedLine(a, b, 2f, 4f, 8f, UnruledPalette.Unclaimed);
             }
 
+            for (int i = 0; i < _sim.Starlanes.Count; i++)
+            {
+                var laneId = _sim.Starlanes.EntityAt(i);
+                if (IsJumpGateLane(laneId))
+                    continue;
+                ref var lane = ref _sim.Starlanes.At(i);
+                if (!_sim.Sites.Has(lane.SiteA) || !_sim.Sites.Has(lane.SiteB))
+                    continue;
+                int cA = _sim.Sites.Get(lane.SiteA).ClusterId;
+                int cB = _sim.Sites.Get(lane.SiteB).ClusterId;
+                if (cA == cB || cA < 0 || cB < 0 || cA >= _clusterPos.Count || cB >= _clusterPos.Count)
+                    continue;
+                var a = _clusterPos[cA];
+                var b = _clusterPos[cB];
+                if (lane.Tier == StarlaneTier.StaHighway)
+                {
+                    var gold = UnruledPalette.Sta;
+                    gold.a = 0.55f;
+                    _mesh.Line(a, b, 2f, gold);
+                }
+                else
+                {
+                    _mesh.DashedLine(a, b, 1.8f, 4f, 6f, UnruledPalette.Safe);
+                }
+            }
+
             for (int c = 0; c < _clusterPos.Count; c++)
             {
                 var p = _clusterPos[c];
                 int owner = ClusterCoreOwner(c);
                 bool contested = c == _contestedId;
-                Color colour = contested ? UnruledPalette.Danger : owner != 0 ? SideColour(owner) : UnruledPalette.Unclaimed;
+                Color colour = contested ? UnruledPalette.Danger : owner != 0 ? SideColour(owner) : UnruledPalette.Safe;
                 if (c == _clusterId)
                     _mesh.SquareOutline(p, 64f, 2f, UnruledPalette.Ink);
                 _mesh.Disc(p, 22f, colour);
                 _mesh.Disc(p, 18f, UnruledPalette.Void);
                 _mesh.Disc(p, 8f, colour);
-                string name = UiFormat.StarName(c) + (contested ? " · CONTESTED" : owner == _playerId ? " · HOME" : "");
+                string name = UiFormat.StarName(c) +
+                              (contested ? " · CONTESTED" : owner == _playerId ? " · HOME" : owner == 0 ? " · FRONTIER" : "");
                 bool strong = contested || owner == _playerId;
                 PlaceLabel(p - new Vector2(0f, 40f * _mesh.UnitsPerPixel), name, strong ? UnruledPalette.Ink : UnruledPalette.InkSoft,
                     true, true);
@@ -337,6 +419,96 @@ namespace Unruled.View
                     return _sim.Players.At(i).PlayerId;
             }
             return 0;
+        }
+
+        private bool IsJumpGateLane(EntityId lane)
+        {
+            for (int i = 0; i < _sim.JumpGates.Count; i++)
+                if (_sim.JumpGates.At(i).Lane == lane)
+                    return true;
+            return false;
+        }
+
+        private void EnsureTelemetryOverlays()
+        {
+            if (_backdropLayer == null)
+            {
+                _backdropLayer = new VisualElement { pickingMode = PickingMode.Ignore };
+                _backdropLayer.style.position = Position.Absolute;
+                _backdropLayer.style.left = 0;
+                _backdropLayer.style.top = 0;
+                _backdropLayer.style.right = 0;
+                _backdropLayer.style.bottom = 0;
+                _backdropLayer.style.opacity = 0.16f;
+                var backdropTex = Resources.Load<Texture2D>("UI/galaxy_sector_backdrop");
+                if (backdropTex != null)
+                    _backdropLayer.style.backgroundImage = new StyleBackground(backdropTex);
+                _boardView.Insert(0, _backdropLayer);
+            }
+            if (_sectorBadge == null)
+            {
+                _sectorBadge = new VisualElement { pickingMode = PickingMode.Ignore };
+                _sectorBadge.style.position = Position.Absolute;
+                _sectorBadge.style.left = 12;
+                _sectorBadge.style.top = 12;
+                _sectorBadge.style.flexDirection = FlexDirection.Row;
+                _sectorBadge.style.alignItems = Align.Center;
+                _sectorBadge.style.paddingLeft = 8;
+                _sectorBadge.style.paddingRight = 10;
+                _sectorBadge.style.paddingTop = 4;
+                _sectorBadge.style.paddingBottom = 4;
+                _sectorBadge.style.backgroundColor = new Color(0.067f, 0.106f, 0.18f, 0.85f);
+                _sectorBadge.style.borderTopWidth = 1;
+                _sectorBadge.style.borderBottomWidth = 1;
+                _sectorBadge.style.borderLeftWidth = 1;
+                _sectorBadge.style.borderRightWidth = 1;
+                _sectorBadge.style.borderTopColor = UnruledPalette.Raised;
+                _sectorBadge.style.borderBottomColor = UnruledPalette.Raised;
+                _sectorBadge.style.borderLeftColor = UnruledPalette.Raised;
+                _sectorBadge.style.borderRightColor = UnruledPalette.Raised;
+                var emblemTex = Resources.Load<Texture2D>("UI/frontier_sector_emblem");
+                if (emblemTex != null)
+                {
+                    var icon = new VisualElement { pickingMode = PickingMode.Ignore };
+                    icon.style.width = 20;
+                    icon.style.height = 20;
+                    icon.style.marginRight = 8;
+                    icon.style.backgroundImage = new StyleBackground(emblemTex);
+                    _sectorBadge.Add(icon);
+                }
+                _sectorBadgeLabel = new Label { pickingMode = PickingMode.Ignore };
+                _sectorBadgeLabel.AddToClassList("board-label");
+                _sectorBadgeLabel.AddToClassList("board-label--strong");
+                _sectorBadge.Add(_sectorBadgeLabel);
+                _boardView.Add(_sectorBadge);
+            }
+        }
+
+        private void UpdateSectorBadge(bool galaxy, int clusterId)
+        {
+            if (_sectorBadgeLabel == null)
+                return;
+            if (galaxy)
+            {
+                _sectorBadgeLabel.style.color = UnruledPalette.You;
+                UiFormat.Set(_sectorBadgeLabel, "ASTROMETRIC GALAXY CHART");
+                return;
+            }
+            int owner = ClusterCoreOwner(clusterId);
+            bool contested = clusterId == _contestedId;
+            string tag = contested
+                ? " · CONTESTED CORE SECTOR"
+                : owner == _playerId
+                    ? " · HOME SECTOR"
+                    : owner != 0
+                        ? " · RIVAL HOME SECTOR"
+                        : " · UNINHABITED FRONTIER SECTOR";
+            _sectorBadgeLabel.style.color = contested
+                ? UnruledPalette.Danger
+                : owner == 0
+                    ? UnruledPalette.Safe
+                    : SideColour(owner);
+            UiFormat.Set(_sectorBadgeLabel, UiFormat.StarName(clusterId) + tag);
         }
 
         private void DrawSites(long tick)
@@ -427,11 +599,32 @@ namespace Unruled.View
             {
                 ref var lane = ref _sim.Starlanes.Get(motion.Lane);
                 var from = motion.FromSite;
-                if (!InCluster(from) || !InCluster(lane.OtherEnd(from)))
+                var to = lane.OtherEnd(from);
+                bool fromIn = InCluster(from);
+                bool toIn = InCluster(to);
+                if (!fromIn && !toIn)
                     return false;
                 float t = lane.Length > 0 ? Mathf.Clamp01(motion.TravelledMilli / (lane.Length * 1000f)) : 0f;
-                position = Vector2.Lerp(Pos(from), Pos(lane.OtherEnd(from)), t);
-                return true;
+                if (fromIn && toIn)
+                {
+                    position = Vector2.Lerp(Pos(from), Pos(to), t);
+                    return true;
+                }
+                if (fromIn && t < 0.5f)
+                {
+                    var p = Pos(from);
+                    var dir = p.sqrMagnitude > 1f ? p.normalized : Vector2.up;
+                    position = p + dir * (t * 80f * _mesh.UnitsPerPixel);
+                    return true;
+                }
+                if (toIn && t >= 0.5f)
+                {
+                    var p = Pos(to);
+                    var dir = p.sqrMagnitude > 1f ? p.normalized : Vector2.up;
+                    position = p + dir * ((1f - t) * 80f * _mesh.UnitsPerPixel);
+                    return true;
+                }
+                return false;
             }
             if (!InCluster(motion.Site))
                 return false;
@@ -468,7 +661,6 @@ namespace Unruled.View
             var local = (Vector2)evt.localPosition;
             var size = _boardView.layout.size;
             var world = new Vector2((local.x / size.x * 2f - 1f) * _halfWidth, (1f - local.y / size.y * 2f) * _halfHeight);
-            long tick = _sim.Clock.CurrentTick;
             if (_galaxy)
             {
                 float pick = ClusterPickPx * _mesh.UnitsPerPixel;

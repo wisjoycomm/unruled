@@ -57,6 +57,8 @@ namespace Unruled.Core.Economy
             long cycle = tick / _balance.CycleTicks;
             long idleCents = _balance.UpkeepCents(cycle, idle: true);
             long activeCents = _balance.UpkeepCents(cycle, idle: false);
+            int remBatches = Math.Max(0, (60 - _balance.CycleTicks - (int)(tick % 60)) / _balance.CycleTicks) * _balance.MaxBatchesPerCycle;
+            BeginTickReserve();
 
             for (int i = 0; i < _refineries.Count; i++)
             {
@@ -71,8 +73,16 @@ namespace Unruled.Core.Economy
                     continue;
                 }
 
+                bool lifeline = refinery.Output == ItemId.ItemCoolant || refinery.Output == ItemId.ItemFuel;
+                int avail1 = lifeline ? stock.Get(recipe.Input1) : Math.Max(0, stock.Get(recipe.Input1) - GetReserve(refinery.Site, recipe.Input1));
+                int avail2 = lifeline ? stock.Get(recipe.Input2) : Math.Max(0, stock.Get(recipe.Input2) - GetReserve(refinery.Site, recipe.Input2));
                 int batches = Math.Min(_balance.MaxBatchesPerCycle,
-                    Math.Min(stock.Get(recipe.Input1) / recipe.Qty1, stock.Get(recipe.Input2) / recipe.Qty2));
+                    Math.Min(avail1 / recipe.Qty1, avail2 / recipe.Qty2));
+                if (lifeline && remBatches > 0)
+                {
+                    AddReserve(refinery.Site, recipe.Input1, remBatches * recipe.Qty1);
+                    AddReserve(refinery.Site, recipe.Input2, remBatches * recipe.Qty2);
+                }
                 if (batches <= 0)
                 {
                     refinery.State = RefineryState.IdleStarved;
@@ -154,6 +164,56 @@ namespace Unruled.Core.Economy
             for (int i = 0; i < _balance.BuildCostCount; i++)
                 stock.Add(_balance.BuildCost(i).Item, -_balance.BuildCost(i).Quantity);
             _refineries.Add(_world.Create(), new Refinery { Site = site, Output = output, StockCap = _balance.DefaultStockCap });
+        }
+
+        private int _reserveStamp;
+        private int[] _siteReserveStamp = Array.Empty<int>();
+        private int[] _siteReserveWater = Array.Empty<int>();
+        private int[] _siteReserveNitrogen = Array.Empty<int>();
+        private int[] _siteReserveMethane = Array.Empty<int>();
+
+        private void BeginTickReserve()
+        {
+            if (++_reserveStamp == int.MaxValue)
+            {
+                Array.Clear(_siteReserveStamp, 0, _siteReserveStamp.Length);
+                _reserveStamp = 1;
+            }
+        }
+
+        private void AddReserve(EntityId site, ItemId item, int amount)
+        {
+            if (site.IsNull || amount <= 0)
+                return;
+            int s = site.Index;
+            if (s >= _siteReserveStamp.Length)
+            {
+                int cap = Math.Max(s + 1, _siteReserveStamp.Length == 0 ? 64 : _siteReserveStamp.Length * 2);
+                Array.Resize(ref _siteReserveStamp, cap);
+                Array.Resize(ref _siteReserveWater, cap);
+                Array.Resize(ref _siteReserveNitrogen, cap);
+                Array.Resize(ref _siteReserveMethane, cap);
+            }
+            if (_siteReserveStamp[s] != _reserveStamp)
+            {
+                _siteReserveStamp[s] = _reserveStamp;
+                _siteReserveWater[s] = 0;
+                _siteReserveNitrogen[s] = 0;
+                _siteReserveMethane[s] = 0;
+            }
+            if (item == ItemId.RawWater) _siteReserveWater[s] += amount;
+            else if (item == ItemId.RawNitrogen) _siteReserveNitrogen[s] += amount;
+            else if (item == ItemId.RawMethane) _siteReserveMethane[s] += amount;
+        }
+
+        private int GetReserve(EntityId site, ItemId item)
+        {
+            if (site.IsNull || site.Index >= _siteReserveStamp.Length || _siteReserveStamp[site.Index] != _reserveStamp)
+                return 0;
+            if (item == ItemId.RawWater) return _siteReserveWater[site.Index];
+            if (item == ItemId.RawNitrogen) return _siteReserveNitrogen[site.Index];
+            if (item == ItemId.RawMethane) return _siteReserveMethane[site.Index];
+            return 0;
         }
 
         private void PayUpkeep(ref Refinery refinery)

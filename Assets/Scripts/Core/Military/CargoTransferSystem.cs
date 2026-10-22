@@ -22,11 +22,12 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly ComponentStore<ContractCargo> _contracts;
         private readonly ComponentStore<StolenGoods> _stolen;
+        private readonly int _coreSupplyReserve;
 
         public CargoTransferSystem(
             ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions, ComponentStore<FleetCombatState> combat,
             ComponentStore<SiteInfo> sites, ComponentStore<Stockpile> stockpiles, ComponentStore<ContractCargo> contracts,
-            ComponentStore<StolenGoods> stolen)
+            ComponentStore<StolenGoods> stolen, int coreSupplyReserve = 0)
         {
             _units = units ?? throw new ArgumentNullException(nameof(units));
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
@@ -35,6 +36,7 @@ namespace Unruled.Core.Military
             _stockpiles = stockpiles ?? throw new ArgumentNullException(nameof(stockpiles));
             _contracts = contracts ?? throw new ArgumentNullException(nameof(contracts));
             _stolen = stolen ?? throw new ArgumentNullException(nameof(stolen));
+            _coreSupplyReserve = coreSupplyReserve;
         }
 
         public void Handle(in DelayedPlayerCommand command, long tick)
@@ -62,7 +64,12 @@ namespace Unruled.Core.Military
             {
                 if (!load)
                     return;
-                quantity = Math.Min(command.ParamB - _stockpiles.Get(fleet).Get(item), source.Get(item));
+                int reserve = item == ItemId.ItemFuel || item == ItemId.ItemCoolant
+                    ? _coreSupplyReserve
+                    : item == ItemId.ItemOxygen || item == ItemId.ItemRations
+                        ? Math.Min(_coreSupplyReserve, 50)
+                        : 0;
+                quantity = Math.Min(command.ParamB - _stockpiles.Get(fleet).Get(item), source.Get(item) - reserve);
                 if (quantity <= 0)
                     return;
             }
