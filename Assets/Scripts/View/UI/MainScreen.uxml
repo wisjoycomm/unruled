@@ -25,6 +25,7 @@
             <ui:VisualElement class="top-bar__group">
                 <ui:Label name="who-tag" class="u-tag u-tag--who" text="WHO · 1 LOCK" />
                 <ui:Label name="sta-tag" class="u-tag u-tag--sta" text="STA · TOLL 4%" />
+                <ui:VisualElement name="citadel-icon" class="top-bar__citadel-icon" />
                 <ui:Label name="citadel-tag" class="u-tag u-tag--citadel" text="CITADEL · 100% · T3" />
             </ui:VisualElement>
         </ui:VisualElement>
@@ -190,18 +191,22 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="fleet-card__parts">
                         <ui:VisualElement class="part">
+                            <ui:VisualElement name="part-icon-line" class="part__icon part__icon--line" />
                             <ui:Label class="part__label" text="LINE" />
                             <ui:Label name="part-line" class="part__value" text="12" />
                         </ui:VisualElement>
                         <ui:VisualElement class="part">
+                            <ui:VisualElement name="part-icon-ew" class="part__icon part__icon--ew" />
                             <ui:Label class="part__label" text="EW" />
                             <ui:Label name="part-ew" class="part__value" text="5" />
                         </ui:VisualElement>
                         <ui:VisualElement class="part">
+                            <ui:VisualElement name="part-icon-supply" class="part__icon part__icon--supply" />
                             <ui:Label class="part__label" text="SUPPLY" />
                             <ui:Label name="part-supply" class="part__value" text="2" />
                         </ui:VisualElement>
                         <ui:VisualElement class="part">
+                            <ui:VisualElement name="part-icon-cargo" class="part__icon part__icon--cargo" />
                             <ui:Label class="part__label" text="CARGO" />
                             <ui:Label name="part-cargo" class="part__value" text="0" />
                         </ui:VisualElement>
@@ -333,7 +338,10 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
-                            <ui:Label class="gauge__label" text="SHIPYARD" />
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement name="ship-preview" class="ops__emblem ops__emblem--ship" />
+                                <ui:Label class="gauge__label" text="SHIPYARD" />
+                            </ui:VisualElement>
                             <ui:Label name="ship-status" class="section-meta" text="TIER 1 · 0 QUEUED" />
                         </ui:VisualElement>
                         <ui:VisualElement class="seg">
@@ -354,7 +362,10 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
-                            <ui:Label class="gauge__label" text="SYSTEM LOAN" />
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement name="loan-emblem" class="ops__emblem ops__emblem--citadel" />
+                                <ui:Label class="gauge__label" text="SYSTEM LOAN" />
+                            </ui:VisualElement>
                             <ui:Label name="loan-status" class="section-meta" text="NO DEBT" />
                         </ui:VisualElement>
                         <ui:VisualElement class="orders">
@@ -364,7 +375,10 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
-                            <ui:Label class="gauge__label" text="JUMP GATE" />
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement name="gate-emblem" class="ops__emblem ops__emblem--gate" />
+                                <ui:Label class="gauge__label" text="JUMP GATE" />
+                            </ui:VisualElement>
                             <ui:Label name="gate-status" class="section-meta" text="DORMANT" />
                         </ui:VisualElement>
                         <ui:VisualElement class="orders">

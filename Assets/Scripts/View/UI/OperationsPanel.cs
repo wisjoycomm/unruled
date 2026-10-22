@@ -4,6 +4,7 @@ using Unruled.Core.Economy;
 using Unruled.Core.Military;
 using Unruled.Core.Research;
 using Unruled.Core.Simulation;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Unruled.View.UI
@@ -27,14 +28,20 @@ namespace Unruled.View.UI
         private static readonly int[] Caps = { 0, 1_000, 5_000 };
 
         private static readonly string[] BranchCodes = { "MIL", "IND", "LOG", "SIG" };
+        private static readonly string[] ShipClassResources =
+        {
+            "UI/ship_class_line", "UI/ship_class_ew", "UI/ship_class_supply", "UI/ship_class_cargo"
+        };
 
         private readonly Button[] _tabs = new Button[3];
         private readonly VisualElement[] _panels = new VisualElement[3];
         private readonly Button[] _researchBranches = new Button[TechProgress.BranchCount];
         private readonly Button[] _shipClass = new Button[4];
+        private readonly Texture2D[] _shipClassTextures = new Texture2D[4];
         private readonly Button[] _shipCount = new Button[3];
         private readonly Button[] _caps = new Button[3];
         private readonly Label _research, _ships, _gate, _loan, _sop, _baseFeedback;
+        private readonly VisualElement _shipPreview, _loanEmblem, _gateEmblem;
         private readonly Label _siteName, _siteOwner, _item, _drills, _refinery, _cargo, _siteFeedback;
         private readonly Button _stressTest, _audit, _borrow, _repay, _build, _retrofit, _openGate, _sopPreset, _sopToggle;
         private readonly Button _claim, _relay, _rig, _pause, _retract, _buildRefinery, _load, _unload, _route;
@@ -75,11 +82,32 @@ namespace Unruled.View.UI
                     Refresh();
                 };
             }
+            _shipPreview = root.Q<VisualElement>("ship-preview");
+            _loanEmblem = root.Q<VisualElement>("loan-emblem");
+            _gateEmblem = root.Q<VisualElement>("gate-emblem");
             for (int i = 0; i < _shipClass.Length; i++)
             {
                 int index = i;
+                _shipClassTextures[i] = Resources.Load<Texture2D>(ShipClassResources[i]);
                 _shipClass[i] = TopTelemetryHud.Require<Button>(root, "ship-class-" + UiFormat.Number(i));
-                _shipClass[i].clicked += () => Pick(_shipClass, ref _classIndex, index);
+                _shipClass[i].clicked += () =>
+                {
+                    Pick(_shipClass, ref _classIndex, index);
+                    UpdateShipPreview();
+                };
+            }
+            UpdateShipPreview();
+            if (_loanEmblem != null)
+            {
+                var citadelTex = Resources.Load<Texture2D>("UI/system_citadel_emblem");
+                if (citadelTex != null)
+                    _loanEmblem.style.backgroundImage = new StyleBackground(citadelTex);
+            }
+            if (_gateEmblem != null)
+            {
+                var gateTex = Resources.Load<Texture2D>("UI/jump_gate_emblem");
+                if (gateTex != null)
+                    _gateEmblem.style.backgroundImage = new StyleBackground(gateTex);
             }
             for (int i = 0; i < _shipCount.Length; i++)
             {
@@ -270,9 +298,19 @@ namespace Unruled.View.UI
             bool unlocked = _sim.TechGates.Unlocks(_playerId, TechGate.JumpGate);
             long gateKey = !hasGate ? 0 : gate.IsOpen ? 1 : unlocked ? 2 : 3;
             if (gateKey != _cache[2])
+            {
                 UiFormat.Set(_gate, ref _cache[2], gateKey, GateText(gateKey));
+                if (_gateEmblem != null)
+                    _gateEmblem.style.opacity = gateKey == 1 ? 1f : gateKey == 2 ? 0.65f : 0.3f;
+            }
             _openGate.SetEnabled(hasGate && !gate.IsOpen && unlocked);
             RefreshStandingOrders();
+        }
+
+        private void UpdateShipPreview()
+        {
+            if (_shipPreview != null && _shipClassTextures[_classIndex] != null)
+                _shipPreview.style.backgroundImage = new StyleBackground(_shipClassTextures[_classIndex]);
         }
 
         private bool IsAuto => _sim.AiControllers.Has(_hq);

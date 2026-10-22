@@ -1,6 +1,7 @@
 using Unruled.Core.Ecs;
 using Unruled.Core.Military;
 using Unruled.Core.Simulation;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Unruled.View.UI
@@ -24,6 +25,7 @@ namespace Unruled.View.UI
         private readonly Label _who;
         private readonly Label _sta;
         private readonly Label _citadel;
+        private readonly VisualElement _citadelIcon;
 
         private SimulationWorld _sim;
         private int _playerId;
@@ -43,6 +45,13 @@ namespace Unruled.View.UI
             _who = Require<Label>(root, "who-tag");
             _sta = Require<Label>(root, "sta-tag");
             _citadel = Require<Label>(root, "citadel-tag");
+            _citadelIcon = root.Q<VisualElement>("citadel-icon");
+            if (_citadelIcon != null)
+            {
+                var emblem = Resources.Load<Texture2D>("UI/system_citadel_emblem");
+                if (emblem != null)
+                    _citadelIcon.style.backgroundImage = new StyleBackground(emblem);
+            }
         }
 
         public void Bind(SimulationWorld sim, int playerId)

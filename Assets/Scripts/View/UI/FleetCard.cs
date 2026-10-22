@@ -2,6 +2,7 @@ using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
 using Unruled.Core.Simulation;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Unruled.View.UI
@@ -22,9 +23,16 @@ namespace Unruled.View.UI
         private const string FillNominal = "gauge__fill--nominal";
         private const string FillLocked = "gauge__fill--locked";
 
+        private static readonly string[] ShipIconNames = { "part-icon-line", "part-icon-ew", "part-icon-supply", "part-icon-cargo" };
+        private static readonly string[] ShipIconResources =
+        {
+            "UI/ship_class_line", "UI/ship_class_ew", "UI/ship_class_supply", "UI/ship_class_cargo"
+        };
+
         private readonly VisualElement _card;
         private readonly Label _name, _state;
         private readonly Label _line, _ew, _supply, _cargo;
+        private readonly VisualElement[] _partIcons = new VisualElement[4];
         private readonly Label _thermalValue, _thermalMin, _thermalLimits, _thermalMax;
         private readonly VisualElement _fill, _release, _lock;
         private readonly Label _ammo, _battery, _coolant, _fuel, _psi, _omega;
@@ -51,6 +59,16 @@ namespace Unruled.View.UI
             _ew = TopTelemetryHud.Require<Label>(root, "part-ew");
             _supply = TopTelemetryHud.Require<Label>(root, "part-supply");
             _cargo = TopTelemetryHud.Require<Label>(root, "part-cargo");
+            for (int i = 0; i < _partIcons.Length; i++)
+            {
+                _partIcons[i] = root.Q<VisualElement>(ShipIconNames[i]);
+                if (_partIcons[i] != null)
+                {
+                    var tex = Resources.Load<Texture2D>(ShipIconResources[i]);
+                    if (tex != null)
+                        _partIcons[i].style.backgroundImage = new StyleBackground(tex);
+                }
+            }
             _thermalValue = TopTelemetryHud.Require<Label>(root, "thermal-value");
             _thermalMin = TopTelemetryHud.Require<Label>(root, "thermal-min");
             _thermalLimits = TopTelemetryHud.Require<Label>(root, "thermal-limits");
@@ -197,7 +215,11 @@ namespace Unruled.View.UI
         private void SetNumber(int index, Label label, long value)
         {
             if (_numbers[index] != value)
+            {
                 UiFormat.Set(label, ref _numbers[index], value, UiFormat.Thousands(value));
+                if (index < _partIcons.Length && _partIcons[index] != null)
+                    _partIcons[index].style.opacity = value > 0 ? 1f : 0.35f;
+            }
         }
 
         private float GaugePercent(int milli)

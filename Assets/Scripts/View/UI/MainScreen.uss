@@ -86,6 +86,17 @@
     padding: 4px 8px;
 }
 
+.top-bar__citadel-icon {
+    width: 24px;
+    height: 24px;
+    margin-left: 8px;
+    margin-right: -2px;
+    background-image: resource("UI/system_citadel_emblem");
+    -unity-background-scale-mode: scale-to-fit;
+    border-width: 1px;
+    border-color: var(--u-rule);
+}
+
 /* ---------- Stockpile dock ---------- */
 
 .dock {
@@ -296,6 +307,30 @@
     padding: 8px;
     margin-left: 6px;
     background-color: var(--u-void);
+    border-width: 1px;
+    border-color: var(--u-rule);
+}
+
+.part__icon {
+    height: 36px;
+    margin-bottom: 4px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.part__icon--line {
+    background-image: resource("UI/ship_class_line");
+}
+
+.part__icon--ew {
+    background-image: resource("UI/ship_class_ew");
+}
+
+.part__icon--supply {
+    background-image: resource("UI/ship_class_supply");
+}
+
+.part__icon--cargo {
+    background-image: resource("UI/ship_class_cargo");
 }
 
 .part__label {
@@ -481,8 +516,35 @@
 .ops__head {
     flex-direction: row;
     justify-content: space-between;
-    align-items: flex-end;
+    align-items: center;
     margin-bottom: 8px;
+}
+
+.ops__title-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.ops__emblem {
+    width: 26px;
+    height: 26px;
+    margin-right: 8px;
+    background-color: var(--u-void);
+    border-width: 1px;
+    border-color: var(--u-rule);
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.ops__emblem--ship {
+    background-image: resource("UI/ship_class_line");
+}
+
+.ops__emblem--citadel {
+    background-image: resource("UI/system_citadel_emblem");
+}
+
+.ops__emblem--gate {
+    background-image: resource("UI/jump_gate_emblem");
 }
 
 .ops__orders {
