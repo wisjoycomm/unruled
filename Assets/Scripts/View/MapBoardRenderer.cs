@@ -662,7 +662,7 @@ namespace Unruled.View
                 {
                     // Lifecycle shape as a sprite, tinted by owner; a dark disc behind keeps lanes from showing through.
                     _mesh.Disc(p, 15f, UnruledPalette.Board);
-                    PlaceGlyph(p, coreOwner != 0 ? 42f : 32f, glyph, irradiated ? UnruledPalette.Iaea : stroke);
+                    PlaceGlyph(p, coreOwner != 0 ? 42f : 32f, glyph, irradiated ? UnruledPalette.Iaea : Husked(stroke, site.LifecycleState));
                 }
                 else
                 {
@@ -941,6 +941,14 @@ namespace Unruled.View
             }
             _screen.SelectTarget(picked);
             _drawnTick = -1;
+        }
+
+        // A depleted husk is drawn fainter, so live worlds stand out at a glance.
+        private static Color Husked(Color tint, PlanetLifecycleState state)
+        {
+            if (state == PlanetLifecycleState.DepletedBarrenHusk)
+                tint.a *= 0.6f;
+            return tint;
         }
 
         private void PlaceGlyph(Vector2 world, float sizePx, Texture2D texture, Color tint)

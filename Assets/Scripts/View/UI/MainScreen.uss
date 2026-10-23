@@ -919,3 +919,13 @@
 .ops__emblem--relay {
     background-image: resource("UI/badge_relay");
 }
+
+/* Standby trace in the in-flight strip while nothing is in flight. */
+.inflight-idle {
+    width: 420px;
+    height: 26px;
+    margin-left: 8px;
+    opacity: 0.6;
+    background-image: resource("UI/empty_telemetry");
+    -unity-background-scale-mode: stretch-to-fill;
+}

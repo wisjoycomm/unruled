@@ -36,11 +36,17 @@ namespace Unruled.View.UI
         private SimulationWorld _sim;
         private int _playerId;
         private int _used;
+        private readonly VisualElement _idle;
+        private bool _idleShown = true;
 
         public InFlightStrip(VisualElement root)
         {
             var list = TopTelemetryHud.Require<VisualElement>(root, "inflight-list");
             list.Clear();
+            // Standby trace while no order, scan or warm-up is in flight.
+            _idle = new VisualElement { pickingMode = PickingMode.Ignore };
+            _idle.AddToClassList("inflight-idle");
+            list.Add(_idle);
             for (int i = 0; i < Slots; i++)
             {
                 var row = new DashedFrame();
@@ -99,6 +105,12 @@ namespace Unruled.View.UI
 
             for (int i = _used; i < Slots; i++)
                 SetKind(i, 0);
+            bool idle = _used == 0;
+            if (idle != _idleShown)
+            {
+                _idleShown = idle;
+                _idle.style.display = idle ? DisplayStyle.Flex : DisplayStyle.None;
+            }
         }
 
         private void Show(byte kind, string text, string eta)
