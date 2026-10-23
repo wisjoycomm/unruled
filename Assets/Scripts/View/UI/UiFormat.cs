@@ -80,6 +80,18 @@ namespace Unruled.View.UI
             return Number(h) + ":" + m.ToString("00", Invariant) + ":" + s.ToString("00", Invariant);
         }
 
+        /// <summary>A long span for prose: "30 days", "2 h", "45 min" (whole units, rounded down).</summary>
+        public static string Span(long ticks)
+        {
+            if (ticks >= SimTick.TicksPerDay)
+                return Number(ticks / SimTick.TicksPerDay) + (ticks / SimTick.TicksPerDay == 1 ? " day" : " days");
+            if (ticks >= SimTick.TicksPerHour)
+                return Number(ticks / SimTick.TicksPerHour) + " h";
+            if (ticks >= SimTick.TicksPerMinute)
+                return Number(ticks / SimTick.TicksPerMinute) + " min";
+            return Number(ticks) + " s";
+        }
+
         public static string SiteName(in SiteInfo site) => StarName(site.ClusterId) + "-" + Number(site.OrbitIndex + 1);
 
         public static string StarName(int clusterId)

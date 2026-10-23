@@ -28,6 +28,8 @@
                 <ui:VisualElement name="citadel-icon" class="top-bar__citadel-icon" />
                 <ui:Label name="citadel-tag" class="u-tag u-tag--citadel" text="CITADEL · 100% · T3" />
             </ui:VisualElement>
+            <ui:Button name="open-alerts" class="u-btn u-btn--secondary top-bar__btn" text="" />
+            <ui:Button name="open-menu" class="u-btn u-btn--secondary top-bar__btn top-bar__btn--icon" />
         </ui:VisualElement>
         <ui:VisualElement class="main__body" picking-mode="Ignore">
             <ui:VisualElement name="dock" class="dock">
@@ -276,8 +278,9 @@
                     <ui:Button name="side-tab-0" class="seg__item seg__item--on" text="MARKET" />
                     <ui:Button name="side-tab-1" class="seg__item" text="BASE" />
                     <ui:Button name="side-tab-2" class="seg__item" text="SITE" />
+                    <ui:Button name="side-tab-3" class="seg__item" text="FLEET" />
                 </ui:VisualElement>
-                <ui:VisualElement name="market" class="market">
+                <ui:ScrollView name="market" class="ops">
                     <ui:VisualElement class="market__head">
                         <ui:Label class="section-title section-title--wto" text="WTO MARKET" />
                         <ui:Label name="market-window" class="section-meta" text="VWAP · 1h" style="font-size: 11px;" />
@@ -318,7 +321,40 @@
                         <ui:Label name="ask" text="6.45" />
                         <ui:Label name="delta" class="market-row__delta u-down" text="−0.4%" />
                     </ui:VisualElement>
-                </ui:VisualElement>
+                    <ui:VisualElement class="market__trade">
+                        <ui:VisualElement class="ops__head">
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement class="ops__emblem ops__emblem--market" />
+                                <ui:Label class="gauge__label" text="TRADE FROM CORE" />
+                            </ui:VisualElement>
+                            <ui:Label name="trade-status" class="section-meta" text="0 OPEN" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="item-picker">
+                            <ui:Button name="trade-prev" class="u-btn u-btn--secondary item-picker__step" text="‹" />
+                            <ui:Label name="trade-item" class="item-picker__name" text="FUEL" />
+                            <ui:Button name="trade-next" class="u-btn u-btn--secondary item-picker__step" text="›" />
+                        </ui:VisualElement>
+                        <ui:Label name="trade-price" class="section-meta ops__feedback" text="REF 12.00 · YOU HOLD 0" />
+                        <ui:VisualElement class="seg">
+                            <ui:Button name="trade-qty-0" class="seg__item seg__item--on" text="×10" />
+                            <ui:Button name="trade-qty-1" class="seg__item" text="×100" />
+                            <ui:Button name="trade-qty-2" class="seg__item" text="×1,000" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="seg">
+                            <ui:Button name="trade-price-0" class="seg__item" text="−10%" />
+                            <ui:Button name="trade-price-1" class="seg__item seg__item--on" text="REF" />
+                            <ui:Button name="trade-price-2" class="seg__item" text="+10%" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders ops__orders">
+                            <ui:Button name="do-bid" class="u-btn" text="Place bid" />
+                            <ui:Button name="do-ask" class="u-btn u-btn--secondary" text="Place ask" />
+                            <ui:Button name="do-sell-system" class="u-btn u-btn--secondary" text="Sell to SYSTEM" />
+                            <ui:Button name="do-buy-system" class="u-btn u-btn--secondary" text="Buy from SYSTEM" />
+                            <ui:Button name="do-cancel-order" class="u-btn u-btn--danger" text="Cancel my order" />
+                        </ui:VisualElement>
+                        <ui:Label name="trade-feedback" class="section-meta ops__feedback" text="" />
+                    </ui:VisualElement>
+                </ui:ScrollView>
                 <ui:ScrollView name="ops-base" class="ops" style="display: none;">
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
@@ -441,6 +477,19 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement class="ops__emblem ops__emblem--terraform" />
+                                <ui:Label class="gauge__label" text="PLANET · CAPITAL" />
+                            </ui:VisualElement>
+                            <ui:Label name="planet-status" class="section-meta" text="PRISTINE · ESI 0.80" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-relocate" class="u-btn u-btn--secondary" text="Move capital here" />
+                            <ui:Button name="do-terraform" class="u-btn u-btn--secondary" text="Terraform" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
                             <ui:Label class="gauge__label" text="SELECTED FLEET" />
                             <ui:Label name="cargo-status" class="section-meta" text="NO FLEET" />
                         </ui:VisualElement>
@@ -452,12 +501,83 @@
                     </ui:VisualElement>
                     <ui:Label name="site-feedback" class="section-meta ops__feedback" text="" />
                 </ui:ScrollView>
+                <ui:ScrollView name="ops-fleet" class="ops" style="display: none;">
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement class="ops__emblem ops__emblem--focus" />
+                                <ui:Label class="gauge__label" text="FOCUS FIRE" />
+                            </ui:VisualElement>
+                            <ui:Label name="focus-status" class="section-meta" text="LINE" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="seg">
+                            <ui:Button name="focus-0" class="seg__item seg__item--on" text="LINE" />
+                            <ui:Button name="focus-1" class="seg__item" text="EW" />
+                            <ui:Button name="focus-2" class="seg__item" text="SUPPLY" />
+                            <ui:Button name="focus-3" class="seg__item" text="CARGO" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement name="readiness-emblem" class="ops__emblem ops__emblem--mothball" />
+                                <ui:Label class="gauge__label" text="READINESS" />
+                            </ui:VisualElement>
+                            <ui:Label name="readiness-status" class="section-meta" text="ACTIVE" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-mothball" class="u-btn u-btn--secondary" text="Mothball" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement class="ops__emblem ops__emblem--scan" />
+                                <ui:Label class="gauge__label" text="FOCUSED RADAR" />
+                            </ui:VisualElement>
+                            <ui:Label name="radar-status" class="section-meta" text="NO SCAN" />
+                        </ui:VisualElement>
+                        <ui:Label name="radar-target" class="section-meta ops__feedback" text="PICK AN OUTER-RIM LANE ON THE BOARD" />
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-scan" class="u-btn" text="Scan belt" />
+                            <ui:Button name="do-cancel-scan" class="u-btn u-btn--secondary" text="Cancel scan" />
+                            <ui:Button name="do-next-lane" class="u-btn u-btn--secondary" text="Next lane" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement class="ops__emblem ops__emblem--ecm" />
+                                <ui:Label class="gauge__label" text="ECM" />
+                            </ui:VisualElement>
+                            <ui:Label name="ecm-status" class="section-meta" text="RWR QUIET" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-ecm" class="u-btn u-btn--danger" text="ECM jam" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:Label name="fleet-feedback" class="section-meta ops__feedback" text="" />
+                </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>
         <ui:VisualElement name="compact-nav" class="seg compact-nav">
             <ui:Button name="nav-0" class="seg__item" text="STOCK" />
             <ui:Button name="nav-1" class="seg__item seg__item--on" text="BOARD" />
             <ui:Button name="nav-2" class="seg__item" text="FLEET · OPS" />
+        </ui:VisualElement>
+        <ui:VisualElement name="toasts" class="toasts" picking-mode="Ignore" />
+    </ui:VisualElement>
+    <ui:VisualElement name="overlay" class="overlay" style="display: none;">
+        <ui:VisualElement name="overlay-backdrop" class="overlay__backdrop" picking-mode="Ignore" />
+        <ui:VisualElement name="modal" class="modal">
+            <ui:VisualElement class="modal__head">
+                <ui:VisualElement name="modal-icon" class="modal__icon" />
+                <ui:Label name="modal-title" class="modal__title" text="CONFIRM" />
+            </ui:VisualElement>
+            <ui:ScrollView name="modal-scroll" class="modal__scroll">
+                <ui:Label name="modal-body" class="u-text modal__body" text="" />
+            </ui:ScrollView>
+            <ui:VisualElement name="modal-actions" class="modal__actions" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

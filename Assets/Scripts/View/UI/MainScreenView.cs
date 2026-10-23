@@ -7,7 +7,8 @@ namespace Unruled.View.UI
 {
     /// <summary>
     /// Owns the main screen's UIDocument and its panel controllers. After <see cref="Bind"/>, it refreshes every panel
-    /// once per sim tick (not per frame) and routes selection from the board to the panels.
+    /// once per sim tick (not per frame) and routes selection from the board to the panels. One <see cref="ModalPopup"/>
+    /// serves every confirm dialog, the bulletin log, the game menu and the end screen.
     /// </summary>
     public sealed class MainScreenView : MonoBehaviour
     {
@@ -21,6 +22,11 @@ namespace Unruled.View.UI
         private FleetCard _fleet;
         private InFlightStrip _inFlight;
         private OperationsPanel _ops;
+        private MarketTradePanel _trade;
+        private FleetOpsPanel _fleetOps;
+        private BulletinFeed _bulletins;
+        private ModalPopup _popup;
+        private UiArt _art;
         private SimulationWorld _sim;
         private long _shownTick = -1;
 
@@ -36,18 +42,32 @@ namespace Unruled.View.UI
 
         public Button GalaxyTab { get; private set; }
 
+        /// <summary>The game menu and end screen; <see cref="GameSession"/> binds its session callbacks.</summary>
+        public GameMenu Menu { get; private set; }
+
         public void Bind(SimulationWorld sim, int playerId)
         {
             if (_document == null)
                 throw new MissingReferenceException("MainScreenView needs its UIDocument.");
             var root = _document.rootVisualElement;
-            _top = new TopTelemetryHud(root);
-            _dock = new LeftInventoryDock(root);
-            _market = new ContractAndMarketUI(root);
-            _fleet = new FleetCard(root);
-            _inFlight = new InFlightStrip(root);
-            _ops = new OperationsPanel(root);
-            Layout = new CompactLayout(root);
+            if (_popup == null)
+            {
+                _art = new UiArt();
+                _popup = new ModalPopup(root);
+                _top = new TopTelemetryHud(root);
+                _dock = new LeftInventoryDock(root);
+                _market = new ContractAndMarketUI(root);
+                _fleet = new FleetCard(root, _popup, _art);
+                _inFlight = new InFlightStrip(root);
+                _ops = new OperationsPanel(root, _popup, _art);
+                _trade = new MarketTradePanel(root, _popup, _art);
+                _fleetOps = new FleetOpsPanel(root, _popup, _art);
+                _bulletins = new BulletinFeed(root, _popup, _art);
+                Menu = new GameMenu(root, _popup, _art);
+            }
+            _popup.Close();
+            if (Layout == null)
+                Layout = new CompactLayout(root);
             BoardView = TopTelemetryHud.Require<VisualElement>(root, "board-view");
             SystemTab = TopTelemetryHud.Require<Button>(root, "tab-system");
             GalaxyTab = TopTelemetryHud.Require<Button>(root, "tab-galaxy");
@@ -59,7 +79,12 @@ namespace Unruled.View.UI
             _fleet.Bind(sim, playerId);
             _inFlight.Bind(sim, playerId);
             _ops.Bind(sim, playerId);
+            _trade.Bind(sim, playerId);
+            _fleetOps.Bind(sim, playerId);
+            _bulletins.Bind(sim, playerId);
+            Menu.Bind(sim, playerId);
             _ops.SelectFleet(_fleet.Fleet);
+            _fleetOps.SelectFleet(_fleet.Fleet);
             _top.SetSelection(_fleet.Fleet);
             _shownTick = -1;
             RefreshAll();
@@ -80,6 +105,7 @@ namespace Unruled.View.UI
                 return;
             _fleet.Select(fleet);
             _ops.SelectFleet(fleet);
+            _fleetOps.SelectFleet(fleet);
             _top.SetSelection(fleet);
             RefreshAll();
         }
@@ -93,13 +119,17 @@ namespace Unruled.View.UI
                 return;
             _fleet.SetMoveTarget(siteOrLane);
             _ops.SelectSite(siteOrLane);
+            _fleetOps.SelectTarget(siteOrLane);
             _top.SetSelection(siteOrLane);
             RefreshAll();
         }
 
         private void LateUpdate()
         {
-            if (_sim != null && _sim.Clock.CurrentTick != _shownTick)
+            if (_sim == null)
+                return;
+            _bulletins.Tick(Time.unscaledTime);
+            if (_sim.Clock.CurrentTick != _shownTick)
                 RefreshAll();
         }
 
@@ -112,6 +142,10 @@ namespace Unruled.View.UI
             _fleet.Refresh();
             _inFlight.Refresh();
             _ops.Refresh();
+            _trade.Refresh();
+            _fleetOps.Refresh();
+            _bulletins.Refresh();
+            Menu.Refresh();
         }
     }
 }

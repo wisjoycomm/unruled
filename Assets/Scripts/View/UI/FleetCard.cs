@@ -40,6 +40,9 @@ namespace Unruled.View.UI
         private readonly Button[] _rof = new Button[3];
         private readonly Button _move, _hold, _reverse, _vent, _raid, _merge, _split, _nuke;
 
+        private readonly ModalPopup _popup;
+        private readonly UiArt _art;
+
         private SimulationWorld _sim;
         private int _playerId;
         private EntityId _fleet;
@@ -51,8 +54,10 @@ namespace Unruled.View.UI
         private int _raidShown = -1;
         private readonly long[] _numbers = new long[10];
 
-        public FleetCard(VisualElement root)
+        public FleetCard(VisualElement root, ModalPopup popup, UiArt art)
         {
+            _popup = popup;
+            _art = art;
             _card = TopTelemetryHud.Require<VisualElement>(root, "fleet-card");
             _name = TopTelemetryHud.Require<Label>(root, "fleet-name");
             _state = TopTelemetryHud.Require<Label>(root, "fleet-state");
@@ -285,7 +290,11 @@ namespace Unruled.View.UI
             else if (!_sim.Stockpiles.Get(_fleet).Has(ItemId.ItemNuclearCore, lifecycle.StrikeNuclearCores))
                 Refuse("REFUSED · NO NUCLEAR CORE IN THE HOLD");
             else
-                Issue(CommandType.NuclearStrike, 0);
+                _popup.Confirm("NUCLEAR STRIKE",
+                    "Fires " + UiFormat.Number(lifecycle.StrikeNuclearCores) + " nuclear core from the hold at the rival site " +
+                    "this fleet is docked at.\n\nThe planet becomes an irradiated dead world: biomass wiped, ESI 0, S4 " +
+                    "radiation for days. The IAEA broadcasts the strike to every player.", _art.Warning, "Launch strike",
+                    () => Issue(CommandType.NuclearStrike, 0));
         }
 
         private void Refuse(string text)

@@ -12,7 +12,8 @@ namespace Unruled.View
     /// Hosts a local game: continues the saved game if there is one, else builds the world from a seed with
     /// <see cref="NewGameSetup"/>; binds the HUD and the board, then advances the clock one tick per real second
     /// (scaled by <see cref="_ticksPerSecond"/>) and lets the AI rivals think after each tick. Saves every
-    /// <see cref="_autosaveTicks"/> and when the app pauses or quits. Runs in-process until Server 2 hosts it.
+    /// <see cref="_autosaveTicks"/> and when the app pauses or quits. The game menu pauses the clock and saves, loads or
+    /// starts a new game through it. Runs in-process until Server 2 hosts it.
     /// </summary>
     public sealed class GameSession : MonoBehaviour
     {
@@ -30,6 +31,7 @@ namespace Unruled.View
         private SimulationWorld _sim;
         private float _pending;
         private long _savedTick;
+        private bool _paused;
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, SaveFileName);
 
@@ -42,18 +44,50 @@ namespace Unruled.View
             if (_board == null)
                 throw new MissingReferenceException("GameSession needs its MapBoardRenderer.");
             var balance = DefaultGameBalance.Create();
-            EntityId fleet;
-            if (_continueSavedGame && File.Exists(SavePath) && TryLoad(balance, out _sim))
-                fleet = FirstFleet(_sim, _playerId);
+            if (_continueSavedGame && File.Exists(SavePath) && TryLoad(balance, out var saved))
+                Host(saved, FirstFleet(saved, _playerId));
             else
-            {
-                _sim = new SimulationWorld(balance, unchecked((ulong)_worldSeed));
-                fleet = NewGameSetup.Create(_sim, _playerId).Fleet;
-            }
+                StartNewGame();
+            _screen.Menu.BindSession(SetPaused, SaveFromMenu, LoadFromMenu, StartNewGame);
+        }
+
+        private void StartNewGame()
+        {
+            var sim = new SimulationWorld(DefaultGameBalance.Create(), unchecked((ulong)_worldSeed));
+            Host(sim, NewGameSetup.Create(sim, _playerId).Fleet);
+        }
+
+        private void Host(SimulationWorld sim, EntityId fleet)
+        {
+            _sim = sim;
+            _pending = 0f;
             _savedTick = _sim.Clock.CurrentTick;
             _screen.Bind(_sim, _playerId);
             _screen.SelectFleet(fleet);
             _board.Bind(_sim, _playerId, _screen);
+        }
+
+        private void SetPaused(bool paused)
+        {
+            _paused = paused;
+            _pending = 0f;
+        }
+
+        private string SaveFromMenu()
+        {
+            Save();
+            return "SAVED · " + UiFormat.Clock(_sim.Clock.CurrentTick);
+        }
+
+        private string LoadFromMenu()
+        {
+            if (!File.Exists(SavePath))
+                return "NO SAVED GAME YET";
+            if (!TryLoad(DefaultGameBalance.Create(), out var loaded))
+                return "THE SAVED GAME COULD NOT BE READ · KEPT ASIDE";
+            Host(loaded, FirstFleet(loaded, _playerId));
+            _paused = true;
+            return "LOADED · " + UiFormat.Clock(_sim.Clock.CurrentTick);
         }
 
         private void OnApplicationPause(bool paused)
@@ -105,7 +139,7 @@ namespace Unruled.View
 
         private void Update()
         {
-            if (_sim == null)
+            if (_sim == null || _paused)
                 return;
             _pending += Time.deltaTime * _ticksPerSecond;
             int steps = 0;

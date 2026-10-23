@@ -16,8 +16,10 @@ namespace Unruled.View.UI
     /// research tier, retrofit of the selected fleet), the jump gate and standing orders (Auto-SOP: hand the empire to the
     /// Utility AI under a picked preset, or take it back).
     /// SITE (the selected site, the core base until one is picked): claim, an item picker, drills (rig, pause/resume,
-    /// retract), refineries (build, output cap) and the selected fleet's cargo and convoy route. Buttons only forward
-    /// commands through <see cref="CommandIssuer"/>; the feedback line says when an order lands or why it was refused.
+    /// retract), refineries (build, output cap), the planet (move the capital here, terraform a dead world) and the
+    /// selected fleet's cargo and convoy route. FLEET is <see cref="FleetOpsPanel"/>. Risky orders (borrow, relocate,
+    /// terraform) ask first in <see cref="ModalPopup"/>. Buttons only forward commands through
+    /// <see cref="CommandIssuer"/>; the feedback line says when an order lands or why it was refused.
     /// </summary>
     public sealed class OperationsPanel
     {
@@ -34,8 +36,8 @@ namespace Unruled.View.UI
             "UI/ship_class_line", "UI/ship_class_ew", "UI/ship_class_supply", "UI/ship_class_cargo"
         };
 
-        private readonly Button[] _tabs = new Button[3];
-        private readonly VisualElement[] _panels = new VisualElement[3];
+        private readonly Button[] _tabs = new Button[4];
+        private readonly VisualElement[] _panels = new VisualElement[4];
         private readonly Button[] _researchBranches = new Button[TechProgress.BranchCount];
         private readonly Button[] _shipClass = new Button[4];
         private readonly Texture2D[] _shipClassTextures = new Texture2D[4];
@@ -43,9 +45,11 @@ namespace Unruled.View.UI
         private readonly Button[] _caps = new Button[3];
         private readonly Label _research, _ships, _gate, _loan, _sop, _baseFeedback;
         private readonly VisualElement _shipPreview, _loanEmblem, _gateEmblem;
-        private readonly Label _siteName, _siteOwner, _item, _drills, _refinery, _cargo, _siteFeedback;
+        private readonly Label _siteName, _siteOwner, _item, _drills, _refinery, _cargo, _siteFeedback, _planet;
         private readonly Button _stressTest, _audit, _borrow, _repay, _build, _retrofit, _openGate, _sopPreset, _sopToggle;
-        private readonly Button _claim, _relay, _rig, _pause, _retract, _buildRefinery, _load, _unload, _route;
+        private readonly Button _claim, _relay, _rig, _pause, _retract, _buildRefinery, _load, _unload, _route, _relocate, _terraform;
+        private readonly ModalPopup _popup;
+        private readonly UiArt _art;
 
         private SimulationWorld _sim;
         private int _playerId;
@@ -59,10 +63,12 @@ namespace Unruled.View.UI
         private int _itemSlot;
         private int _presetIndex = 1; // Industrialist_Trader
         private bool _drillsPaused;
-        private readonly long[] _cache = new long[11];
+        private readonly long[] _cache = new long[12];
 
-        public OperationsPanel(VisualElement root)
+        public OperationsPanel(VisualElement root, ModalPopup popup, UiArt art)
         {
+            _popup = popup;
+            _art = art;
             for (int i = 0; i < _tabs.Length; i++)
             {
                 int tab = i;
@@ -72,6 +78,7 @@ namespace Unruled.View.UI
             _panels[0] = TopTelemetryHud.Require<VisualElement>(root, "market");
             _panels[1] = TopTelemetryHud.Require<VisualElement>(root, "ops-base");
             _panels[2] = TopTelemetryHud.Require<VisualElement>(root, "ops-site");
+            _panels[3] = TopTelemetryHud.Require<VisualElement>(root, "ops-fleet");
             for (int i = 0; i < _researchBranches.Length; i++)
             {
                 int index = i;
@@ -136,6 +143,7 @@ namespace Unruled.View.UI
             _refinery = TopTelemetryHud.Require<Label>(root, "refinery-status");
             _cargo = TopTelemetryHud.Require<Label>(root, "cargo-status");
             _siteFeedback = TopTelemetryHud.Require<Label>(root, "site-feedback");
+            _planet = TopTelemetryHud.Require<Label>(root, "planet-status");
 
             _stressTest = TopTelemetryHud.Require<Button>(root, "do-stress-test");
             _audit = TopTelemetryHud.Require<Button>(root, "do-audit");
@@ -155,12 +163,14 @@ namespace Unruled.View.UI
             _load = TopTelemetryHud.Require<Button>(root, "do-load");
             _unload = TopTelemetryHud.Require<Button>(root, "do-unload");
             _route = TopTelemetryHud.Require<Button>(root, "do-route");
+            _relocate = TopTelemetryHud.Require<Button>(root, "do-relocate");
+            _terraform = TopTelemetryHud.Require<Button>(root, "do-terraform");
             var prev = TopTelemetryHud.Require<Button>(root, "item-prev");
             var next = TopTelemetryHud.Require<Button>(root, "item-next");
 
             _stressTest.clicked += () => SendBase(CommandType.StressTest, CoreBase, _branchIndex);
             _audit.clicked += () => SendBase(CommandType.AuditOptIn, CoreBase, IsAudited ? 0 : 1);
-            _borrow.clicked += () => SendBase(CommandType.Borrow, CoreBase, LoanStep);
+            _borrow.clicked += ConfirmBorrow;
             _repay.clicked += () => SendBase(CommandType.Repay, CoreBase, LoanStep);
             _build.clicked += IssueBuild;
             _retrofit.clicked += () => SendBase(CommandType.Retrofit, _fleet, 0);
@@ -176,6 +186,8 @@ namespace Unruled.View.UI
             _load.clicked += () => SendSite(CommandType.TransferCargo, _fleet, (int)Item, CargoStep);
             _unload.clicked += () => SendSite(CommandType.TransferCargo, _fleet, (int)Item, -CargoStep);
             _route.clicked += IssueRoute;
+            _relocate.clicked += ConfirmRelocate;
+            _terraform.clicked += ConfirmTerraform;
             prev.clicked += () => StepItem(-1);
             next.clicked += () => StepItem(1);
         }
@@ -512,7 +524,103 @@ namespace Unruled.View.UI
             for (int i = 0; i < _caps.Length; i++)
                 _caps[i].SetEnabled(own && refineries > 0);
 
+            RefreshPlanet(in site, own);
             RefreshCargo();
+        }
+
+        private void RefreshPlanet(in SiteInfo site, bool own)
+        {
+            long tick = _sim.Clock.CurrentTick;
+            var core = CoreBase;
+            bool relocating = _sim.Relocations.Has(_hq) && _sim.Relocations.Get(_hq).Phase != RelocationPhase.None;
+            long cooldown = _sim.Relocations.Has(_hq) ? System.Math.Max(0, _sim.Relocations.Get(_hq).CooldownUntilTick - tick) : 0;
+            bool dead = site.LifecycleState == PlanetLifecycleState.IrradiatedDeadWorld;
+            bool canTerraform = _sim.TechGates.Unlocks(_playerId, TechGate.Terraform);
+            long key = (long)site.LifecycleState | (long)site.CurrentEsiMilli << 4 | (relocating ? 1L << 20 : 0) |
+                       (cooldown / SimTick.TicksPerMinute) << 21 | (_site == core ? 1L << 50 : 0) | (canTerraform ? 1L << 51 : 0);
+            if (key != _cache[11])
+            {
+                string capital = _site == core ? " · CAPITAL" : relocating ? " · CAPITAL MOVING" : "";
+                UiFormat.Set(_planet, ref _cache[11], key, LifecycleText(site.LifecycleState) + " · ESI " + Esi(site.CurrentEsiMilli) +
+                    capital + (cooldown > 0 ? " · MOVE COOLDOWN " + UiFormat.Duration(cooldown) : ""));
+            }
+            _relocate.SetEnabled(own && _site != core && !relocating && cooldown == 0);
+            _terraform.SetEnabled(own && dead && canTerraform);
+            _terraform.text = canTerraform
+                ? "Terraform"
+                : "Terraform · IND T" + UiFormat.Number(_sim.Balance.Research.GateTier(TechGate.Terraform));
+        }
+
+        private static string Esi(int milli) =>
+            (milli / 1000m).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+
+        private static string LifecycleText(PlanetLifecycleState state)
+        {
+            switch (state)
+            {
+                case PlanetLifecycleState.PristineWorld: return "PRISTINE";
+                case PlanetLifecycleState.DeepCoreStripping: return "DEEP-CORE STRIPPING";
+                case PlanetLifecycleState.DepletedBarrenHusk: return "BARREN HUSK";
+                case PlanetLifecycleState.IrradiatedDeadWorld: return "IRRADIATED DEAD WORLD";
+                default: return "TERRAFORMED";
+            }
+        }
+
+        private void ConfirmBorrow()
+        {
+            if (_sim == null)
+                return;
+            var ledger = _sim.Balance.Ledger;
+            long tick = _sim.Clock.CurrentTick;
+            string free = tick < ledger.InterestFreeTicks
+                ? "Interest-free until " + UiFormat.Clock(ledger.InterestFreeTicks) + ", then "
+                : "Interest: ";
+            _popup.Confirm("BORROW " + UiFormat.Thousands(LoanStep) + " CR",
+                "THE SYSTEM lends " + UiFormat.Thousands(LoanStep) + " credits to your core base.\n\n" + free +
+                (ledger.DailyInterestBasisPoints / 100m).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) +
+                "% of the principal per day. The debt falls due " + UiFormat.Span(ledger.LoanTermTicks) +
+                " after interest starts; overdue debt is collected by seizing core goods at the WTO reference price.",
+                _art.Citadel, "Borrow", () => SendBase(CommandType.Borrow, CoreBase, LoanStep));
+        }
+
+        private void ConfirmRelocate()
+        {
+            if (_sim == null || !_sim.Sites.Has(_site))
+                return;
+            var rules = _sim.Balance.Relocation;
+            string cost = CostText(rules.TeardownCost) + ", " + CostText(rules.BootstrapCost);
+            var target = _site;
+            _popup.Confirm("MOVE CAPITAL TO " + UiFormat.SiteName(in _sim.Sites.Get(_site)),
+                "Three phases: teardown (" + UiFormat.Span(rules.TeardownMinTicks) + "–" +
+                UiFormat.Span(rules.TeardownMaxTicks) + "), the capital convoy (" + UiFormat.Span(rules.ConvoyMinTicks) +
+                "–" + UiFormat.Span(rules.ConvoyMaxTicks) + "), bootstrap (" + UiFormat.Span(rules.BootstrapTicks) +
+                ").\n\nPaid up front from the core base: " + cost + ".\nNeeds an own fleet docked at the core and no hostile " +
+                "fleet near it. While the convoy flies every order is slower; if it is destroyed your orders are refused for " +
+                UiFormat.Span(rules.ParalysisTicks) + ".",
+                _art.Relocate, "Move capital", () => SendSite(CommandType.RelocateBase, target, 0, 0));
+        }
+
+        private static string CostText(ItemAmount[] cost)
+        {
+            string text = "";
+            for (int i = 0; i < cost.Length; i++)
+                text += (i > 0 ? ", " : "") + UiFormat.Number((cost[i].Milli + 999) / 1000) + " " +
+                        ContractAndMarketUI.ItemCode(cost[i].Item);
+            return text;
+        }
+
+        private void ConfirmTerraform()
+        {
+            if (_sim == null || !_sim.Sites.Has(_site))
+                return;
+            var rules = _sim.Balance.Lifecycle;
+            var target = _site;
+            _popup.Confirm("TERRAFORM " + UiFormat.SiteName(in _sim.Sites.Get(_site)),
+                "Spends from this site's stock: " + UiFormat.Number(rules.TerraformWater) + " WATER, " +
+                UiFormat.Number(rules.TerraformNitrogen) + " NITROGEN, " + UiFormat.Number(rules.TerraformBiomass) +
+                " BIOMASS, " + UiFormat.Number(rules.TerraformNuclearCores) + " NUCLEAR CORE.\n\nThe dead world recovers at ESI " +
+                Esi(rules.TerraformedEsiMilli) + " and its radiation ends.", _art.Terraform, "Terraform",
+                () => SendSite(CommandType.Terraform, target, 0, 0), ModalPopup.Tone.Normal);
         }
 
         private void RefreshCargo()

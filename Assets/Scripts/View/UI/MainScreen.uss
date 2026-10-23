@@ -271,6 +271,7 @@
 }
 
 .fleet-card {
+    flex-shrink: 0;
     padding: 16px;
     border-bottom-width: 1px;
     border-color: var(--u-rule);
@@ -669,4 +670,205 @@
 
 .main--compact.main--show-dock .dock, .main--compact.main--show-side .side {
     display: flex;
+}
+
+/* ---------- Top-bar buttons, extra emblems, market trade block ---------- */
+
+.unity-button.top-bar__btn {
+    min-height: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 0 0 0 30px;
+    margin-left: 8px;
+    font-size: 12px;
+    flex-shrink: 0;
+    background-image: resource("UI/alert_warning");
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: rgb(255, 255, 255);
+    background-position-x: left 2px;
+    background-size: 28px 28px;
+}
+
+.unity-button.top-bar__btn--icon {
+    width: 32px;
+    padding: 0;
+    background-image: resource("UI/action_pause");
+    background-position-x: center;
+}
+
+.ops__emblem--market {
+    background-image: resource("UI/action_market");
+}
+
+.ops__emblem--terraform {
+    background-image: resource("UI/action_terraform");
+}
+
+.ops__emblem--focus {
+    background-image: resource("UI/action_focus");
+}
+
+.ops__emblem--mothball {
+    background-image: resource("UI/action_mothball");
+}
+
+.ops__emblem--activate {
+    background-image: resource("UI/action_activate");
+}
+
+.ops__emblem--scan {
+    background-image: resource("UI/action_scan");
+}
+
+.ops__emblem--ecm {
+    background-image: resource("UI/action_ecm");
+}
+
+.market__trade {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top-width: 1px;
+    border-color: var(--u-rule);
+}
+
+/* ---------- Toasts: THE SYSTEM's bulletins, top right over the board ---------- */
+
+.toasts {
+    position: absolute;
+    top: 64px;
+    right: 372px;
+    width: 340px;
+}
+
+.toast {
+    flex-direction: row;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 8px;
+    background-color: var(--u-raised);
+    border-width: 1px;
+    border-left-width: 4px;
+    border-color: var(--u-rule-strong);
+}
+
+.toast__icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    margin-right: 10px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.toast__text {
+    flex-shrink: 1;
+    flex-grow: 1;
+    margin: 0;
+    padding: 0;
+}
+
+.toast--noaa { border-left-color: var(--u-noaa); }
+.toast--iaea { border-left-color: var(--u-iaea); }
+.toast--wto { border-left-color: var(--u-wto); }
+.toast--who { border-left-color: var(--u-who); }
+.toast--sta { border-left-color: var(--u-sta); }
+.toast--danger { border-left-color: var(--u-danger); }
+
+.main--compact .toasts {
+    right: 8px;
+    left: 8px;
+    width: auto;
+}
+
+/* ---------- Modal overlay: confirm dialogs, alerts log, pause menu, end screens ---------- */
+
+.overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.overlay__backdrop {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--u-void);
+    opacity: 0.85;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.overlay--screen > .overlay__backdrop {
+    opacity: 1;
+}
+
+.modal {
+    width: 520px;
+    max-width: 94%;
+    max-height: 86%;
+    padding: 20px;
+    background-color: var(--u-panel);
+    border-width: 1px;
+    border-top-width: 3px;
+    border-color: var(--u-rule-strong);
+    border-top-color: var(--u-you);
+}
+
+.modal--danger {
+    border-top-color: var(--u-danger);
+}
+
+.modal--victory {
+    border-top-color: var(--u-sta);
+}
+
+.modal__head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.modal__icon {
+    width: 48px;
+    height: 48px;
+    margin-right: 14px;
+    flex-shrink: 0;
+    background-color: var(--u-void);
+    border-width: 1px;
+    border-color: var(--u-rule);
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.modal__title {
+    -unity-font-definition: url("Theme/Fonts/ChakraPetch-Bold.asset");
+    font-size: 22px;
+    letter-spacing: 1.2px;
+    color: var(--u-ink);
+    white-space: normal;
+    flex-shrink: 1;
+}
+
+.modal__scroll {
+    flex-shrink: 1;
+    margin-bottom: 16px;
+}
+
+.modal__body {
+    color: var(--u-ink-soft);
+}
+
+.modal__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.modal__actions > .u-btn {
+    margin-left: 8px;
+    margin-top: 6px;
+    min-width: 120px;
 }
