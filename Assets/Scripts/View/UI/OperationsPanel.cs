@@ -31,16 +31,12 @@ namespace Unruled.View.UI
         private static readonly int[] Caps = { 0, 1_000, 5_000 };
 
         private static readonly string[] BranchCodes = { "MIL", "IND", "LOG", "SIG" };
-        private static readonly string[] ShipClassResources =
-        {
-            "UI/ship_class_line", "UI/ship_class_ew", "UI/ship_class_supply", "UI/ship_class_cargo"
-        };
 
         private readonly Button[] _tabs = new Button[4];
         private readonly VisualElement[] _panels = new VisualElement[4];
         private readonly Button[] _researchBranches = new Button[TechProgress.BranchCount];
         private readonly Button[] _shipClass = new Button[4];
-        private readonly Texture2D[] _shipClassTextures = new Texture2D[4];
+        private int _previewTier = 1;
         private readonly Button[] _shipCount = new Button[3];
         private readonly Button[] _caps = new Button[3];
         private readonly Label _research, _ships, _gate, _loan, _sop, _baseFeedback;
@@ -97,7 +93,6 @@ namespace Unruled.View.UI
             for (int i = 0; i < _shipClass.Length; i++)
             {
                 int index = i;
-                _shipClassTextures[i] = Resources.Load<Texture2D>(ShipClassResources[i]);
                 _shipClass[i] = TopTelemetryHud.Require<Button>(root, "ship-class-" + UiFormat.Number(i));
                 _shipClass[i].clicked += () =>
                 {
@@ -273,6 +268,11 @@ namespace Unruled.View.UI
         {
             long tick = _sim.Clock.CurrentTick;
             byte tier = _sim.TechGates.TechTierOf(_playerId);
+            if (tier != _previewTier)
+            {
+                _previewTier = tier;
+                UpdateShipPreview();
+            }
             if (_sim.TechProgress.Has(_hq))
             {
                 ref var progress = ref _sim.TechProgress.Get(_hq);
@@ -324,8 +324,9 @@ namespace Unruled.View.UI
 
         private void UpdateShipPreview()
         {
-            if (_shipPreview != null && _shipClassTextures[_classIndex] != null)
-                _shipPreview.style.backgroundImage = new StyleBackground(_shipClassTextures[_classIndex]);
+            var tex = _art.Ship(_classIndex, _previewTier);
+            if (_shipPreview != null && tex != null)
+                _shipPreview.style.backgroundImage = new StyleBackground(tex);
         }
 
         private bool IsAuto => _sim.AiControllers.Has(_hq);

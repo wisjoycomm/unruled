@@ -13,6 +13,14 @@ namespace Unruled.View.UI
         private readonly Texture2D[] _agencies = new Texture2D[6];
         private readonly Texture2D[] _planets = new Texture2D[6];
 
+        /// <summary>Tech tiers drawn per ship class (T1..T5): size and the class's key feature count grow with tier.</summary>
+        public const int Tiers = 5;
+        public const int ShipClasses = 4; // Line, EW, Supply, Cargo
+        private static readonly string[] ShipNames = { "line", "ew", "supply", "cargo" };
+        private static readonly string[] TokenNames = { "warfleet", "convoy", "patrol", "inspector" };
+        private readonly Texture2D[] _ships = new Texture2D[ShipClasses * Tiers];
+        private readonly Texture2D[] _tokens = new Texture2D[TokenNames.Length * Tiers];
+
         public readonly Texture2D Warning, Market, Scan, Ecm, Mothball, Activate, Focus, Relocate, Terraform, Pause;
         public readonly Texture2D Citadel, JumpGate;
         public readonly Texture2D VictoryScreen, DefeatScreen, MenuScreen;
@@ -46,10 +54,30 @@ namespace Unruled.View.UI
             _planets[(int)PlanetLifecycleState.IrradiatedDeadWorld] = Load("node_irradiated");
             _planets[(int)PlanetLifecycleState.TerraformedRecovery] = Load("node_terraformed");
             CapitalPlanet = Load("node_core_base");
+            for (int c = 0; c < ShipClasses; c++)
+            {
+                var fallback = Load("ship_class_" + ShipNames[c]);
+                for (int t = 0; t < Tiers; t++)
+                    _ships[c * Tiers + t] = Load("ship_" + ShipNames[c] + "_t" + (t + 1)) ?? fallback;
+            }
+            for (int k = 0; k < TokenNames.Length; k++)
+            {
+                var fallback = Load("token_" + TokenNames[k]);
+                for (int t = 0; t < Tiers; t++)
+                    _tokens[k * Tiers + t] = Load("token_" + TokenNames[k] + "_t" + (t + 1)) ?? fallback;
+            }
         }
 
         public Texture2D Agency(SystemAgency agency) =>
             (int)agency < _agencies.Length ? _agencies[(int)agency] : null;
+
+        /// <summary>Ship-class plate (0 Line, 1 EW, 2 Supply, 3 Cargo) at a tech tier 1..5.</summary>
+        public Texture2D Ship(int shipClass, int tier) => _ships[shipClass * Tiers + TierIndex(tier)];
+
+        /// <summary>Board token (0 warfleet, 1 convoy, 2 SYSTEM patrol, 3 IAEA inspector) at a tech tier 1..5.</summary>
+        public Texture2D Token(int kind, int tier) => _tokens[kind * Tiers + TierIndex(tier)];
+
+        private static int TierIndex(int tier) => tier < 1 ? 0 : tier > Tiers ? Tiers - 1 : tier - 1;
 
         public Texture2D Planet(PlanetLifecycleState state) =>
             (int)state < _planets.Length ? _planets[(int)state] : null;

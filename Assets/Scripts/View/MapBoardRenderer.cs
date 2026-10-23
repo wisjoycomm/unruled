@@ -46,7 +46,7 @@ namespace Unruled.View
         private Texture2D _coreGlyph;
         private Texture2D _citadelGlyph;
         private Texture2D _starHome, _starContested, _starFrontier, _beacon, _hazard;
-        private Texture2D _tokenWarfleet, _tokenConvoy, _tokenPatrol, _tokenInspector;
+        private UiArt _art;
         private int _glyphsUsed;
         private readonly List<float> _orbits = new List<float>();
         private readonly List<Vector2> _clusterPos = new List<Vector2>();
@@ -105,10 +105,7 @@ namespace Unruled.View
                 _starFrontier = Resources.Load<Texture2D>("UI/star_frontier");
                 _beacon = Resources.Load<Texture2D>("UI/beacon_toll");
                 _hazard = Resources.Load<Texture2D>("UI/marker_hazard");
-                _tokenWarfleet = Resources.Load<Texture2D>("UI/token_warfleet");
-                _tokenConvoy = Resources.Load<Texture2D>("UI/token_convoy");
-                _tokenPatrol = Resources.Load<Texture2D>("UI/token_patrol");
-                _tokenInspector = Resources.Load<Texture2D>("UI/token_inspector");
+                _art = new UiArt();
                 _lifecycleGlyphs[(int)PlanetLifecycleState.PristineWorld] = Resources.Load<Texture2D>("UI/node_pristine");
                 _lifecycleGlyphs[(int)PlanetLifecycleState.DeepCoreStripping] = Resources.Load<Texture2D>("UI/node_deep_core");
                 _lifecycleGlyphs[(int)PlanetLifecycleState.DepletedBarrenHusk] = Resources.Load<Texture2D>("UI/node_barren_husk");
@@ -391,13 +388,14 @@ namespace Unruled.View
             return ClusterCoreOwner(clusterId) != 0 ? _starHome : _starFrontier;
         }
 
+        // Token kind by role, drawn at the fleet's tech tier: 0 warfleet, 1 convoy, 2 SYSTEM patrol, 3 IAEA inspector.
         private Texture2D FleetToken(EntityId fleet, in FleetUnit unit)
         {
-            if (unit.OwnerPlayerId == SystemAgencies.OwnerId(SystemAgency.Iaea))
-                return _tokenInspector;
-            if (unit.OwnerPlayerId < 0)
-                return _tokenPatrol;
-            return _sim.ConvoyRoutes.Has(fleet) || _sim.ContractCargo.Has(fleet) ? _tokenConvoy : _tokenWarfleet;
+            int kind = unit.OwnerPlayerId == SystemAgencies.OwnerId(SystemAgency.Iaea) ? 3
+                : unit.OwnerPlayerId < 0 ? 2
+                : _sim.ConvoyRoutes.Has(fleet) || _sim.ContractCargo.Has(fleet) ? 1
+                : 0;
+            return _art.Token(kind, unit.TechTier);
         }
 
         // R3+ radio blackout: orders across the lane are refused, so it is marked over the lane in the NOAA colour.
@@ -897,7 +895,7 @@ namespace Unruled.View
                     float angle = TryFleetHeading(fleet, out _, out var heading)
                         ? Mathf.Atan2(heading.x, heading.y) * Mathf.Rad2Deg
                         : 0f;
-                    PlaceGlyph(p, 30f, token, colour, angle);
+                    PlaceGlyph(p, 44f, token, colour, angle);
                     _mesh.Chevrons(p + new Vector2(0f, -20f) * _mesh.UnitsPerPixel, Mathf.Clamp(unit.TechTier, 1, 5), own, colour, 0.45f);
                 }
                 else
