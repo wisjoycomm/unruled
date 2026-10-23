@@ -50,6 +50,7 @@ namespace Unruled.View.UI
         private readonly Button _claim, _relay, _rig, _pause, _retract, _buildRefinery, _load, _unload, _route, _relocate, _terraform;
         private readonly ModalPopup _popup;
         private readonly UiArt _art;
+        private readonly VisualElement _planetPortrait;
 
         private SimulationWorld _sim;
         private int _playerId;
@@ -144,6 +145,7 @@ namespace Unruled.View.UI
             _cargo = TopTelemetryHud.Require<Label>(root, "cargo-status");
             _siteFeedback = TopTelemetryHud.Require<Label>(root, "site-feedback");
             _planet = TopTelemetryHud.Require<Label>(root, "planet-status");
+            _planetPortrait = TopTelemetryHud.Require<VisualElement>(root, "planet-portrait");
 
             _stressTest = TopTelemetryHud.Require<Button>(root, "do-stress-test");
             _audit = TopTelemetryHud.Require<Button>(root, "do-audit");
@@ -541,6 +543,9 @@ namespace Unruled.View.UI
             if (key != _cache[11])
             {
                 string capital = _site == core ? " · CAPITAL" : relocating ? " · CAPITAL MOVING" : "";
+                var portrait = _site == core ? _art.CapitalPlanet : _art.Planet(site.LifecycleState);
+                if (portrait != null)
+                    _planetPortrait.style.backgroundImage = new StyleBackground(portrait);
                 UiFormat.Set(_planet, ref _cache[11], key, LifecycleText(site.LifecycleState) + " · ESI " + Esi(site.CurrentEsiMilli) +
                     capital + (cooldown > 0 ? " · MOVE COOLDOWN " + UiFormat.Duration(cooldown) : ""));
             }

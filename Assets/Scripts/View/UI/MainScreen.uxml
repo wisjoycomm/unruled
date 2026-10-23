@@ -488,7 +488,7 @@
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
                             <ui:VisualElement class="ops__title-row">
-                                <ui:VisualElement class="ops__emblem ops__emblem--terraform" />
+                                <ui:VisualElement name="planet-portrait" class="ops__emblem ops__emblem--planet" />
                                 <ui:Label class="gauge__label" text="PLANET · CAPITAL" />
                             </ui:VisualElement>
                             <ui:Label name="planet-status" class="section-meta" text="PRISTINE · ESI 0.80" />
