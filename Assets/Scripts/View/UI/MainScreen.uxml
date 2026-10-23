@@ -267,11 +267,11 @@
                         <ui:Button name="order-move" class="u-btn" text="Move" />
                         <ui:Button name="order-hold" class="u-btn u-btn--secondary" text="Hold" />
                         <ui:Button name="order-reverse" class="u-btn u-btn--secondary" text="Reverse" />
-                        <ui:Button name="order-vent" class="u-btn u-btn--danger" text="Vent coolant" />
-                        <ui:Button name="order-raid" class="u-btn u-btn--secondary" text="Raid convoys: off" />
+                        <ui:Button name="order-vent" class="u-btn u-btn--secondary u-btn--icon order-vent" text="Vent coolant" />
+                        <ui:Button name="order-raid" class="u-btn u-btn--secondary u-btn--icon order-raid" text="Raid convoys: off" />
                         <ui:Button name="order-merge" class="u-btn u-btn--secondary" text="Merge fleet here" />
                         <ui:Button name="order-split" class="u-btn u-btn--secondary" text="Split in half" />
-                        <ui:Button name="order-nuke" class="u-btn u-btn--danger" text="Nuclear strike" />
+                        <ui:Button name="order-nuke" class="u-btn u-btn--danger u-btn--icon order-nuke" text="Nuclear strike" />
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement name="side-tabs" class="seg side-tabs">
@@ -436,7 +436,10 @@
                 <ui:ScrollView name="ops-site" class="ops" style="display: none;">
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
-                            <ui:Label name="site-name" class="section-title" text="KEPLER-3" />
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement class="ops__emblem ops__emblem--relay" />
+                                <ui:Label name="site-name" class="section-title" text="KEPLER-3" />
+                            </ui:VisualElement>
                             <ui:Label name="site-owner" class="section-meta" text="YOURS" />
                         </ui:VisualElement>
                         <ui:VisualElement class="orders">
@@ -451,7 +454,10 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
-                            <ui:Label class="gauge__label" text="DRILLS" />
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement class="ops__emblem ops__emblem--rig" />
+                                <ui:Label class="gauge__label" text="DRILLS" />
+                            </ui:VisualElement>
                             <ui:Label name="drill-status" class="section-meta" text="0 DEPOSITS" />
                         </ui:VisualElement>
                         <ui:VisualElement class="orders">
@@ -462,7 +468,10 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
-                            <ui:Label class="gauge__label" text="REFINERY" />
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement class="ops__emblem ops__emblem--refinery" />
+                                <ui:Label class="gauge__label" text="REFINERY" />
+                            </ui:VisualElement>
                             <ui:Label name="refinery-status" class="section-meta" text="NONE" />
                         </ui:VisualElement>
                         <ui:VisualElement class="orders">

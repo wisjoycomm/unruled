@@ -41,6 +41,10 @@ namespace Unruled.View
 
         private BoardMesh _mesh; // created in Bind: Unity objects can't be made in a MonoBehaviour's field initialisers
         private readonly List<Label> _labels = new List<Label>();
+        private readonly List<VisualElement> _glyphs = new List<VisualElement>();
+        private readonly Texture2D[] _lifecycleGlyphs = new Texture2D[6];
+        private Texture2D _coreGlyph;
+        private int _glyphsUsed;
         private readonly List<float> _orbits = new List<float>();
         private readonly List<Vector2> _clusterPos = new List<Vector2>();
         private readonly List<int> _clusterFleets = new List<int>();
@@ -88,6 +92,15 @@ namespace Unruled.View
                 _labelLayer.style.bottom = 0;
             }
             _boardView.Insert(0, _labelLayer);
+            if (_coreGlyph == null)
+            {
+                _coreGlyph = Resources.Load<Texture2D>("UI/node_core_base");
+                _lifecycleGlyphs[(int)PlanetLifecycleState.PristineWorld] = Resources.Load<Texture2D>("UI/node_pristine");
+                _lifecycleGlyphs[(int)PlanetLifecycleState.DeepCoreStripping] = Resources.Load<Texture2D>("UI/node_deep_core");
+                _lifecycleGlyphs[(int)PlanetLifecycleState.DepletedBarrenHusk] = Resources.Load<Texture2D>("UI/node_barren_husk");
+                _lifecycleGlyphs[(int)PlanetLifecycleState.IrradiatedDeadWorld] = Resources.Load<Texture2D>("UI/node_irradiated");
+                _lifecycleGlyphs[(int)PlanetLifecycleState.TerraformedRecovery] = Resources.Load<Texture2D>("UI/node_terraformed");
+            }
             EnsureTelemetryOverlays();
             _contestedId = _sim.JumpGates.Count > 0 && _sim.Sites.Has(_sim.JumpGates.At(0).FarSite)
                 ? _sim.Sites.Get(_sim.JumpGates.At(0).FarSite).ClusterId
@@ -209,6 +222,7 @@ namespace Unruled.View
             long tick = _sim.Clock.CurrentTick;
             _mesh.Clear();
             _labelsUsed = 0;
+            _glyphsUsed = 0;
             if (_galaxy)
             {
                 DrawGalaxy();
@@ -236,6 +250,8 @@ namespace Unruled.View
             _mesh.Upload();
             for (int i = _labelsUsed; i < _labels.Count; i++)
                 _labels[i].style.display = DisplayStyle.None;
+            for (int i = _glyphsUsed; i < _glyphs.Count; i++)
+                _glyphs[i].style.display = DisplayStyle.None;
         }
 
         private void DrawStorms(long tick)
@@ -541,7 +557,7 @@ namespace Unruled.View
                 _sectorBadge = new VisualElement { pickingMode = PickingMode.Ignore };
                 _sectorBadge.style.position = Position.Absolute;
                 _sectorBadge.style.left = 12;
-                _sectorBadge.style.top = 12;
+                _sectorBadge.style.top = 56; // below the SYSTEM / GALAXY tabs
                 _sectorBadge.style.flexDirection = FlexDirection.Row;
                 _sectorBadge.style.alignItems = Align.Center;
                 _sectorBadge.style.paddingLeft = 8;
@@ -639,18 +655,26 @@ namespace Unruled.View
                     fill = SideColour(site.OwnerPlayerId);
                     stroke = fill;
                 }
-                if (site.LifecycleState == PlanetLifecycleState.TerraformedRecovery && !irradiated)
-                    _mesh.Ring(p, 13f, 2f, UnruledPalette.Who);
-                else if (site.LifecycleState == PlanetLifecycleState.DepletedBarrenHusk)
-                    _mesh.DashedRing(p, 13f, 1.5f, 2f, 3f, UnruledPalette.InkDim);
-                _mesh.Disc(p, 10f, stroke);
-                _mesh.Disc(p, 8f, fill);
+                var glyph = coreOwner != 0 && _coreGlyph != null
+                    ? _coreGlyph
+                    : _lifecycleGlyphs[(int)site.LifecycleState];
+                if (glyph != null)
+                {
+                    // Lifecycle shape as a sprite, tinted by owner; a dark disc behind keeps lanes from showing through.
+                    _mesh.Disc(p, 15f, UnruledPalette.Board);
+                    PlaceGlyph(p, coreOwner != 0 ? 42f : 32f, glyph, irradiated ? UnruledPalette.Iaea : stroke);
+                }
+                else
+                {
+                    _mesh.Disc(p, 10f, stroke);
+                    _mesh.Disc(p, 8f, fill);
+                }
                 if (site.OwnerPlayerId == _playerId)
                     DrawSiteWorks(entity, p);
                 if (_sim.Relays.Has(entity))
                     _mesh.Triangle(p + new Vector2(-18f, 14f) * _mesh.UnitsPerPixel, 10f, 1.5f,
                         SideColour(_sim.Relays.Get(entity).OwnerPlayerId));
-                if (irradiated)
+                if (irradiated && glyph == null)
                     _mesh.Line(p + new Vector2(-6f, -6f) * _mesh.UnitsPerPixel, p + new Vector2(6f, 6f) * _mesh.UnitsPerPixel, 2f,
                         UnruledPalette.Iaea);
                 PlaceLabel(p - new Vector2(0f, 26f * _mesh.UnitsPerPixel), UiFormat.SiteName(site), UnruledPalette.InkSoft, true, false);
@@ -917,6 +941,32 @@ namespace Unruled.View
             }
             _screen.SelectTarget(picked);
             _drawnTick = -1;
+        }
+
+        private void PlaceGlyph(Vector2 world, float sizePx, Texture2D texture, Color tint)
+        {
+            VisualElement glyph;
+            if (_glyphsUsed < _glyphs.Count)
+            {
+                glyph = _glyphs[_glyphsUsed];
+            }
+            else
+            {
+                glyph = new VisualElement { pickingMode = PickingMode.Ignore };
+                glyph.style.position = Position.Absolute;
+                glyph.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Contain);
+                _glyphs.Add(glyph);
+                _labelLayer.Insert(0, glyph);
+            }
+            _glyphsUsed++;
+            var size = _boardView.layout.size;
+            glyph.style.display = DisplayStyle.Flex;
+            glyph.style.width = sizePx;
+            glyph.style.height = sizePx;
+            glyph.style.left = (world.x / _halfWidth + 1f) * 0.5f * size.x - sizePx * 0.5f;
+            glyph.style.top = (1f - world.y / _halfHeight) * 0.5f * size.y - sizePx * 0.5f;
+            glyph.style.backgroundImage = new StyleBackground(texture);
+            glyph.style.unityBackgroundImageTintColor = tint;
         }
 
         private void PlaceLabel(Vector2 world, string text, Color colour, bool centred, bool strong)

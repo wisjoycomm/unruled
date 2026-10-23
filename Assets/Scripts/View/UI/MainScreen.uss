@@ -70,6 +70,16 @@
     flex-direction: row;
     align-items: center;
     margin-left: 20px;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.top-bar__group > .u-tag {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
 }
 
 .top-bar__group > .u-noaa, .top-bar__group > .u-tag {
@@ -84,6 +94,8 @@
 
 .top-bar__group > .u-tag {
     padding: 4px 8px;
+    -unity-text-overflow-position: end;
+    text-overflow: ellipsis;
 }
 
 .top-bar__citadel-icon {
@@ -313,7 +325,7 @@
 }
 
 .part__icon {
-    height: 36px;
+    height: 44px;
     margin-bottom: 4px;
     -unity-background-scale-mode: scale-to-fit;
 }
@@ -871,4 +883,39 @@
     margin-left: 8px;
     margin-top: 6px;
     min-width: 120px;
+}
+
+/* ---------- Command icons on fleet orders, site section badges ---------- */
+
+.unity-button.u-btn--icon {
+    padding-left: 34px;
+    background-position-x: left 8px;
+    background-size: 20px 20px;
+    background-repeat: no-repeat;
+}
+
+.unity-button.order-vent {
+    background-image: resource("UI/cmd_vent");
+    border-color: var(--u-thermal-nominal);
+}
+
+.unity-button.order-raid {
+    background-image: resource("UI/cmd_raid");
+}
+
+.unity-button.order-nuke {
+    background-image: resource("UI/cmd_nuke");
+    -unity-background-image-tint-color: rgb(11, 18, 32);
+}
+
+.ops__emblem--rig {
+    background-image: resource("UI/badge_rig");
+}
+
+.ops__emblem--refinery {
+    background-image: resource("UI/badge_refinery");
+}
+
+.ops__emblem--relay {
+    background-image: resource("UI/badge_relay");
 }
