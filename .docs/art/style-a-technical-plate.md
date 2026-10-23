@@ -23,3 +23,7 @@ Pipeline:
 - Board planets ship as full-colour plates; the owner colour is the ring drawn around them in code.
 - Icons from plates (shown under ~64 px): `.temp/plate_icon.py` brightens the fills and adds a bold contour in the
   class accent colour so the silhouette survives downscaling.
+
+Done in Style A (2026-10-23): board planets (5 lifecycle states, capital, Citadel world), ship-class plates,
+agency seals + Citadel/gate/sector emblems, menu/victory/defeat backdrops, `PlateFrame` corner brackets, SITE planet
+portrait. Small command/action/badge glyphs stay single-colour line icons (same line language, legible at 16-24 px).
