@@ -141,3 +141,4 @@
 - 2026-10-23 - Claude (art by Antigravity) - Style A planets: full-colour technical-plate planet sprites for every lifecycle state, capital and a new Citadel-world sprite; owner shown by a ring around the planet; style guide in `.docs/art/`.
 - 2026-10-23 - Claude (art by Antigravity) - Style A ship-class icons (Line, EW, Supply, Cargo) as technical plates with a class-colour contour.
 - 2026-10-23 - Claude - Style A plate frame (`PlateFrame`: chamfered corner brackets + registration ticks) on the fleet card and every dialog, tinted by dialog tone.
+- 2026-10-23 - Claude (art by Antigravity) - Style A seals: one octagon medallion set for STA, WTO, WHO, IAEA and NOAA, plus Citadel, jump-gate and frontier-sector emblems.
