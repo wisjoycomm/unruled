@@ -21,3 +21,5 @@ Pipeline:
   trim to content, 128 px, Sprite, no mips. Line icons: `.temp/key_alpha.py`.
 - HUD frames, panels and gauges are USS, not images.
 - Board planets ship as full-colour plates; the owner colour is the ring drawn around them in code.
+- Icons from plates (shown under ~64 px): `.temp/plate_icon.py` brightens the fills and adds a bold contour in the
+  class accent colour so the silhouette survives downscaling.
