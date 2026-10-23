@@ -2,6 +2,7 @@ using Unruled.Core.AI;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
+using Unruled.Core.Galaxy;
 using Unruled.Core.Military;
 using Unruled.Core.Research;
 using Unruled.Core.Simulation;
@@ -432,6 +433,62 @@ namespace Unruled.Core.Persistence
             if (n > 0) v.OwnerPlayerId = r.ReadInt32();
             if (n > 1) v.Pool = (TaxPoolKind)r.ReadByte();
             if (n > 2) v.Cents = r.ReadInt64();
+            SkipNewer(r, n, 3);
+            return v;
+        }
+
+        internal static void Write(MsgPackWriter w, in StarSystem v)
+        {
+            w.WriteArrayHeader(7);
+            w.Write(v.StarId);
+            w.Write(v.ClusterId);
+            w.Write(v.OwnerPlayerId);
+            w.Write(v.MaterialisedTick);
+            w.Write(v.X);
+            w.Write(v.Y);
+            w.Write((int)v.Class);
+        }
+
+        internal static StarSystem ReadStarSystem(MsgPackReader r)
+        {
+            int n = r.ReadArrayHeader();
+            var v = new StarSystem();
+            if (n > 0) v.StarId = r.ReadInt64();
+            if (n > 1) v.ClusterId = r.ReadInt32();
+            if (n > 2) v.OwnerPlayerId = r.ReadInt32();
+            if (n > 3) v.MaterialisedTick = r.ReadInt64();
+            if (n > 4) v.X = r.ReadInt32();
+            if (n > 5) v.Y = r.ReadInt32();
+            if (n > 6) v.Class = (StarClass)r.ReadByte();
+            SkipNewer(r, n, 7);
+            return v;
+        }
+
+        // SystemName: [chars as ints, renamed by, renamed tick].
+        internal static void Write(MsgPackWriter w, in SystemName v)
+        {
+            w.WriteArrayHeader(3);
+            w.WriteArrayHeader(v.Length);
+            for (int i = 0; i < v.Length; i++)
+                w.Write((int)v.CharAt(i));
+            w.Write(v.RenamedByPlayerId);
+            w.Write(v.RenamedTick);
+        }
+
+        internal static SystemName ReadSystemName(MsgPackReader r)
+        {
+            int n = r.ReadArrayHeader();
+            var v = new SystemName();
+            if (n > 0)
+            {
+                int chars = r.ReadArrayHeader();
+                if (chars > SystemName.MaxLength) throw new System.FormatException("System name too long.");
+                for (int i = 0; i < chars; i++)
+                    v.SetChar(i, (char)r.ReadInt32());
+                v.Length = chars;
+            }
+            if (n > 1) v.RenamedByPlayerId = r.ReadInt32();
+            if (n > 2) v.RenamedTick = r.ReadInt64();
             SkipNewer(r, n, 3);
             return v;
         }

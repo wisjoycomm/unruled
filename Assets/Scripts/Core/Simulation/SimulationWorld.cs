@@ -3,6 +3,7 @@ using Unruled.Core.AI;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
+using Unruled.Core.Galaxy;
 using Unruled.Core.Military;
 using Unruled.Core.Research;
 using Unruled.Core.SystemFactions;
@@ -44,6 +45,9 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<Wallet> Wallets;
         public readonly ComponentStore<PlayerStanding> Standings;
         public readonly ComponentStore<Loan> Loans;
+        public readonly ComponentStore<StarSystem> StarSystems;
+        public readonly ComponentStore<SystemName> SystemNames;
+        public readonly GalaxySystem Galaxy;
         public readonly ComponentStore<WtoOrder> WtoOrders;
         public readonly ComponentStore<ItemMarket> ItemMarkets;
         public readonly ComponentStore<WtoContract> Contracts;
@@ -134,6 +138,8 @@ namespace Unruled.Core.Simulation
             VictoryRecords = World.CreateStore<VictoryRecord>();
             DirectorateSeats = World.CreateStore<DirectorateSeat>();
             Loans = World.CreateStore<Loan>();
+            StarSystems = World.CreateStore<StarSystem>();
+            SystemNames = World.CreateStore<SystemName>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -285,6 +291,9 @@ namespace Unruled.Core.Simulation
                 Starlanes, RadarScans, TechProgress, JumpGates, ConvoyRoutes, ShipOrders, Refineries, Standings, Citadels, WtoOrders,
                 ItemMarkets, Loans, Sanctions, FleetRoutes, Ledger, WtoFeePool, Rates, Issuer, Routes, Tolls, TechGates, balance);
             Commands.Register(CommandType.SetStandingOrders, Ai);
+
+            Galaxy = new GalaxySystem(World, StarSystems, SystemNames, Sites, new GalaxyCatalog(balance.Galaxy, worldSeed));
+            Clock.Register(Galaxy);
         }
 
         /// <summary>
@@ -315,6 +324,29 @@ namespace Unruled.Core.Simulation
         /// </summary>
         public void GenerateSystem(ulong systemSeed, int clusterId) =>
             GenerateSystem(systemSeed, clusterId, rebuildGraph: true);
+
+        /// <summary>
+        /// The one door from the galaxy catalog into the simulation: generates the star's system under a new cluster
+        /// id (sites, lanes, weather, stockpiles) and registers it. Returns the cluster id; a star already
+        /// materialised returns its existing cluster.
+        /// </summary>
+        public int MaterialiseStar(StarId star, bool rebuildGraph = true)
+        {
+            if (Galaxy.TryGetCluster(star, out int existing))
+                return existing;
+            if (!Galaxy.Catalog.TryGetStar(star, out var record))
+                throw new ArgumentException("No such star in the catalog.", nameof(star));
+            int clusterId = Galaxy.NextClusterId();
+            int firstSite = Sites.Count;
+            GenerateSystem(record.SystemSeed, clusterId, rebuildGraph: false);
+            for (int i = firstSite; i < Sites.Count; i++)
+                if (!Stockpiles.Has(Sites.EntityAt(i)))
+                    Stockpiles.Add(Sites.EntityAt(i), default);
+            Galaxy.Register(record, clusterId, Clock.CurrentTick);
+            if (rebuildGraph)
+                Graph.Rebuild(Starlanes);
+            return clusterId;
+        }
 
         internal void GenerateSystem(ulong systemSeed, int clusterId, bool rebuildGraph)
         {

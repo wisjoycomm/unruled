@@ -56,6 +56,7 @@ namespace Unruled.Core.Simulation
             SetUpContestedCluster(sim, ref rng, playerId, participants);
             SetUpUninhabitedClusters(sim, ref rng, participants);
             sim.Graph.Rebuild(sim.Starlanes);
+            sim.Galaxy.EnsureSystemsForAllClusters(sim.Clock.CurrentTick);
             return player;
         }
 

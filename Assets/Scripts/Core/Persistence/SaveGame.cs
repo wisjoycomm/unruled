@@ -12,10 +12,10 @@ namespace Unruled.Core.Persistence
     public static class SaveGame
     {
         /// <summary>Bump when a saved shape changes, and add a migration test for the older version.</summary>
-        public const int SchemaVersion = 5;
+        public const int SchemaVersion = 6;
 
         private const int TopLevelKeys = 6;
-        private const int StoreCount = 38;
+        private const int StoreCount = 40;
 
         private delegate void Writer<T>(MsgPackWriter w, in T value);
         private delegate T Reader<T>(MsgPackReader r);
@@ -78,6 +78,8 @@ namespace Unruled.Core.Persistence
             if (storeCount > 35) WriteStore(w, sim.VictoryRecords, ComponentFormatters.Write);
             if (storeCount > 36) WriteStore(w, sim.DirectorateSeats, ComponentFormatters.Write);
             if (storeCount > 37) WriteStore(w, sim.Loans, ComponentFormatters.Write);
+            if (storeCount > 38) WriteStore(w, sim.StarSystems, ComponentFormatters.Write);
+            if (storeCount > 39) WriteStore(w, sim.SystemNames, ComponentFormatters.Write);
             return w.ToArray();
         }
 
@@ -143,6 +145,8 @@ namespace Unruled.Core.Persistence
             if (stores > 37) ReadStore(r, sim.World, sim.Loans, ComponentFormatters.ReadLoan);
             else
                 AddMissingLoans(sim); // schema 1: no loans yet, so every player owes nothing
+            if (stores > 38) ReadStore(r, sim.World, sim.StarSystems, ComponentFormatters.ReadStarSystem);
+            if (stores > 39) ReadStore(r, sim.World, sim.SystemNames, ComponentFormatters.ReadSystemName);
             if (stores > StoreCount) r.Skip(stores - StoreCount);
             r.Skip(keys - TopLevelKeys);
             if (!r.End) throw new FormatException("Save has bytes after its end.");
@@ -150,6 +154,7 @@ namespace Unruled.Core.Persistence
             if (!sim.Stockpiles.Has(sim.WtoFeePool))
                 sim.Stockpiles.Add(sim.WtoFeePool, default); // schema 3 and older: THE SYSTEM held no stock yet
             sim.Graph.Rebuild(sim.Starlanes);
+            sim.Galaxy.EnsureSystemsForAllClusters(tick); // schema 5 and older: systems from before the catalog
             return sim;
         }
 
