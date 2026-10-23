@@ -45,6 +45,8 @@ namespace Unruled.View
         private readonly Texture2D[] _lifecycleGlyphs = new Texture2D[6];
         private Texture2D _coreGlyph;
         private Texture2D _citadelGlyph;
+        private Texture2D _starHome, _starContested, _starFrontier, _beacon, _hazard;
+        private Texture2D _tokenWarfleet, _tokenConvoy, _tokenPatrol, _tokenInspector;
         private int _glyphsUsed;
         private readonly List<float> _orbits = new List<float>();
         private readonly List<Vector2> _clusterPos = new List<Vector2>();
@@ -65,6 +67,7 @@ namespace Unruled.View
         private int _contestedId = -1;
         private float _extent = 1f;
         private float _halfWidth = 1f, _halfHeight = 1f;
+        private int _previewCluster = -1;
         private long _drawnTick = -1;
         private Rect _drawnRect;
         private EntityId _drawnSelection;
@@ -97,6 +100,15 @@ namespace Unruled.View
             {
                 _coreGlyph = Resources.Load<Texture2D>("UI/node_core_base");
                 _citadelGlyph = Resources.Load<Texture2D>("UI/node_citadel");
+                _starHome = Resources.Load<Texture2D>("UI/star_home");
+                _starContested = Resources.Load<Texture2D>("UI/star_contested");
+                _starFrontier = Resources.Load<Texture2D>("UI/star_frontier");
+                _beacon = Resources.Load<Texture2D>("UI/beacon_toll");
+                _hazard = Resources.Load<Texture2D>("UI/marker_hazard");
+                _tokenWarfleet = Resources.Load<Texture2D>("UI/token_warfleet");
+                _tokenConvoy = Resources.Load<Texture2D>("UI/token_convoy");
+                _tokenPatrol = Resources.Load<Texture2D>("UI/token_patrol");
+                _tokenInspector = Resources.Load<Texture2D>("UI/token_inspector");
                 _lifecycleGlyphs[(int)PlanetLifecycleState.PristineWorld] = Resources.Load<Texture2D>("UI/node_pristine");
                 _lifecycleGlyphs[(int)PlanetLifecycleState.DeepCoreStripping] = Resources.Load<Texture2D>("UI/node_deep_core");
                 _lifecycleGlyphs[(int)PlanetLifecycleState.DepletedBarrenHusk] = Resources.Load<Texture2D>("UI/node_barren_husk");
@@ -122,6 +134,8 @@ namespace Unruled.View
         public void ShowCluster(int clusterId)
         {
             _galaxy = false;
+            _previewCluster = -1;
+            _screen.Preview.Hide();
             _clusterId = clusterId;
             _screen.ShowBoardTab(false, clusterId);
             _orbits.Clear();
@@ -145,6 +159,8 @@ namespace Unruled.View
         public void ShowGalaxy()
         {
             _galaxy = true;
+            _previewCluster = -1;
+            _screen.Preview.Hide();
             _contestedId = _sim.JumpGates.Count > 0 && _sim.Sites.Has(_sim.JumpGates.At(0).FarSite)
                 ? _sim.Sites.Get(_sim.JumpGates.At(0).FarSite).ClusterId
                 : -1;
@@ -231,6 +247,8 @@ namespace Unruled.View
                 _mesh.Upload();
                 for (int i = _labelsUsed; i < _labels.Count; i++)
                     _labels[i].style.display = DisplayStyle.None;
+                for (int i = _glyphsUsed; i < _glyphs.Count; i++)
+                    _glyphs[i].style.display = DisplayStyle.None;
                 return;
             }
 
@@ -239,8 +257,13 @@ namespace Unruled.View
                 _mesh.RingWorld(Vector2.zero, _orbits[i], 1f, orbitColor);
 
             DrawStorms(tick);
-            _mesh.Disc(Vector2.zero, 14f, UnruledPalette.Sta);
+            var star = StarTexture(_clusterId);
+            if (star != null)
+                PlaceGlyph(Vector2.zero, 56f, star, Color.white);
+            else
+                _mesh.Disc(Vector2.zero, 14f, UnruledPalette.Sta);
             DrawLanes();
+            DrawTraffic(tick);
             DrawBlackouts();
             DrawScans(tick);
             DrawGates();
@@ -290,18 +313,91 @@ namespace Unruled.View
                 switch (lane.Tier)
                 {
                     case StarlaneTier.StaHighway:
+                        // Twin rails with an STA toll beacon at the midpoint.
                         var gold = UnruledPalette.Sta;
                         gold.a = 0.7f;
-                        _mesh.Line(a, b, 2.5f, gold);
+                        var side = Perpendicular(a, b) * (2.5f * _mesh.UnitsPerPixel);
+                        _mesh.Line(a + side, b + side, 1.5f, gold);
+                        _mesh.Line(a - side, b - side, 1.5f, gold);
+                        if (_beacon != null)
+                            PlaceGlyph((a + b) * 0.5f, 18f, _beacon, Color.white);
                         break;
                     case StarlaneTier.OuterRimBypass:
                         _mesh.DashedLine(a, b, 2f, 2f, 6f, UnruledPalette.Unclaimed);
+                        if (_hazard != null)
+                            PlaceGlyph((a + b) * 0.5f, 18f, _hazard, Color.white);
                         break;
                     default:
                         _mesh.Zigzag(a, b, 2f, 6f, 30f, UnruledPalette.Danger);
                         break;
                 }
             }
+        }
+
+        private static Vector2 Perpendicular(Vector2 a, Vector2 b)
+        {
+            var d = b - a;
+            return d.sqrMagnitude > 1e-6f ? new Vector2(-d.y, d.x).normalized : Vector2.zero;
+        }
+
+        // Moving traffic: a short trail of fading dots behind every visible fleet in transit, in its side colour.
+        private void DrawTraffic(long tick)
+        {
+            float u = _mesh.UnitsPerPixel;
+            for (int i = 0; i < _sim.Fleets.Count; i++)
+            {
+                ref var unit = ref _sim.Fleets.At(i);
+                var fleet = _sim.Fleets.EntityAt(i);
+                if (!TryFleetHeading(fleet, out var p, out var dir) || !IsVisible(fleet, in unit, tick))
+                    continue;
+                var colour = FleetColour(in unit);
+                for (int k = 1; k <= 4; k++)
+                {
+                    var dot = colour;
+                    dot.a = 0.55f - k * 0.11f;
+                    _mesh.Disc(p - dir * ((10f + k * 7f) * u), 2.2f, dot);
+                }
+            }
+        }
+
+        private Color FleetColour(in FleetUnit unit) =>
+            unit.OwnerPlayerId == _playerId ? UnruledPalette.You
+            : unit.OwnerPlayerId < 0 ? AgencyColour(unit.OwnerPlayerId)
+            : UnruledPalette.Hostile;
+
+        // A fleet on a lane inside this system: its position and the unit direction it travels in.
+        private bool TryFleetHeading(EntityId fleet, out Vector2 position, out Vector2 direction)
+        {
+            direction = Vector2.up;
+            if (!TryFleetPosition(fleet, out position))
+                return false;
+            ref var motion = ref _sim.FleetMotions.Get(fleet);
+            if (motion.Lane.IsNull || !_sim.Starlanes.Has(motion.Lane))
+                return false;
+            var to = _sim.Starlanes.Get(motion.Lane).OtherEnd(motion.FromSite);
+            if (!InCluster(motion.FromSite) || !InCluster(to))
+                return false;
+            var d = Pos(to) - Pos(motion.FromSite);
+            if (d.sqrMagnitude < 1e-6f)
+                return false;
+            direction = d.normalized;
+            return true;
+        }
+
+        private Texture2D StarTexture(int clusterId)
+        {
+            if (clusterId == _contestedId)
+                return _starContested;
+            return ClusterCoreOwner(clusterId) != 0 ? _starHome : _starFrontier;
+        }
+
+        private Texture2D FleetToken(EntityId fleet, in FleetUnit unit)
+        {
+            if (unit.OwnerPlayerId == SystemAgencies.OwnerId(SystemAgency.Iaea))
+                return _tokenInspector;
+            if (unit.OwnerPlayerId < 0)
+                return _tokenPatrol;
+            return _sim.ConvoyRoutes.Has(fleet) || _sim.ContractCargo.Has(fleet) ? _tokenConvoy : _tokenWarfleet;
         }
 
         // R3+ radio blackout: orders across the lane are refused, so it is marked over the lane in the NOAA colour.
@@ -504,9 +600,18 @@ namespace Unruled.View
                 Color colour = contested ? UnruledPalette.Danger : owner != 0 ? SideColour(owner) : UnruledPalette.Unclaimed;
                 if (c == _clusterId)
                     _mesh.SquareOutline(p, 64f, 2f, UnruledPalette.Ink);
-                _mesh.Disc(p, 22f, colour);
-                _mesh.Disc(p, 18f, UnruledPalette.Void);
-                _mesh.Disc(p, 8f, colour);
+                var starTex = StarTexture(c);
+                if (starTex != null)
+                {
+                    _mesh.Ring(p, 24f, 2f, colour);
+                    PlaceGlyph(p, 40f, starTex, Color.white);
+                }
+                else
+                {
+                    _mesh.Disc(p, 22f, colour);
+                    _mesh.Disc(p, 18f, UnruledPalette.Void);
+                    _mesh.Disc(p, 8f, colour);
+                }
                 string name = UiFormat.StarName(c) +
                               (contested ? " · CONTESTED" : owner == _playerId ? " · HOME" : owner == 0 ? " · FRONTIER" : "");
                 bool strong = contested || owner == _playerId;
@@ -755,7 +860,7 @@ namespace Unruled.View
                 if (!TryFleetPosition(fleet, out var p) || !IsVisible(fleet, in unit, tick))
                     continue;
                 bool own = unit.OwnerPlayerId == _playerId;
-                var colour = own ? UnruledPalette.You : unit.OwnerPlayerId < 0 ? AgencyColour(unit.OwnerPlayerId) : UnruledPalette.Hostile;
+                var colour = FleetColour(in unit);
                 if (fleet == selection)
                 {
                     _mesh.SquareFill(p, 40f, UnruledPalette.Raised);
@@ -785,7 +890,18 @@ namespace Unruled.View
                 }
                 else if (tick < readiness.WarmupUntilTick)
                     _mesh.DashedRing(p, 16f, 1.5f, 4f, 3f, UnruledPalette.You);
-                _mesh.Chevrons(p, Mathf.Clamp(unit.TechTier, 1, 5), own, colour);
+                var token = FleetToken(fleet, in unit);
+                if (token != null)
+                {
+                    // Ship token turned along its lane; the tier chevrons shrink to a mark under it.
+                    float angle = TryFleetHeading(fleet, out _, out var heading)
+                        ? Mathf.Atan2(heading.x, heading.y) * Mathf.Rad2Deg
+                        : 0f;
+                    PlaceGlyph(p, 30f, token, colour, angle);
+                    _mesh.Chevrons(p + new Vector2(0f, -20f) * _mesh.UnitsPerPixel, Mathf.Clamp(unit.TechTier, 1, 5), own, colour, 0.45f);
+                }
+                else
+                    _mesh.Chevrons(p, Mathf.Clamp(unit.TechTier, 1, 5), own, colour);
                 bool rwr = own && DrawFleetAlerts(fleet, p, in combat, in readiness, tick);
 
                 string text;
@@ -907,7 +1023,14 @@ namespace Unruled.View
                 {
                     if (Vector2.Distance(_clusterPos[c], world) > pick)
                         continue;
-                    ShowCluster(c);
+                    // First click previews the system; a second click on it opens the system view.
+                    if (c == _previewCluster)
+                        ShowCluster(c);
+                    else
+                    {
+                        _previewCluster = c;
+                        _screen.Preview.ShowCluster(c, StarTexture(c));
+                    }
                     return;
                 }
                 return;
@@ -958,7 +1081,7 @@ namespace Unruled.View
             return tint;
         }
 
-        private void PlaceGlyph(Vector2 world, float sizePx, Texture2D texture, Color tint)
+        private void PlaceGlyph(Vector2 world, float sizePx, Texture2D texture, Color tint, float degrees = 0f)
         {
             VisualElement glyph;
             if (_glyphsUsed < _glyphs.Count)
@@ -982,6 +1105,7 @@ namespace Unruled.View
             glyph.style.top = (1f - world.y / _halfHeight) * 0.5f * size.y - sizePx * 0.5f;
             glyph.style.backgroundImage = new StyleBackground(texture);
             glyph.style.unityBackgroundImageTintColor = tint;
+            glyph.style.rotate = new Rotate(degrees);
         }
 
         private void PlaceLabel(Vector2 world, string text, Color colour, bool centred, bool strong)

@@ -144,3 +144,4 @@
 - 2026-10-23 - Claude (art by Antigravity) - Style A seals: one octagon medallion set for STA, WTO, WHO, IAEA and NOAA, plus Citadel, jump-gate and frontier-sector emblems.
 - 2026-10-23 - Claude (art by Antigravity) - Style A backdrops for the game menu, victory (Citadel lattice opened under the Directorate spire) and defeat (cracked capital, broken station ring, rival fleet) screens.
 - 2026-10-23 - Claude - SITE tab PLANET group shows a live Style A planet portrait (lifecycle state, or the capital plate).
+- 2026-10-23 - Claude (art by Antigravity) - Board: Style A stars (home / contested / frontier) in the system view and on the galaxy chart, highways as twin rails with STA toll beacons, bypass hazard markers, fleets as tinted ship tokens (warfleet, convoy, SYSTEM patrol, IAEA inspector) turned along their lane with a traffic trail.

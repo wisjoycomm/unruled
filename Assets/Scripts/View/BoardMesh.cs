@@ -207,9 +207,9 @@ namespace Unruled.View
         }
 
         /// <summary>A stack of <paramref name="count"/> chevrons (one per tech tier) pointing up or down.</summary>
-        public void Chevrons(Vector2 centre, int count, bool up, Color32 color)
+        public void Chevrons(Vector2 centre, int count, bool up, Color32 color, float scale = 1f)
         {
-            const float widthPx = 20f, risePx = 6f, stepPx = 8f, strokePx = 3f;
+            float widthPx = 20f * scale, risePx = 6f * scale, stepPx = 8f * scale, strokePx = Mathf.Max(1.5f, 3f * scale);
             float u = UnitsPerPixel;
             float sign = up ? 1f : -1f;
             float top = (count - 1) * stepPx * 0.5f;
