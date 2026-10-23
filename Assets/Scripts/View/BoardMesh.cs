@@ -145,6 +145,46 @@ namespace Unruled.View
             }
         }
 
+        /// <summary>
+        /// A clockwise arc from twelve o'clock covering <paramref name="fraction"/> (0..1) of a ring, for gauges
+        /// drawn on the board (Citadel shield, scan progress).
+        /// </summary>
+        public void Arc(Vector2 centre, float radiusPx, float widthPx, float fraction, Color32 color)
+        {
+            fraction = Mathf.Clamp01(fraction);
+            if (fraction <= 0f)
+                return;
+            float radius = radiusPx * UnitsPerPixel;
+            float half = widthPx * UnitsPerPixel * 0.5f;
+            int segments = Mathf.Max(2, Mathf.RoundToInt(Segments(radius) * fraction));
+            int start = _vertices.Count;
+            for (int i = 0; i <= segments; i++)
+            {
+                float a = Mathf.PI * 0.5f - i * fraction * Mathf.PI * 2f / segments;
+                var dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+                AddVertex(centre + dir * (radius + half), color);
+                AddVertex(centre + dir * Mathf.Max(0f, radius - half), color);
+            }
+            for (int i = 0; i < segments; i++)
+            {
+                int o0 = start + i * 2, i0 = o0 + 1, o1 = o0 + 2, i1 = o0 + 3;
+                _indices.Add(o0); _indices.Add(o1); _indices.Add(i1);
+                _indices.Add(o0); _indices.Add(i1); _indices.Add(i0);
+            }
+        }
+
+        /// <summary>A triangle outline pointing up, <paramref name="sizePx"/> wide (relay stations).</summary>
+        public void Triangle(Vector2 centre, float sizePx, float widthPx, Color32 color)
+        {
+            float h = sizePx * UnitsPerPixel * 0.5f;
+            var top = centre + new Vector2(0f, h);
+            var left = centre + new Vector2(-h, -h * 0.8f);
+            var right = centre + new Vector2(h, -h * 0.8f);
+            Line(left, top, widthPx, color);
+            Line(top, right, widthPx, color);
+            Line(right, left, widthPx, color);
+        }
+
         /// <summary>An axis-aligned square outline, <paramref name="sizePx"/> on a side, centred.</summary>
         public void SquareOutline(Vector2 centre, float sizePx, float widthPx, Color32 color)
         {

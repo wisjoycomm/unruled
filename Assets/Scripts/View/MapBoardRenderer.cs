@@ -13,8 +13,11 @@ namespace Unruled.View
 {
     /// <summary>
     /// Draws one star system on the single-layer board: orbits, lanes (STA highway solid, rim bypass dotted, storm
-    /// shortcut zigzag), site glyphs (own, hostile, unclaimed, THE SYSTEM, core base, WHO lock, irradiated), fleets as
-    /// tier chevrons, and NOAA storm discs the player's bracket can see; a jump gate or inter-system lane is a ring on its site.
+    /// shortcut zigzag; R3+ radio blackout overlaid; the player's focused scans as a sweep on the lane), site glyphs
+    /// (own, hostile, unclaimed, THE SYSTEM, core base, WHO lock, irradiated, terraformed; rigs, refineries, relays,
+    /// the Citadel's shield arc), fleets as tier chevrons with state marks (engaged, mothballed, warming up,
+    /// unsupplied, guns locked, RWR alarm, WTO contract convoy), the selected fleet's route and convoy run, and NOAA
+    /// storm discs the player's bracket can see; a jump gate or inter-system lane is a ring on its site.
     /// The galaxy tab instead shows every star system: the contested cluster in the middle, homes on the inner ring,
     /// uninhabited frontier systems on the outer ring, gate/inter-system links and own fleet counts; clicking a system opens it.
     /// One mesh, rebuilt only when the sim tick or the board's screen area changes. Names are pooled UI Toolkit labels over
@@ -222,8 +225,12 @@ namespace Unruled.View
             DrawStorms(tick);
             _mesh.Disc(Vector2.zero, 14f, UnruledPalette.Sta);
             DrawLanes();
+            DrawBlackouts();
+            DrawScans(tick);
             DrawGates();
+            DrawSelectedRoute(selection);
             DrawSites(tick);
+            DrawCitadels(tick);
             DrawFleets(tick, selection);
 
             _mesh.Upload();
@@ -275,6 +282,90 @@ namespace Unruled.View
                     default:
                         _mesh.Zigzag(a, b, 2f, 6f, 30f, UnruledPalette.Danger);
                         break;
+                }
+            }
+        }
+
+        // R3+ radio blackout: orders across the lane are refused, so it is marked over the lane in the NOAA colour.
+        private void DrawBlackouts()
+        {
+            for (int i = 0; i < _sim.Starlanes.Count; i++)
+            {
+                var id = _sim.Starlanes.EntityAt(i);
+                if (!_sim.LaneWeather.Has(id))
+                    continue;
+                byte level = _sim.LaneWeather.Get(id).RadioBlackoutLevel;
+                ref var lane = ref _sim.Starlanes.At(i);
+                if (level < 3 || !InCluster(lane.SiteA) || !InCluster(lane.SiteB))
+                    continue;
+                var colour = UnruledPalette.NoaaLevel(level);
+                colour.a = 0.55f;
+                _mesh.DashedLine(Pos(lane.SiteA), Pos(lane.SiteB), 7f, 3f, 5f, colour);
+                PlaceLabel((Pos(lane.SiteA) + Pos(lane.SiteB)) * 0.5f, "R" + UiFormat.Number(level) + " BLACKOUT",
+                    UnruledPalette.NoaaLevel(level), true, false);
+            }
+        }
+
+        // The player's focused scans: a bright band growing along the lane as the scan integrates.
+        private void DrawScans(long tick)
+        {
+            for (int i = 0; i < _sim.RadarScans.Count; i++)
+            {
+                ref var scan = ref _sim.RadarScans.At(i);
+                if (scan.OwnerPlayerId != _playerId || !_sim.Starlanes.Has(scan.Lane))
+                    continue;
+                ref var lane = ref _sim.Starlanes.Get(scan.Lane);
+                if (!InCluster(lane.SiteA) || !InCluster(lane.SiteB))
+                    continue;
+                var a = Pos(lane.SiteA);
+                var b = Pos(lane.SiteB);
+                float t = scan.IntegrationTicks > 0 ? Mathf.Clamp01((tick - scan.StartTick) / (float)scan.IntegrationTicks) : 1f;
+                var glow = UnruledPalette.You;
+                glow.a = 0.25f;
+                _mesh.Line(a, b, 9f, glow);
+                _mesh.Line(a, Vector2.Lerp(a, b, t), 3f, UnruledPalette.You);
+                PlaceLabel((a + b) * 0.5f + new Vector2(0f, 14f * _mesh.UnitsPerPixel),
+                    "SCAN " + UiFormat.Number((long)(t * 100f)) + "%", UnruledPalette.You, true, true);
+            }
+        }
+
+        // The selected own fleet's remaining route (lanes still ahead) and its convoy run, if it has one.
+        private void DrawSelectedRoute(EntityId fleet)
+        {
+            if (!_sim.Fleets.Has(fleet) || _sim.Fleets.Get(fleet).OwnerPlayerId != _playerId)
+                return;
+            var ink = UnruledPalette.You;
+            ink.a = 0.8f;
+            if (_sim.FleetRoutes.Has(fleet))
+            {
+                ref var route = ref _sim.FleetRoutes.Get(fleet);
+                ref var motion = ref _sim.FleetMotions.Get(fleet);
+                var at = motion.Lane.IsNull ? motion.Site : _sim.Starlanes.Get(motion.Lane).OtherEnd(motion.FromSite);
+                if (!motion.Lane.IsNull && TryFleetPosition(fleet, out var p) && InCluster(at))
+                    _mesh.DashedLine(p, Pos(at), 3f, 6f, 4f, ink);
+                for (int i = route.Next; i < route.Count && _sim.Sites.Has(at); i++)
+                {
+                    var laneId = route.LaneAt(i);
+                    if (!_sim.Starlanes.Has(laneId))
+                        break;
+                    var next = _sim.Starlanes.Get(laneId).OtherEnd(at);
+                    if (InCluster(at) && InCluster(next))
+                        _mesh.DashedLine(Pos(at), Pos(next), 3f, 6f, 4f, ink);
+                    at = next;
+                }
+                if (InCluster(at) && route.Next < route.Count)
+                    _mesh.Ring(Pos(at), 15f, 2f, UnruledPalette.You);
+            }
+            if (_sim.ConvoyRoutes.Has(fleet))
+            {
+                ref var convoy = ref _sim.ConvoyRoutes.Get(fleet);
+                if (InCluster(convoy.Hub) && InCluster(convoy.Outpost))
+                {
+                    var teal = UnruledPalette.Wto;
+                    teal.a = 0.7f;
+                    _mesh.DashedLine(Pos(convoy.Hub), Pos(convoy.Outpost), 2f, 10f, 6f, teal);
+                    PlaceLabel((Pos(convoy.Hub) + Pos(convoy.Outpost)) * 0.5f - new Vector2(0f, 12f * _mesh.UnitsPerPixel),
+                        "CONVOY RUN", UnruledPalette.Wto, true, false);
                 }
             }
         }
@@ -548,12 +639,79 @@ namespace Unruled.View
                     fill = SideColour(site.OwnerPlayerId);
                     stroke = fill;
                 }
+                if (site.LifecycleState == PlanetLifecycleState.TerraformedRecovery && !irradiated)
+                    _mesh.Ring(p, 13f, 2f, UnruledPalette.Who);
+                else if (site.LifecycleState == PlanetLifecycleState.DepletedBarrenHusk)
+                    _mesh.DashedRing(p, 13f, 1.5f, 2f, 3f, UnruledPalette.InkDim);
                 _mesh.Disc(p, 10f, stroke);
                 _mesh.Disc(p, 8f, fill);
+                if (site.OwnerPlayerId == _playerId)
+                    DrawSiteWorks(entity, p);
+                if (_sim.Relays.Has(entity))
+                    _mesh.Triangle(p + new Vector2(-18f, 14f) * _mesh.UnitsPerPixel, 10f, 1.5f,
+                        SideColour(_sim.Relays.Get(entity).OwnerPlayerId));
                 if (irradiated)
                     _mesh.Line(p + new Vector2(-6f, -6f) * _mesh.UnitsPerPixel, p + new Vector2(6f, 6f) * _mesh.UnitsPerPixel, 2f,
                         UnruledPalette.Iaea);
                 PlaceLabel(p - new Vector2(0f, 26f * _mesh.UnitsPerPixel), UiFormat.SiteName(site), UnruledPalette.InkSoft, true, false);
+            }
+        }
+
+        // Own site works under the glyph: one tick per rig (dim when paused or retracting), one square per refinery.
+        private void DrawSiteWorks(EntityId site, Vector2 p)
+        {
+            float u = _mesh.UnitsPerPixel;
+            int rigs = 0;
+            bool idle = false;
+            long tick = _sim.Clock.CurrentTick;
+            for (int d = 0; d < _sim.Deposits.Count; d++)
+            {
+                ref var deposit = ref _sim.Deposits.At(d);
+                if (deposit.Site != site)
+                    continue;
+                rigs += deposit.RigCount;
+                idle |= deposit.IsPaused || tick < deposit.RetractUntilTick;
+            }
+            int shown = Mathf.Min(rigs, 10);
+            var rigColour = idle ? UnruledPalette.InkDim : UnruledPalette.InkSoft;
+            for (int i = 0; i < shown; i++)
+            {
+                var x = p + new Vector2((i - (shown - 1) * 0.5f) * 4f, -15f) * u;
+                _mesh.Line(x, x - new Vector2(0f, 5f) * u, 2f, rigColour);
+            }
+            int refineries = 0;
+            for (int r = 0; r < _sim.Refineries.Count; r++)
+                if (_sim.Refineries.At(r).Site == site)
+                    refineries++;
+            for (int i = 0; i < Mathf.Min(refineries, 8); i++)
+                _mesh.SquareFill(p + new Vector2(14f + i * 6f, 8f) * u, 4f, UnruledPalette.Wto);
+        }
+
+        // THE SYSTEM's Citadel: a shield arc around the site (integrity), the garrison tier, or the fallen mark.
+        private void DrawCitadels(long tick)
+        {
+            int max = _sim.Balance.Citadel.MaxIntegrity;
+            for (int i = 0; i < _sim.Citadels.Count; i++)
+            {
+                var site = _sim.Citadels.EntityAt(i);
+                if (!InCluster(site))
+                    continue;
+                ref var citadel = ref _sim.Citadels.At(i);
+                var p = Pos(site);
+                if (citadel.FallenTick != 0)
+                {
+                    _mesh.DashedRing(p, 26f, 2f, 3f, 5f, UnruledPalette.InkDim);
+                    PlaceLabel(p + new Vector2(0f, 40f * _mesh.UnitsPerPixel), "CITADEL FALLEN", UnruledPalette.InkDim, true, true);
+                    continue;
+                }
+                var track = UnruledPalette.Sta;
+                track.a = 0.25f;
+                _mesh.Ring(p, 26f, 4f, track);
+                bool hit = tick - citadel.LastHitTick < 60 && citadel.LastHitTick > 0;
+                _mesh.Arc(p, 26f, 4f, max > 0 ? citadel.Integrity / (float)max : 0f, hit ? UnruledPalette.Danger : UnruledPalette.Sta);
+                PlaceLabel(p + new Vector2(0f, 40f * _mesh.UnitsPerPixel),
+                    "CITADEL · " + UiFormat.Number(max > 0 ? (long)citadel.Integrity * 100 / max : 0) + "% · T" +
+                    UiFormat.Number(citadel.DefenceTier), hit ? UnruledPalette.Danger : UnruledPalette.Sta, true, true);
             }
         }
 
@@ -574,7 +732,30 @@ namespace Unruled.View
                 }
                 if (unit.OwnerPlayerId == SystemAgencies.OwnerId(SystemAgency.Iaea))
                     _mesh.DashedRing(p, 24f, 2f, 4f, 3f, UnruledPalette.Iaea);
+                bool contract = _sim.ContractCargo.Has(fleet);
+                if (contract)
+                    _mesh.SquareOutline(p, 30f, 1.5f, UnruledPalette.Wto);
+                ref var combat = ref _sim.FleetCombat.Get(fleet);
+                ref var readiness = ref _sim.FleetReadiness.Get(fleet);
+                if (tick < combat.EngagedUntilTick)
+                {
+                    // engaged: a ring that pulses with the salvo clock
+                    float pulse = 18f + (tick % 4) * 3f;
+                    var flash = UnruledPalette.Danger;
+                    flash.a = 0.8f;
+                    _mesh.Ring(p, pulse, 2f, flash);
+                }
+                if (readiness.IsMothballed)
+                {
+                    var dim = colour;
+                    dim.a = 0.4f;
+                    colour = dim;
+                    _mesh.DashedRing(p, 16f, 1.5f, 2f, 3f, UnruledPalette.InkDim);
+                }
+                else if (tick < readiness.WarmupUntilTick)
+                    _mesh.DashedRing(p, 16f, 1.5f, 4f, 3f, UnruledPalette.You);
                 _mesh.Chevrons(p, Mathf.Clamp(unit.TechTier, 1, 5), own, colour);
+                bool rwr = own && DrawFleetAlerts(fleet, p, in combat, in readiness, tick);
 
                 string text;
                 if (own)
@@ -587,8 +768,35 @@ namespace Unruled.View
                     text = AgencyName(unit.OwnerPlayerId) + " · T" + UiFormat.Number(unit.TechTier);
                 else
                     text = "HOSTILE · T" + UiFormat.Number(unit.TechTier);
+                if (contract)
+                    text += " · WTO CARGO";
+                if (rwr)
+                    text += " · RWR!";
                 PlaceLabel(p + new Vector2(26f * _mesh.UnitsPerPixel, 0f), text, own ? UnruledPalette.Ink : colour, false, false);
             }
+        }
+
+        // Small marks above an own fleet: unsupplied (red bar), guns locked (red square), venting (blue bar), RWR alarm.
+        // Returns whether the RWR alarm is up (the caller adds it to the fleet's label).
+        private bool DrawFleetAlerts(EntityId fleet, Vector2 p, in FleetCombatState combat, in FleetReadiness readiness, long tick)
+        {
+            float u = _mesh.UnitsPerPixel;
+            var above = p + new Vector2(0f, 27f) * u;
+            if (readiness.IsUnsupplied)
+                _mesh.Line(above - new Vector2(10f, 0f) * u, above + new Vector2(10f, 0f) * u, 3f, UnruledPalette.Danger);
+            if (combat.IsOverheated)
+                _mesh.SquareFill(above + new Vector2(-14f, 4f) * u, 6f, UnruledPalette.ThermalLocked);
+            else if (combat.IsVenting)
+                _mesh.Line(above + new Vector2(-17f, 4f) * u, above + new Vector2(-11f, 4f) * u, 3f, UnruledPalette.ThermalNominal);
+            long rwr = _sim.FleetSensors.Get(fleet).RwrWarningTick;
+            if (rwr > 0 && tick - rwr < _sim.Balance.Radar.IntegrationTicks)
+            {
+                var warn = UnruledPalette.Danger;
+                warn.a = (tick & 1) == 0 ? 1f : 0.45f;
+                _mesh.DashedRing(p, 30f, 2f, 3f, 3f, warn);
+                return true;
+            }
+            return false;
         }
 
         private bool TryFleetPosition(EntityId fleet, out Vector2 position)
