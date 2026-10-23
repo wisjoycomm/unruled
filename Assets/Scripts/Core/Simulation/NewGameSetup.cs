@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
+using Unruled.Core.Galaxy;
 using Unruled.Core.Military;
 
 namespace Unruled.Core.Simulation
@@ -32,6 +34,9 @@ namespace Unruled.Core.Simulation
     /// uninhabited star systems (clusters = participant count + 1 ..) are generated with every raw item and no native life,
     /// linked from the contested entry orbits and in an outer ring. THE SYSTEM holds the contested cluster's outermost
     /// orbit, which no gate lands on, as its Citadel.
+    /// Every system is a star from the seeded <see cref="GalaxyCatalog"/>: the hub is a hub-class star on the spawn
+    /// ring, homes are the home-class stars nearest it and frontiers the frontier stars nearest it, each materialised
+    /// with its catalog system seed (so the same world seed always lays out the same galaxy).
     /// Runs once, before the clock starts.
     /// </summary>
     public static class NewGameSetup
@@ -44,19 +49,18 @@ namespace Unruled.Core.Simulation
             if (playerId <= 0 || playerId > int.MaxValue - rules.RivalCount)
                 throw new ArgumentOutOfRangeException(nameof(playerId));
 
-            var rng = new SplitMix64(sim.WorldSeed);
-            var player = SetUpParticipant(sim, ref rng, playerId, 0);
+            int participants = 1 + rules.RivalCount;
+            var picks = PickStars(sim.Galaxy.Catalog, participants, participants * rules.UninhabitedClustersPerParticipant);
+            var player = SetUpParticipant(sim, picks[0], playerId, 0);
             for (int i = 1; i <= rules.RivalCount; i++)
             {
-                var rival = SetUpParticipant(sim, ref rng, playerId + i, i);
+                var rival = SetUpParticipant(sim, picks[i], playerId + i, i);
                 byte archetype = (byte)((i - 1) % sim.Balance.Ai.Count + 1);
                 sim.Ai.Assign(rival.PlayerHq, archetype);
             }
-            int participants = 1 + rules.RivalCount;
-            SetUpContestedCluster(sim, ref rng, playerId, participants);
-            SetUpUninhabitedClusters(sim, ref rng, participants);
+            SetUpContestedCluster(sim, picks[participants], playerId, participants);
+            SetUpUninhabitedClusters(sim, picks, participants);
             sim.Graph.Rebuild(sim.Starlanes);
-            sim.Galaxy.EnsureSystemsForAllClusters(sim.Clock.CurrentTick);
             return player;
         }
 
@@ -66,13 +70,94 @@ namespace Unruled.Core.Simulation
         /// <summary>The first uninhabited cluster's id in a game with this many participants.</summary>
         public static int FirstUninhabitedClusterId(int participants) => ContestedClusterId(participants) + 1;
 
-        private static void SetUpContestedCluster(SimulationWorld sim, ref SplitMix64 rng, int firstPlayerId, int participants)
+        /// <summary>
+        /// The stars of one spawn group, in cluster order: <paramref name="homes"/> home-class stars, then the hub, then
+        /// <paramref name="frontiers"/> frontier stars. The hub is the hub-class star nearest a point on the spawn ring
+        /// (at the angle the catalog's seed puts it); homes and frontiers are the stars of their class nearest the hub,
+        /// searched in widening sector rings so a sparse patch still fills. Deterministic for a world seed.
+        /// </summary>
+        public static StarRecord[] PickStars(GalaxyCatalog catalog, int homes, int frontiers)
         {
-            ulong systemSeed = rng.NextULong();
+            if (catalog == null) throw new ArgumentNullException(nameof(catalog));
+            var b = catalog.Balance;
+            var picks = new StarRecord[homes + 1 + frontiers];
+            var rng = new SplitMix64(catalog.Seed ^ 0xA5A5A5A5UL);
+            int angle = rng.NextInt(0, FixedMath.AngleMask);
+            int ringX = (int)(((long)b.SpawnRingSectors * FixedMath.Cos(angle)) >> 16);
+            int ringY = (int)(((long)b.SpawnRingSectors * FixedMath.Sin(angle)) >> 16);
+            var used = new HashSet<long>();
+            var hub = Nearest(catalog, ringX, ringY, StarClass.Hub, used, b.RadiusSectors);
+            picks[homes] = hub;
+            used.Add(hub.Id.Packed);
+            catalog.SectorOf(hub.X, hub.Y, out int hx, out int hy);
+            for (int i = 0; i < homes; i++)
+            {
+                picks[i] = Nearest(catalog, hx, hy, StarClass.Home, used, b.RadiusSectors);
+                used.Add(picks[i].Id.Packed);
+            }
+            for (int i = 0; i < frontiers; i++)
+            {
+                picks[homes + 1 + i] = Nearest(catalog, hx, hy, StarClass.Frontier, used, b.RadiusSectors);
+                used.Add(picks[homes + 1 + i].Id.Packed);
+            }
+            return picks;
+        }
+
+        // The unused star of `cls` nearest the centre of sector (sx, sy), searching square rings of sectors outward and
+        // stopping one ring after the first hit (a closer star can only sit in the next ring).
+        private static StarRecord Nearest(GalaxyCatalog catalog, int sx, int sy, StarClass cls, HashSet<long> used, int maxRing)
+        {
+            var stars = new List<StarRecord>();
+            int size = catalog.Balance.SectorSize;
+            long cx = (long)sx * size, cy = (long)sy * size;
+            bool found = false;
+            StarRecord best = default;
+            long bestD = long.MaxValue;
+            int stopAt = maxRing;
+            for (int ring = 0; ring <= stopAt; ring++)
+            {
+                for (int dy = -ring; dy <= ring; dy++)
+                for (int dx = -ring; dx <= ring; dx++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != ring)
+                        continue;
+                    catalog.GetSector(sx + dx, sy + dy, stars);
+                    for (int i = 0; i < stars.Count; i++)
+                    {
+                        var s = stars[i];
+                        if (s.Class != cls || used.Contains(s.Id.Packed))
+                            continue;
+                        long ddx = s.X - cx, ddy = s.Y - cy;
+                        long d = ddx * ddx + ddy * ddy;
+                        if (d < bestD || (d == bestD && s.Id.Packed < best.Id.Packed))
+                        {
+                            best = s;
+                            bestD = d;
+                            found = true;
+                        }
+                    }
+                }
+                if (found && stopAt == maxRing)
+                    stopAt = Math.Min(maxRing, ring + 1);
+            }
+            if (!found) throw new InvalidOperationException($"The galaxy has no free {cls} star near sector ({sx}, {sy}).");
+            return best;
+        }
+
+        // Generates a catalog star's system under `clusterId` and registers it with the galaxy.
+        private static void Materialise(SimulationWorld sim, in StarRecord star, int clusterId)
+        {
+            sim.GenerateSystem(star.SystemSeed, clusterId, rebuildGraph: false);
+            sim.Galaxy.Register(star, clusterId, sim.Clock.CurrentTick);
+        }
+
+        private static void SetUpContestedCluster(SimulationWorld sim, in StarRecord star, int firstPlayerId, int participants)
+        {
+            ulong systemSeed = star.SystemSeed;
             int firstSite = sim.Sites.Count;
             int firstDeposit = sim.Deposits.Count;
             int contested = ContestedClusterId(participants);
-            sim.GenerateSystem(systemSeed, contested, rebuildGraph: false);
+            Materialise(sim, star, contested);
             var siteRng = new SplitMix64(systemSeed);
             for (int i = firstSite; i < sim.Sites.Count; i++)
             {
@@ -98,7 +183,7 @@ namespace Unruled.Core.Simulation
             sim.Defense.CreateCitadel(citadel);
         }
 
-        private static void SetUpUninhabitedClusters(SimulationWorld sim, ref SplitMix64 rng, int participants)
+        private static void SetUpUninhabitedClusters(SimulationWorld sim, StarRecord[] picks, int participants)
         {
             int perParticipant = sim.Balance.NewGame.UninhabitedClustersPerParticipant;
             if (perParticipant <= 0)
@@ -108,12 +193,12 @@ namespace Unruled.Core.Simulation
             var clusterFirstSite = new int[count];
             for (int u = 0; u < count; u++)
             {
-                ulong systemSeed = rng.NextULong();
+                ulong systemSeed = picks[participants + 1 + u].SystemSeed;
                 int firstSite = sim.Sites.Count;
                 int firstDeposit = sim.Deposits.Count;
                 clusterFirstSite[u] = firstSite;
                 int clusterId = firstCluster + u;
-                sim.GenerateSystem(systemSeed, clusterId, rebuildGraph: false);
+                Materialise(sim, picks[participants + 1 + u], clusterId);
                 var siteRng = new SplitMix64(systemSeed);
                 for (int i = firstSite; i < sim.Sites.Count; i++)
                 {
@@ -193,13 +278,13 @@ namespace Unruled.Core.Simulation
             throw new InvalidOperationException($"Cluster {clusterId} has no orbit {orbit}.");
         }
 
-        private static NewGame SetUpParticipant(SimulationWorld sim, ref SplitMix64 rng, int playerId, int clusterId)
+        private static NewGame SetUpParticipant(SimulationWorld sim, in StarRecord star, int playerId, int clusterId)
         {
             var rules = sim.Balance.NewGame;
-            ulong systemSeed = rng.NextULong();
+            ulong systemSeed = star.SystemSeed;
             int firstSite = sim.Sites.Count;
             int firstDeposit = sim.Deposits.Count;
-            sim.GenerateSystem(systemSeed, clusterId, rebuildGraph: false);
+            Materialise(sim, star, clusterId);
 
             var siteRng = new SplitMix64(systemSeed);
             EntityId coreBase = default;

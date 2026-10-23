@@ -24,11 +24,16 @@ namespace Unruled.Core.Galaxy
         public readonly int MaxNeighbourDistance;
         public readonly int HubSharePermille; // chance a star is a hub (contested system with a Citadel)
         public readonly int HomeSharePermille; // chance a star can host a new player's home
+        public readonly int SpawnRingSectors; // new hubs are looked for this far from the core (sectors)
+        public readonly int PlayersPerHub; // players whose homes gate into one hub
+        public readonly int SearchRadiusSectors; // how far around a hub its homes and frontiers are looked for
+        public readonly int HubSpacingSectors; // a new hub sits at least this far from the last one
 
         public GalaxyBalance(
             int sectorSize, int radiusSectors, int coreRadiusSectors, int armCount, int armWindingPerSector,
             int armWidthAngle, int maxStarsPerSector, int armStarsPerSector, int fieldStarsPerSector, int neighbourCount,
-            int maxNeighbourDistance, int hubSharePermille, int homeSharePermille)
+            int maxNeighbourDistance, int hubSharePermille, int homeSharePermille, int spawnRingSectors, int playersPerHub,
+            int searchRadiusSectors, int hubSpacingSectors)
         {
             if (sectorSize < 1) throw new ArgumentOutOfRangeException(nameof(sectorSize));
             if (radiusSectors < 1 || radiusSectors > 1 << 14) throw new ArgumentOutOfRangeException(nameof(radiusSectors));
@@ -43,6 +48,11 @@ namespace Unruled.Core.Galaxy
             if (hubSharePermille < 0 || homeSharePermille < 0 || hubSharePermille + homeSharePermille > 1000)
                 throw new ArgumentOutOfRangeException(nameof(hubSharePermille));
 
+            if (spawnRingSectors <= coreRadiusSectors || spawnRingSectors >= radiusSectors) throw new ArgumentOutOfRangeException(nameof(spawnRingSectors));
+            if (playersPerHub < 1) throw new ArgumentOutOfRangeException(nameof(playersPerHub));
+            if (searchRadiusSectors < 1) throw new ArgumentOutOfRangeException(nameof(searchRadiusSectors));
+            if (hubSpacingSectors < 1) throw new ArgumentOutOfRangeException(nameof(hubSpacingSectors));
+
             SectorSize = sectorSize;
             RadiusSectors = radiusSectors;
             CoreRadiusSectors = coreRadiusSectors;
@@ -56,6 +66,10 @@ namespace Unruled.Core.Galaxy
             MaxNeighbourDistance = maxNeighbourDistance;
             HubSharePermille = hubSharePermille;
             HomeSharePermille = homeSharePermille;
+            SpawnRingSectors = spawnRingSectors;
+            PlayersPerHub = playersPerHub;
+            SearchRadiusSectors = searchRadiusSectors;
+            HubSpacingSectors = hubSpacingSectors;
         }
 
         public int RadiusUnits => RadiusSectors * SectorSize;

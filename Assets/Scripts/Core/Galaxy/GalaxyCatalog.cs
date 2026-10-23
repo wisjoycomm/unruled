@@ -57,6 +57,8 @@ namespace Unruled.Core.Galaxy
 
         public GalaxyBalance Balance => _balance;
 
+        public ulong Seed => _seed;
+
         /// <summary>Whether a sector lies inside the galactic disc.</summary>
         public bool InDisc(int sectorX, int sectorY)
         {
