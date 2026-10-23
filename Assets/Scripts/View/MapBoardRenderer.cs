@@ -324,7 +324,7 @@ namespace Unruled.View
                 var here = aIn ? lane.SiteA : lane.SiteB;
                 var there = lane.OtherEnd(here);
                 var p = Pos(here);
-                var col = lane.Tier == StarlaneTier.StaHighway ? UnruledPalette.Sta : UnruledPalette.Safe;
+                var col = lane.Tier == StarlaneTier.StaHighway ? UnruledPalette.Sta : UnruledPalette.Unclaimed;
                 _mesh.DashedRing(p, 24f, 2f, 5f, 3f, col);
                 string star = _sim.Sites.Has(there) ? UiFormat.StarName(_sim.Sites.Get(there).ClusterId) : "";
                 int stack = _portalStack.TryGetValue(here.Index, out int k) ? k : 0;
@@ -383,7 +383,7 @@ namespace Unruled.View
                 }
                 else
                 {
-                    _mesh.DashedLine(a, b, 1.8f, 4f, 6f, UnruledPalette.Safe);
+                    _mesh.DashedLine(a, b, 1.8f, 4f, 6f, UnruledPalette.Unclaimed);
                 }
             }
 
@@ -392,7 +392,7 @@ namespace Unruled.View
                 var p = _clusterPos[c];
                 int owner = ClusterCoreOwner(c);
                 bool contested = c == _contestedId;
-                Color colour = contested ? UnruledPalette.Danger : owner != 0 ? SideColour(owner) : UnruledPalette.Safe;
+                Color colour = contested ? UnruledPalette.Danger : owner != 0 ? SideColour(owner) : UnruledPalette.Unclaimed;
                 if (c == _clusterId)
                     _mesh.SquareOutline(p, 64f, 2f, UnruledPalette.Ink);
                 _mesh.Disc(p, 22f, colour);
@@ -506,7 +506,7 @@ namespace Unruled.View
             _sectorBadgeLabel.style.color = contested
                 ? UnruledPalette.Danger
                 : owner == 0
-                    ? UnruledPalette.Safe
+                    ? UnruledPalette.Unclaimed
                     : SideColour(owner);
             UiFormat.Set(_sectorBadgeLabel, UiFormat.StarName(clusterId) + tag);
         }

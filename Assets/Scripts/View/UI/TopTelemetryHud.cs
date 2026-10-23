@@ -3,6 +3,7 @@ using Unruled.Core.Military;
 using Unruled.Core.Simulation;
 using UnityEngine;
 using UnityEngine.UIElements;
+using EntityId = Unruled.Core.Ecs.EntityId;
 
 namespace Unruled.View.UI
 {
