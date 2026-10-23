@@ -30,8 +30,6 @@ namespace Unruled.View
         private const float SitePickPx = 18f;
         private const float FleetPickPx = 20f;
         private const float FleetOffsetPx = 30f;
-        private const float GalaxyRadius = 850f;
-        private const float OuterGalaxyRadius = 1550f;
         private const float ClusterPickPx = 40f;
 
         private static readonly string[] StormLevelNames = { "", "MINOR", "MODERATE", "STRONG", "SEVERE", "EXTREME" };
@@ -50,6 +48,8 @@ namespace Unruled.View
         private int _glyphsUsed;
         private readonly List<float> _orbits = new List<float>();
         private readonly List<Vector2> _clusterPos = new List<Vector2>();
+        private readonly List<byte> _clusterKinds = new List<byte>();
+        private readonly GalaxyLayout _layout = new GalaxyLayout();
         private readonly List<int> _clusterFleets = new List<int>();
         private readonly Dictionary<int, int> _portalStack = new Dictionary<int, int>();
         private int _labelsUsed;
@@ -116,6 +116,7 @@ namespace Unruled.View
             _contestedId = _sim.JumpGates.Count > 0 && _sim.Sites.Has(_sim.JumpGates.At(0).FarSite)
                 ? _sim.Sites.Get(_sim.JumpGates.At(0).FarSite).ClusterId
                 : -1;
+            BuildGalaxyLayout();
             screen.SystemTab.clicked -= OnSystemTab;
             screen.SystemTab.clicked += OnSystemTab;
             screen.GalaxyTab.clicked -= ShowGalaxy;
@@ -132,6 +133,7 @@ namespace Unruled.View
         {
             _galaxy = false;
             _previewCluster = -1;
+            _backdropLayer.style.display = DisplayStyle.Flex;
             _screen.Preview.Hide();
             _clusterId = clusterId;
             _screen.ShowBoardTab(false, clusterId);
@@ -161,48 +163,33 @@ namespace Unruled.View
             _contestedId = _sim.JumpGates.Count > 0 && _sim.Sites.Has(_sim.JumpGates.At(0).FarSite)
                 ? _sim.Sites.Get(_sim.JumpGates.At(0).FarSite).ClusterId
                 : -1;
-            int clusters = 0;
-            for (int i = 0; i < _sim.Sites.Count; i++)
-                clusters = Mathf.Max(clusters, _sim.Sites.At(i).ClusterId + 1);
-            _clusterPos.Clear();
-            int homeCount = 0;
-            int frontierCount = 0;
-            for (int c = 0; c < clusters; c++)
-            {
-                if (c == _contestedId)
-                    continue;
-                if (ClusterCoreOwner(c) != 0)
-                    homeCount++;
-                else
-                    frontierCount++;
-            }
-            int homeSlot = 0;
-            int frontierSlot = 0;
-            for (int c = 0; c < clusters; c++)
-            {
-                if (c == _contestedId)
-                {
-                    _clusterPos.Add(Vector2.zero);
-                    continue;
-                }
-                if (ClusterCoreOwner(c) != 0)
-                {
-                    float angle = Mathf.PI * 0.5f - 2f * Mathf.PI * homeSlot++ / Mathf.Max(1, homeCount);
-                    _clusterPos.Add(new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * GalaxyRadius);
-                }
-                else
-                {
-                    float angle = Mathf.PI * 0.5f - 2f * Mathf.PI * frontierSlot++ / Mathf.Max(1, frontierCount);
-                    _clusterPos.Add(new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * OuterGalaxyRadius);
-                }
-            }
-            _extent = (frontierCount > 0 ? OuterGalaxyRadius : GalaxyRadius) * 1.28f;
+            BuildGalaxyLayout();
+            _extent = GalaxyLayout.Radius * 1.08f;
+            _backdropLayer.style.display = DisplayStyle.None; // the chart draws its own star field
             _drawnTick = -1;
             _screen.ShowBoardTab(true, _clusterId);
             UpdateSectorBadge(true, _clusterId);
         }
 
         private void OnSystemTab() => ShowCluster(_clusterId);
+
+        // Lays the systems out on a seeded spiral galaxy; the system view also uses it for the bearing of exits.
+        private void BuildGalaxyLayout()
+        {
+            int clusters = 0;
+            for (int i = 0; i < _sim.Sites.Count; i++)
+                clusters = Mathf.Max(clusters, _sim.Sites.At(i).ClusterId + 1);
+            _clusterKinds.Clear();
+            for (int c = 0; c < clusters; c++)
+                _clusterKinds.Add(c == _contestedId ? GalaxyLayout.Contested
+                    : ClusterCoreOwner(c) != 0 ? GalaxyLayout.Home
+                    : GalaxyLayout.Frontier);
+            _layout.Build(_sim.WorldSeed, _clusterKinds, UnruledPalette.InkSoft, UnruledPalette.Sta, UnruledPalette.Hostile,
+                UnruledPalette.You, UnruledPalette.Wto);
+            _clusterPos.Clear();
+            _clusterPos.AddRange(_layout.Systems);
+        }
+
 
         private void LateUpdate()
         {
@@ -328,6 +315,33 @@ namespace Unruled.View
                         _mesh.Zigzag(a, b, 2f, 6f, 30f, UnruledPalette.Danger);
                         break;
                 }
+            }
+        }
+
+        // From a gate or warp point, a route runs out past the edge of the system towards the far system, with
+        // arrowheads; its direction is the far system's bearing on the galaxy chart.
+        private void DrawExitVector(Vector2 from, EntityId there, Color colour)
+        {
+            if (!_sim.Sites.Has(there))
+                return;
+            int far = _sim.Sites.Get(there).ClusterId;
+            Vector2 dir;
+            if (_clusterId < _clusterPos.Count && far < _clusterPos.Count && (_clusterPos[far] - _clusterPos[_clusterId]).sqrMagnitude > 1f)
+                dir = (_clusterPos[far] - _clusterPos[_clusterId]).normalized;
+            else
+                dir = from.sqrMagnitude > 1f ? from.normalized : Vector2.up;
+            float u = _mesh.UnitsPerPixel;
+            var start = from + dir * (26f * u);
+            var end = from + dir * (_extent * 0.55f);
+            var faint = colour;
+            faint.a = 0.5f;
+            _mesh.DashedLine(start, end, 1.5f, 10f, 6f, faint);
+            var side = new Vector2(-dir.y, dir.x);
+            for (int k = 0; k < 3; k++)
+            {
+                var tip = Vector2.Lerp(start, end, 0.35f + k * 0.25f);
+                _mesh.Line(tip - dir * (7f * u) + side * (6f * u), tip, 1.5f, colour);
+                _mesh.Line(tip - dir * (7f * u) - side * (6f * u), tip, 1.5f, colour);
             }
         }
 
@@ -506,6 +520,7 @@ namespace Unruled.View
                     _mesh.Ring(p, 20f, 2.5f, UnruledPalette.Sta);
                 else
                     _mesh.DashedRing(p, 20f, 2f, 4f, 4f, UnruledPalette.Unclaimed);
+                DrawExitVector(p, there, gate.IsOpen ? UnruledPalette.Sta : UnruledPalette.Unclaimed);
                 string star = _sim.Sites.Has(there) ? UiFormat.StarName(_sim.Sites.Get(there).ClusterId) : "";
                 int stack = _portalStack.TryGetValue(here.Index, out int n) ? n : 0;
                 _portalStack[here.Index] = stack + 1;
@@ -529,6 +544,7 @@ namespace Unruled.View
                 var p = Pos(here);
                 var col = lane.Tier == StarlaneTier.StaHighway ? UnruledPalette.Sta : UnruledPalette.Unclaimed;
                 _mesh.DashedRing(p, 24f, 2f, 5f, 3f, col);
+                DrawExitVector(p, there, col);
                 string star = _sim.Sites.Has(there) ? UiFormat.StarName(_sim.Sites.Get(there).ClusterId) : "";
                 int stack = _portalStack.TryGetValue(here.Index, out int k) ? k : 0;
                 _portalStack[here.Index] = stack + 1;
@@ -538,6 +554,7 @@ namespace Unruled.View
 
         private void DrawGalaxy()
         {
+            DrawGalaxyField();
             _clusterFleets.Clear();
             for (int c = 0; c < _clusterPos.Count; c++)
                 _clusterFleets.Add(0);
@@ -558,10 +575,7 @@ namespace Unruled.View
                     continue;
                 var a = _clusterPos[_sim.Sites.Get(gate.HomeSite).ClusterId];
                 var b = _clusterPos[_sim.Sites.Get(gate.FarSite).ClusterId];
-                if (gate.IsOpen)
-                    _mesh.Line(a, b, 3f, UnruledPalette.Sta);
-                else
-                    _mesh.DashedLine(a, b, 2f, 4f, 8f, UnruledPalette.Unclaimed);
+                DrawRoute(a, b, gate.IsOpen ? UnruledPalette.Sta : UnruledPalette.Unclaimed, gate.IsOpen ? 3f : 2f, !gate.IsOpen);
             }
 
             for (int i = 0; i < _sim.Starlanes.Count; i++)
@@ -582,12 +596,10 @@ namespace Unruled.View
                 {
                     var gold = UnruledPalette.Sta;
                     gold.a = 0.55f;
-                    _mesh.Line(a, b, 2f, gold);
+                    DrawRoute(a, b, gold, 2f, false);
                 }
                 else
-                {
-                    _mesh.DashedLine(a, b, 1.8f, 4f, 6f, UnruledPalette.Unclaimed);
-                }
+                    DrawRoute(a, b, UnruledPalette.Unclaimed, 1.8f, true);
             }
 
             for (int c = 0; c < _clusterPos.Count; c++)
@@ -619,6 +631,47 @@ namespace Unruled.View
                     PlaceLabel(p + new Vector2(0f, 40f * _mesh.UnitsPerPixel),
                         UiFormat.Number(_clusterFleets[c]) + (_clusterFleets[c] == 1 ? " FLEET" : " FLEETS"), UnruledPalette.You,
                         true, false);
+            }
+        }
+
+        // The galaxy behind the systems: faint nebula rings, the spiral star field and a bright core.
+        private void DrawGalaxyField()
+        {
+            for (int i = 0; i < _layout.Nebula.Count; i++)
+            {
+                var n = _layout.Nebula[i];
+                var c = _layout.NebulaColours[i];
+                for (int k = 1; k <= 3; k++)
+                {
+                    c.a = (byte)(26 - k * 5);
+                    _mesh.RingWorld(new Vector2(n.x, n.y), n.z * (0.45f + 0.28f * k), 1.5f, c);
+                }
+            }
+            var core = (Color32)UnruledPalette.Sta;
+            for (int k = 4; k >= 1; k--)
+            {
+                core.a = (byte)(14 + (4 - k) * 12);
+                _mesh.DiscWorld(Vector2.zero, GalaxyLayout.Radius * 0.05f * k, core);
+            }
+            for (int i = 0; i < _layout.Stars.Count; i++)
+                _mesh.Disc(_layout.Stars[i], _layout.StarSizes[i] * 0.5f, _layout.StarColours[i]);
+        }
+
+        // A route between two systems on the chart, bowed gently so crossing routes stay readable.
+        private void DrawRoute(Vector2 a, Vector2 b, Color colour, float widthPx, bool dashed)
+        {
+            const int Segments = 14;
+            var mid = (a + b) * 0.5f;
+            var d = b - a;
+            var bow = new Vector2(-d.y, d.x) * 0.12f;
+            var prev = a;
+            for (int i = 1; i <= Segments; i++)
+            {
+                float t = i / (float)Segments;
+                var q = Vector2.Lerp(Vector2.Lerp(a, mid + bow, t), Vector2.Lerp(mid + bow, b, t), t);
+                if (!dashed || (i & 1) == 1)
+                    _mesh.Line(prev, q, widthPx, colour);
+                prev = q;
             }
         }
 
