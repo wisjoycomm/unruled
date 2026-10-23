@@ -830,6 +830,25 @@
     border-top-color: var(--u-you);
 }
 
+/* Style A plate frame: corner brackets drawn over the panel, never in the layout. */
+.plate-frame {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    --u-plate-color: var(--u-rule-strong);
+}
+
+.plate-frame--modal {
+    --u-plate-color: var(--u-you);
+}
+
+.modal--danger .plate-frame--modal {
+    --u-plate-color: var(--u-danger);
+}
+
 .modal--danger {
     border-top-color: var(--u-danger);
 }
@@ -928,4 +947,8 @@
     opacity: 0.6;
     background-image: resource("UI/empty_telemetry");
     -unity-background-scale-mode: stretch-to-fill;
+}
+
+.modal--victory .plate-frame--modal {
+    --u-plate-color: var(--u-sta);
 }

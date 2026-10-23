@@ -187,6 +187,7 @@
             </ui:VisualElement>
             <ui:VisualElement name="side" class="side">
                 <ui:VisualElement name="fleet-card" class="fleet-card">
+                    <theme:PlateFrame class="plate-frame" />
                     <ui:VisualElement class="fleet-card__head">
                         <ui:Label name="fleet-name" class="fleet-card__name" text="FLEET B" />
                         <ui:Label name="fleet-state" class="section-meta" text="TIER 3 · IN TRANSIT" />
@@ -587,6 +588,7 @@
                 <ui:Label name="modal-body" class="u-text modal__body" text="" />
             </ui:ScrollView>
             <ui:VisualElement name="modal-actions" class="modal__actions" />
+            <theme:PlateFrame class="plate-frame plate-frame--modal" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
