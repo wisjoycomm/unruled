@@ -32,7 +32,8 @@ namespace Unruled.Core.Simulation
         /// turns, 6 stars per arm sector and 2 between arms; each star links to its 3 nearest within one sector;
         /// 1.5% of stars are hubs (a Citadel) and 12% can host a home outside the core. New players spawn in groups of
         /// 6 around a hub on a ring 900 sectors out; each group's homes and frontiers are taken within 6 sectors of
-        /// its hub, and successive hubs keep 12 sectors apart.
+        /// its hub, and successive hubs keep 12 sectors apart. Charting a neighbour frontier star costs a fleet 300 fuel
+        /// and opens a 400-long highway (the jump-gate lane length) to it.
         /// </summary>
         public static GalaxyBalance CreateGalaxyBalance() => new GalaxyBalance(
             sectorSize: 1000,
@@ -51,7 +52,9 @@ namespace Unruled.Core.Simulation
             spawnRingSectors: 900,
             playersPerHub: 6,
             searchRadiusSectors: 6,
-            hubSpacingSectors: 12);
+            hubSpacingSectors: 12,
+            surveyFuel: 300,
+            surveyLaneLength: 400);
 
         /// <summary>
         /// GDD §1: an alliance that brings down the System Citadel forms The Directorate; Tier-5 nuclear ships are the

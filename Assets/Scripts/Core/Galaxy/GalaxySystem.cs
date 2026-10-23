@@ -29,6 +29,12 @@ namespace Unruled.Core.Galaxy
         private readonly Dictionary<long, int> _clusterOfStar = new Dictionary<long, int>();
         private int[] _holdings = new int[16];
         private int[] _holders = new int[16];
+        // Per-cluster site lists (dense site indexes, ascending), rebuilt when the site count changes.
+        private int _indexedSiteCount = -1;
+        private int _maxCluster = -1;
+        private int[] _clusterFirstSite = Array.Empty<int>();
+        private int[] _siteNext = Array.Empty<int>();
+        private readonly List<StarId> _neighbours = new List<StarId>();
 
         public GalaxySystem(World world, ComponentStore<StarSystem> systems, ComponentStore<SystemName> names,
             ComponentStore<SiteInfo> sites, GalaxyCatalog catalog)
@@ -45,10 +51,95 @@ namespace Unruled.Core.Galaxy
         /// <summary>The cluster id the next materialised star will get.</summary>
         public int NextClusterId()
         {
-            int next = _byCluster.Count;
-            for (int i = 0; i < _sites.Count; i++)
-                next = Math.Max(next, _sites.At(i).ClusterId + 1);
-            return next;
+            EnsureSiteIndex();
+            return Math.Max(_byCluster.Count, _maxCluster + 1);
+        }
+
+        /// <summary>The catalog star a cluster's system was materialised from; false for none or a pre-catalog one.</summary>
+        public bool TryGetStar(int clusterId, out StarId star)
+        {
+            star = default;
+            var system = SystemOf(clusterId);
+            if (system.IsNull || !_systems.Has(system) || _systems.Get(system).StarId == 0)
+                return false;
+            star = StarId.FromPacked(_systems.Get(system).StarId);
+            return true;
+        }
+
+        /// <summary>
+        /// Whether a fleet in <paramref name="fromCluster"/> may chart <paramref name="target"/>: a frontier-class
+        /// catalog star, not yet materialised, that is a hyperlane neighbour of the cluster's star. Home and hub stars
+        /// are kept for spawning.
+        /// </summary>
+        public bool CanSurvey(int fromCluster, StarId target)
+        {
+            if (!TryGetStar(fromCluster, out var from) || IsMaterialised(target) ||
+                !_catalog.TryGetStar(target, out var record) || record.Class != StarClass.Frontier)
+                return false;
+            _catalog.Neighbours(from, _neighbours);
+            for (int i = 0; i < _neighbours.Count; i++)
+                if (_neighbours[i] == target)
+                    return true;
+            return false;
+        }
+
+        /// <summary>The first star (by packed id) a fleet in <paramref name="fromCluster"/> may chart, if any.</summary>
+        public bool TryPickSurvey(int fromCluster, out StarId target)
+        {
+            target = default;
+            if (!TryGetStar(fromCluster, out var from))
+                return false;
+            _catalog.Neighbours(from, _neighbours);
+            for (int i = 0; i < _neighbours.Count; i++)
+            {
+                var candidate = _neighbours[i];
+                if (IsMaterialised(candidate) || !_catalog.TryGetStar(candidate, out var record) ||
+                    record.Class != StarClass.Frontier)
+                    continue;
+                target = candidate;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Materialised hyperlane neighbours of a star, as cluster ids appended to <paramref name="clusters"/>
+        /// (cleared first), in packed-id order.
+        /// </summary>
+        public void MaterialisedNeighbours(StarId star, List<int> clusters)
+        {
+            if (clusters == null) throw new ArgumentNullException(nameof(clusters));
+            clusters.Clear();
+            _catalog.Neighbours(star, _neighbours);
+            for (int i = 0; i < _neighbours.Count; i++)
+                if (TryGetCluster(_neighbours[i], out int cluster))
+                    clusters.Add(cluster);
+        }
+
+        /// <summary>The cluster's site with this orbit index, or null.</summary>
+        public EntityId SiteAtOrbit(int clusterId, int orbit)
+        {
+            EnsureSiteIndex();
+            for (int i = FirstSite(clusterId); i >= 0; i = _siteNext[i])
+                if (_sites.At(i).OrbitIndex == orbit)
+                    return _sites.EntityAt(i);
+            return default;
+        }
+
+        /// <summary>The cluster's outermost site (highest orbit index), or null.</summary>
+        public EntityId OuterOrbit(int clusterId)
+        {
+            EnsureSiteIndex();
+            EntityId best = default;
+            int bestOrbit = -1;
+            for (int i = FirstSite(clusterId); i >= 0; i = _siteNext[i])
+            {
+                if (_sites.At(i).OrbitIndex <= bestOrbit)
+                    continue;
+                bestOrbit = _sites.At(i).OrbitIndex;
+                best = _sites.EntityAt(i);
+            }
+            return best;
         }
 
         public bool IsMaterialised(StarId star) => _clusterOfStar.ContainsKey(star.Packed);
@@ -123,6 +214,7 @@ namespace Unruled.Core.Galaxy
         {
             if (tick % OwnerRefreshTicks != 0)
                 return;
+            EnsureSiteIndex();
             for (int i = 0; i < _systems.Count; i++)
             {
                 ref var system = ref _systems.At(i);
@@ -134,10 +226,10 @@ namespace Unruled.Core.Galaxy
         private int LeadingHolder(int clusterId, int current)
         {
             int distinct = 0;
-            for (int i = 0; i < _sites.Count; i++)
+            for (int i = FirstSite(clusterId); i >= 0; i = _siteNext[i])
             {
                 ref var site = ref _sites.At(i);
-                if (site.ClusterId != clusterId || site.OwnerPlayerId <= 0)
+                if (site.OwnerPlayerId <= 0)
                     continue;
                 int slot = 0;
                 while (slot < distinct && _holders[slot] != site.OwnerPlayerId)
@@ -173,10 +265,37 @@ namespace Unruled.Core.Galaxy
 
         private bool HasSites(int clusterId)
         {
+            EnsureSiteIndex();
+            return FirstSite(clusterId) >= 0;
+        }
+
+        private int FirstSite(int clusterId) =>
+            clusterId >= 0 && clusterId <= _maxCluster ? _clusterFirstSite[clusterId] : -1;
+
+        // Sites are only ever added (never removed or moved between clusters), so the count says when to reindex.
+        private void EnsureSiteIndex()
+        {
+            if (_indexedSiteCount == _sites.Count)
+                return;
+            _indexedSiteCount = _sites.Count;
+            int maxCluster = -1;
             for (int i = 0; i < _sites.Count; i++)
-                if (_sites.At(i).ClusterId == clusterId)
-                    return true;
-            return false;
+                maxCluster = Math.Max(maxCluster, _sites.At(i).ClusterId);
+            _maxCluster = maxCluster;
+            if (_clusterFirstSite.Length < maxCluster + 1)
+                Array.Resize(ref _clusterFirstSite, Math.Max(maxCluster + 1, _clusterFirstSite.Length * 2));
+            if (_siteNext.Length < _sites.Count)
+                Array.Resize(ref _siteNext, Math.Max(_sites.Count, _siteNext.Length * 2));
+            for (int c = 0; c <= maxCluster; c++)
+                _clusterFirstSite[c] = -1;
+            for (int i = _sites.Count - 1; i >= 0; i--)
+            {
+                int c = _sites.At(i).ClusterId;
+                if (c < 0)
+                    continue;
+                _siteNext[i] = _clusterFirstSite[c];
+                _clusterFirstSite[c] = i;
+            }
         }
 
         private void Index(EntityId entity, int clusterId, long starId)

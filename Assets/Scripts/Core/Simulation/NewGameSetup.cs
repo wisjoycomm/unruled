@@ -144,37 +144,35 @@ namespace Unruled.Core.Simulation
             return best;
         }
 
-        // Generates a catalog star's system under `clusterId` and registers it with the galaxy.
-        private static void Materialise(SimulationWorld sim, in StarRecord star, int clusterId)
+        // Generates a catalog star's system under `clusterId` and registers it with the galaxy; returns its orbits.
+        private static EntityId[] Materialise(SimulationWorld sim, in StarRecord star, int clusterId)
         {
-            sim.GenerateSystem(star.SystemSeed, clusterId, rebuildGraph: false);
+            var orbits = sim.GenerateSystem(star.SystemSeed, clusterId, rebuildGraph: false);
             sim.Galaxy.Register(star, clusterId, sim.Clock.CurrentTick);
+            return orbits;
         }
 
         private static void SetUpContestedCluster(SimulationWorld sim, in StarRecord star, int firstPlayerId, int participants)
         {
             ulong systemSeed = star.SystemSeed;
-            int firstSite = sim.Sites.Count;
-            int firstDeposit = sim.Deposits.Count;
             int contested = ContestedClusterId(participants);
-            Materialise(sim, star, contested);
+            var sites = Materialise(sim, star, contested);
+            var deposits = new List<EntityId>();
             var siteRng = new SplitMix64(systemSeed);
-            for (int i = firstSite; i < sim.Sites.Count; i++)
+            for (int i = 0; i < sites.Length; i++)
             {
-                var site = sim.Sites.EntityAt(i);
-                if (!sim.Stockpiles.Has(site))
-                    sim.Stockpiles.Add(site, default);
-                AddDeposits(sim, ref siteRng, site, sim.Sites.At(i).BaseEsiMilli, home: false);
+                if (!sim.Stockpiles.Has(sites[i]))
+                    sim.Stockpiles.Add(sites[i], default);
+                AddDeposits(sim, ref siteRng, sites[i], sim.Sites.Get(sites[i]).BaseEsiMilli, home: false, deposits);
             }
-            var citadel = OuterOrbit(sim, contested, firstSite);
-            AddMissingRaws(sim, firstSite, firstDeposit, contested, default, citadel, home: false);
+            var citadel = sites[sites.Length - 1];
+            AddMissingRaws(sim, sites, deposits, default, citadel, home: false);
 
-            int orbits = sim.Sites.Count - firstSite;
-            int perSys = sim.Balance.Universe.SitesPerSystem;
+            int orbits = sites.Length;
             for (int p = 0; p < participants; p++)
             {
-                var home = OuterOrbit(sim, p, p * perSys);
-                var far = SiteAtOrbit(sim, contested, participants < orbits ? (int)((long)p * orbits / participants) : p % Math.Max(1, orbits - 1), firstSite);
+                var home = sim.Galaxy.OuterOrbit(p);
+                var far = sites[participants < orbits ? (int)((long)p * orbits / participants) : p % Math.Max(1, orbits - 1)];
                 sim.JumpGates.Add(sim.World.Create(), new JumpGate { OwnerPlayerId = firstPlayerId + p, HomeSite = home, FarSite = far });
             }
             for (int g = 0; g < sim.JumpGates.Count; g++)
@@ -190,24 +188,11 @@ namespace Unruled.Core.Simulation
                 return;
             int firstCluster = FirstUninhabitedClusterId(participants);
             int count = participants * perParticipant;
-            var clusterFirstSite = new int[count];
+            var clusterSites = new EntityId[count][];
             for (int u = 0; u < count; u++)
             {
-                ulong systemSeed = picks[participants + 1 + u].SystemSeed;
-                int firstSite = sim.Sites.Count;
-                int firstDeposit = sim.Deposits.Count;
-                clusterFirstSite[u] = firstSite;
-                int clusterId = firstCluster + u;
-                Materialise(sim, picks[participants + 1 + u], clusterId);
-                var siteRng = new SplitMix64(systemSeed);
-                for (int i = firstSite; i < sim.Sites.Count; i++)
-                {
-                    var site = sim.Sites.EntityAt(i);
-                    if (!sim.Stockpiles.Has(site))
-                        sim.Stockpiles.Add(site, default);
-                    AddDeposits(sim, ref siteRng, site, sim.Sites.At(i).BaseEsiMilli, home: false);
-                }
-                AddMissingRaws(sim, firstSite, firstDeposit, clusterId, default, default, home: false);
+                clusterSites[u] = Materialise(sim, picks[participants + 1 + u], firstCluster + u);
+                StockFrontier(sim, picks[participants + 1 + u].SystemSeed, clusterSites[u]);
             }
 
             int length = sim.Balance.JumpGates.LaneLength;
@@ -217,19 +202,34 @@ namespace Unruled.Core.Simulation
                 var far = sim.JumpGates.At(p).FarSite;
                 int baseOffset = p * perParticipant;
                 int baseCluster = firstCluster + baseOffset;
-                AddInterSystemLane(sim, far, SiteAtOrbit(sim, baseCluster, 0, clusterFirstSite[baseOffset]), StarlaneTier.StaHighway, length, firstInterLane);
+                AddInterSystemLane(sim, far, clusterSites[baseOffset][0], StarlaneTier.StaHighway, length, firstInterLane);
                 for (int k = 1; k < perParticipant; k++)
-                    AddInterSystemLane(sim,
-                        OuterOrbit(sim, baseCluster + k - 1, clusterFirstSite[baseOffset + k - 1]),
-                        SiteAtOrbit(sim, baseCluster + k, 0, clusterFirstSite[baseOffset + k]),
+                    AddInterSystemLane(sim, Outer(clusterSites[baseOffset + k - 1]), clusterSites[baseOffset + k][0],
                         StarlaneTier.StaHighway, length, firstInterLane);
             }
             if (count > 1)
                 for (int u = 0; u < count; u++)
-                    AddInterSystemLane(sim,
-                        OuterOrbit(sim, firstCluster + u, clusterFirstSite[u]),
-                        OuterOrbit(sim, firstCluster + (u + 1) % count, clusterFirstSite[(u + 1) % count]),
+                    AddInterSystemLane(sim, Outer(clusterSites[u]), Outer(clusterSites[(u + 1) % count]),
                         StarlaneTier.OuterRimBypass, length, firstInterLane);
+        }
+
+        private static EntityId Outer(EntityId[] orbits) => orbits[orbits.Length - 1];
+
+        /// <summary>
+        /// Gives a just-generated uninhabited system (its sites in orbit order) stockpiles and deposits: the raws its
+        /// ESI rolls, then every raw item the roll left out. Shared by new games and surveys.
+        /// </summary>
+        internal static void StockFrontier(SimulationWorld sim, ulong systemSeed, EntityId[] orbits)
+        {
+            var deposits = new List<EntityId>();
+            var siteRng = new SplitMix64(systemSeed);
+            for (int i = 0; i < orbits.Length; i++)
+            {
+                if (!sim.Stockpiles.Has(orbits[i]))
+                    sim.Stockpiles.Add(orbits[i], default);
+                AddDeposits(sim, ref siteRng, orbits[i], sim.Sites.Get(orbits[i]).BaseEsiMilli, home: false, deposits);
+            }
+            AddMissingRaws(sim, orbits, deposits, default, default, home: false);
         }
 
         private static void AddInterSystemLane(SimulationWorld sim, EntityId siteA, EntityId siteB, StarlaneTier tier, int length, int searchFrom)
@@ -248,61 +248,32 @@ namespace Unruled.Core.Simulation
             sim.LaneWeather.Add(lane, default);
         }
 
-        private static EntityId OuterOrbit(SimulationWorld sim, int clusterId, int startIndex)
-        {
-            EntityId best = default;
-            int bestOrbit = -1;
-            for (int i = Math.Max(0, startIndex); i < sim.Sites.Count; i++)
-            {
-                ref var site = ref sim.Sites.At(i);
-                if (site.ClusterId != clusterId)
-                {
-                    if (!best.IsNull)
-                        break;
-                    continue;
-                }
-                if (site.OrbitIndex > bestOrbit)
-                {
-                    bestOrbit = site.OrbitIndex;
-                    best = sim.Sites.EntityAt(i);
-                }
-            }
-            return best;
-        }
-
-        private static EntityId SiteAtOrbit(SimulationWorld sim, int clusterId, int orbit, int startIndex)
-        {
-            for (int i = Math.Max(0, startIndex); i < sim.Sites.Count; i++)
-                if (sim.Sites.At(i).ClusterId == clusterId && sim.Sites.At(i).OrbitIndex == orbit)
-                    return sim.Sites.EntityAt(i);
-            throw new InvalidOperationException($"Cluster {clusterId} has no orbit {orbit}.");
-        }
 
         private static NewGame SetUpParticipant(SimulationWorld sim, in StarRecord star, int playerId, int clusterId)
         {
             var rules = sim.Balance.NewGame;
             ulong systemSeed = star.SystemSeed;
-            int firstSite = sim.Sites.Count;
-            int firstDeposit = sim.Deposits.Count;
-            Materialise(sim, star, clusterId);
+            var sites = Materialise(sim, star, clusterId);
+            var deposits = new List<EntityId>();
 
             var siteRng = new SplitMix64(systemSeed);
             EntityId coreBase = default;
             int bestEsi = -1;
-            for (int i = firstSite; i < sim.Sites.Count; i++)
+            for (int i = 0; i < sites.Length; i++)
             {
-                var site = sim.Sites.EntityAt(i);
+                var site = sites[i];
                 if (!sim.Stockpiles.Has(site))
                     sim.Stockpiles.Add(site, default);
-                AddDeposits(sim, ref siteRng, site, sim.Sites.At(i).BaseEsiMilli, home: true);
-                if (sim.Sites.At(i).BaseEsiMilli > bestEsi)
+                int esi = sim.Sites.Get(site).BaseEsiMilli;
+                AddDeposits(sim, ref siteRng, site, esi, home: true, deposits);
+                if (esi > bestEsi)
                 {
-                    bestEsi = sim.Sites.At(i).BaseEsiMilli;
+                    bestEsi = esi;
                     coreBase = site;
                 }
             }
             if (bestEsi < 0) throw new InvalidOperationException($"System {clusterId} generated no sites.");
-            AddMissingRaws(sim, firstSite, firstDeposit, clusterId, coreBase, default, home: true);
+            AddMissingRaws(sim, sites, deposits, coreBase, default, home: true);
 
             sim.Sites.Get(coreBase).OwnerPlayerId = playerId;
             var hq = sim.CreatePlayer(playerId, coreBase);
@@ -310,9 +281,9 @@ namespace Unruled.Core.Simulation
             {
                 var spec = rules.CoreBaseDeposit(d);
                 bool found = false;
-                for (int i = firstDeposit; i < sim.Deposits.Count && !found; i++)
+                for (int i = 0; i < deposits.Count && !found; i++)
                 {
-                    ref var deposit = ref sim.Deposits.At(i);
+                    ref var deposit = ref sim.Deposits.Get(deposits[i]);
                     if (deposit.Site != coreBase || deposit.RawItem != spec.Item)
                         continue;
                     deposit.RigCount = spec.Quantity;
@@ -360,7 +331,7 @@ namespace Unruled.Core.Simulation
         // Citadel (GDD §0: uranium is mined before THE SYSTEM falls). Each raw item with an ESI window that the roll left
         // out gets a deposit on the site nearest that window (lowest orbit on a tie), never the core base unless it is
         // the only site, and never the Citadel.
-        private static void AddMissingRaws(SimulationWorld sim, int firstSite, int firstDeposit, int clusterId,
+        private static void AddMissingRaws(SimulationWorld sim, EntityId[] sites, List<EntityId> deposits,
             EntityId coreBase, EntityId citadel, bool home)
         {
             var rules = sim.Balance.NewGame;
@@ -368,26 +339,28 @@ namespace Unruled.Core.Simulation
             {
                 var raw = ItemIds.FromSlot(slot);
                 ref readonly var item = ref sim.Balance.Recipes.GetItem(raw);
-                if ((home && rules.IsExcludedAtHome(raw)) || !item.HasPreferredEsi || HasDeposit(sim, firstDeposit, clusterId, raw, citadel))
+                if ((home && rules.IsExcludedAtHome(raw)) || !item.HasPreferredEsi || HasDeposit(sim, deposits, raw, citadel))
                     continue;
                 EntityId best = default;
                 int bestDistance = int.MaxValue;
-                for (int i = firstSite; i < sim.Sites.Count; i++)
+                for (int i = 0; i < sites.Length; i++)
                 {
-                    var site = sim.Sites.EntityAt(i);
-                    if ((site == coreBase && sim.Sites.Count - firstSite > 1) || site == citadel)
+                    var site = sites[i];
+                    if ((site == coreBase && sites.Length > 1) || site == citadel)
                         continue;
-                    int esi = sim.Sites.At(i).BaseEsiMilli;
+                    int esi = sim.Sites.Get(site).BaseEsiMilli;
                     int distance = esi < item.PreferredEsiMinMilli ? item.PreferredEsiMinMilli - esi
                         : esi > item.PreferredEsiMaxMilli ? esi - item.PreferredEsiMaxMilli : 0;
                     if (distance < bestDistance ||
-                        (distance == bestDistance && sim.Sites.At(i).OrbitIndex < sim.Sites.Get(best).OrbitIndex))
+                        (distance == bestDistance && sim.Sites.Get(site).OrbitIndex < sim.Sites.Get(best).OrbitIndex))
                     {
                         best = site;
                         bestDistance = distance;
                     }
                 }
-                sim.Deposits.Add(sim.World.Create(), new MineralDeposit
+                var added = sim.World.Create();
+                deposits.Add(added);
+                sim.Deposits.Add(added, new MineralDeposit
                 {
                     Site = best,
                     RawItem = raw,
@@ -398,12 +371,13 @@ namespace Unruled.Core.Simulation
             }
         }
 
-        private static bool HasDeposit(SimulationWorld sim, int firstDeposit, int clusterId, ItemId raw, EntityId except)
+        // Whether one of the system's new deposits (all on its own sites) is of `raw`, ignoring those on `except`.
+        private static bool HasDeposit(SimulationWorld sim, List<EntityId> deposits, ItemId raw, EntityId except)
         {
-            for (int d = firstDeposit; d < sim.Deposits.Count; d++)
+            for (int d = 0; d < deposits.Count; d++)
             {
-                ref var deposit = ref sim.Deposits.At(d);
-                if (deposit.RawItem == raw && deposit.Site != except && sim.Sites.Get(deposit.Site).ClusterId == clusterId)
+                ref var deposit = ref sim.Deposits.Get(deposits[d]);
+                if (deposit.RawItem == raw && deposit.Site != except)
                     return true;
             }
             return false;
@@ -414,7 +388,8 @@ namespace Unruled.Core.Simulation
         /// the site's ESI, in a seeded order. A site no window holds gets one deposit of the nearest window's item.
         /// Home systems skip the raw items excluded at home.
         /// </summary>
-        private static void AddDeposits(SimulationWorld sim, ref SplitMix64 rng, EntityId site, int esiMilli, bool home)
+        private static void AddDeposits(SimulationWorld sim, ref SplitMix64 rng, EntityId site, int esiMilli, bool home,
+            List<EntityId> added)
         {
             var rules = sim.Balance.NewGame;
             Span<ItemId> candidates = stackalloc ItemId[ItemIds.RawCount];
@@ -453,7 +428,9 @@ namespace Unruled.Core.Simulation
                 var raw = candidates[j];
                 candidates[j] = candidates[i];
                 candidates[i] = raw;
-                sim.Deposits.Add(sim.World.Create(), new MineralDeposit
+                var deposit = sim.World.Create();
+                added.Add(deposit);
+                sim.Deposits.Add(deposit, new MineralDeposit
                 {
                     Site = site,
                     RawItem = raw,

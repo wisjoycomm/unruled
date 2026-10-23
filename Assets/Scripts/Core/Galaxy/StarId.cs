@@ -42,6 +42,30 @@ namespace Unruled.Core.Galaxy
             return new StarId(x, y, (int)(packed & IndexMask));
         }
 
+        /// <summary>Unpacks an id that came from outside (a command); false for 0 or bits no star id packs to.</summary>
+        public static bool TryFromPacked(long packed, out StarId id)
+        {
+            id = default;
+            if (packed <= 0 || (packed >> (2 * SectorBits + IndexBits)) != 0)
+                return false;
+            int x = (int)((packed >> (SectorBits + IndexBits)) & SectorMask) - SectorBias;
+            int y = (int)((packed >> IndexBits) & SectorMask) - SectorBias;
+            if (x == -SectorBias || y == -SectorBias)
+                return false;
+            id = new StarId(x, y, (int)(packed & IndexMask));
+            return true;
+        }
+
+        /// <summary>The low and high halves of a packed id, for two int command params.</summary>
+        public static void Split(long packed, out int low, out int high)
+        {
+            low = (int)packed;
+            high = (int)(packed >> 32);
+        }
+
+        /// <summary>Joins the halves <see cref="Split"/> made.</summary>
+        public static long Join(int low, int high) => ((long)high << 32) | (uint)low;
+
         public bool Equals(StarId other) => SectorX == other.SectorX && SectorY == other.SectorY && Index == other.Index;
 
         public override bool Equals(object obj) => obj is StarId other && Equals(other);

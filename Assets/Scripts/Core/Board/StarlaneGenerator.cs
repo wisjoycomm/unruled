@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unruled.Core.Ecs;
 using Unruled.Core.Simulation;
 
@@ -16,46 +17,54 @@ namespace Unruled.Core.Board
 
         public static void LinkSystem(
             World world, ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes,
-            StarlaneBalance balance, ulong systemSeed, int clusterId) =>
-            LinkSystem(world, sites, lanes, balance, systemSeed, clusterId, 0);
+            StarlaneBalance balance, ulong systemSeed, int clusterId)
+        {
+            if (sites == null) throw new ArgumentNullException(nameof(sites));
+            LinkSystem(world, sites, lanes, balance, systemSeed, CollectOrbits(sites, clusterId), null);
+        }
 
+        /// <summary>
+        /// Links a system whose sites the caller already holds in orbit order (no scan of the site store); each new
+        /// lane is appended to <paramref name="created"/> when given.
+        /// </summary>
         internal static void LinkSystem(
             World world, ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes,
-            StarlaneBalance balance, ulong systemSeed, int clusterId, int startIndex)
+            StarlaneBalance balance, ulong systemSeed, EntityId[] orbits, List<EntityId> created)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (sites == null) throw new ArgumentNullException(nameof(sites));
             if (lanes == null) throw new ArgumentNullException(nameof(lanes));
             if (balance == null) throw new ArgumentNullException(nameof(balance));
+            if (orbits == null) throw new ArgumentNullException(nameof(orbits));
 
-            var orbits = CollectOrbits(sites, clusterId, startIndex);
             var rng = new ChaCha8(systemSeed ^ StreamSalt);
 
             for (int i = 0; i + 1 < orbits.Length; i++)
-                AddLane(world, sites, lanes, orbits[i], orbits[i + 1], StarlaneTier.StaHighway);
+                AddLane(world, sites, lanes, orbits[i], orbits[i + 1], StarlaneTier.StaHighway, created);
 
             for (int i = 0; i + 2 < orbits.Length; i++)
             {
                 if (rng.NextInt(0, 99) < balance.BypassChancePercent)
-                    AddLane(world, sites, lanes, orbits[i], orbits[i + 2], StarlaneTier.OuterRimBypass);
+                    AddLane(world, sites, lanes, orbits[i], orbits[i + 2], StarlaneTier.OuterRimBypass, created);
             }
 
             for (int i = 0; i + balance.ShortcutSpan < orbits.Length; i++)
             {
                 if (rng.NextInt(0, 99) < balance.ShortcutChancePercent)
-                    AddLane(world, sites, lanes, orbits[i], orbits[i + balance.ShortcutSpan], StarlaneTier.HazardStormShortcut);
+                    AddLane(world, sites, lanes, orbits[i], orbits[i + balance.ShortcutSpan], StarlaneTier.HazardStormShortcut,
+                        created);
             }
         }
 
-        private static EntityId[] CollectOrbits(ComponentStore<SiteInfo> sites, int clusterId, int startIndex)
+        private static EntityId[] CollectOrbits(ComponentStore<SiteInfo> sites, int clusterId)
         {
             int count = 0;
-            for (int i = startIndex; i < sites.Count; i++)
+            for (int i = 0; i < sites.Count; i++)
                 if (sites.At(i).ClusterId == clusterId)
                     count++;
 
             var orbits = new EntityId[count];
-            for (int i = startIndex; i < sites.Count; i++)
+            for (int i = 0; i < sites.Count; i++)
             {
                 ref var site = ref sites.At(i);
                 if (site.ClusterId != clusterId)
@@ -69,7 +78,7 @@ namespace Unruled.Core.Board
 
         private static void AddLane(
             World world, ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes,
-            EntityId a, EntityId b, StarlaneTier tier)
+            EntityId a, EntityId b, StarlaneTier tier, List<EntityId> created)
         {
             ref var siteA = ref sites.Get(a);
             ref var siteB = ref sites.Get(b);
@@ -81,6 +90,7 @@ namespace Unruled.Core.Board
             {
                 SiteA = a, SiteB = b, Tier = tier, Length = (int)FixedMath.Sqrt(dx * dx + dy * dy)
             });
+            created?.Add(lane);
         }
     }
 }

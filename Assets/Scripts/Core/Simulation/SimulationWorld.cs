@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unruled.Core.AI;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
@@ -286,14 +287,16 @@ namespace Unruled.Core.Simulation
             Victory = new VictoryEvaluator(Citadels, CitadelAssaults, VictoryRecords, DirectorateSeats, Players, balance.Citadel);
             Clock.Register(Victory);
 
+            Galaxy = new GalaxySystem(World, StarSystems, SystemNames, Sites, new GalaxyCatalog(balance.Galaxy, worldSeed));
             Ai = new UtilityAiEngine(
                 AiControllers, Players, Fleets, FleetMotions, FleetCombat, FleetReadiness, Stockpiles, Sites, Weather, Deposits,
                 Starlanes, RadarScans, TechProgress, JumpGates, ConvoyRoutes, ShipOrders, Refineries, Standings, Citadels, WtoOrders,
-                ItemMarkets, Loans, Sanctions, FleetRoutes, Ledger, WtoFeePool, Rates, Issuer, Routes, Tolls, TechGates, balance);
+                ItemMarkets, Loans, Sanctions, FleetRoutes, Ledger, WtoFeePool, Rates, Issuer, Routes, Tolls, TechGates, Galaxy,
+                balance);
             Commands.Register(CommandType.SetStandingOrders, Ai);
 
-            Galaxy = new GalaxySystem(World, StarSystems, SystemNames, Sites, new GalaxyCatalog(balance.Galaxy, worldSeed));
             Clock.Register(Galaxy);
+            Commands.Register(CommandType.Survey, new SurveySystem(this, balance.Galaxy));
         }
 
         /// <summary>
@@ -330,39 +333,47 @@ namespace Unruled.Core.Simulation
         /// id (sites, lanes, weather, stockpiles) and registers it. Returns the cluster id; a star already
         /// materialised returns its existing cluster.
         /// </summary>
-        public int MaterialiseStar(StarId star, bool rebuildGraph = true)
+        public int MaterialiseStar(StarId star, bool rebuildGraph = true) => MaterialiseStar(star, rebuildGraph, out _);
+
+        /// <summary>As above, also giving the new system's sites in orbit order (empty if it already existed).</summary>
+        internal int MaterialiseStar(StarId star, bool rebuildGraph, out EntityId[] orbits)
         {
+            orbits = Array.Empty<EntityId>();
             if (Galaxy.TryGetCluster(star, out int existing))
                 return existing;
             if (!Galaxy.Catalog.TryGetStar(star, out var record))
                 throw new ArgumentException("No such star in the catalog.", nameof(star));
             int clusterId = Galaxy.NextClusterId();
-            int firstSite = Sites.Count;
-            GenerateSystem(record.SystemSeed, clusterId, rebuildGraph: false);
-            for (int i = firstSite; i < Sites.Count; i++)
-                if (!Stockpiles.Has(Sites.EntityAt(i)))
-                    Stockpiles.Add(Sites.EntityAt(i), default);
+            orbits = GenerateSystem(record.SystemSeed, clusterId, rebuildGraph: false);
+            for (int i = 0; i < orbits.Length; i++)
+                if (!Stockpiles.Has(orbits[i]))
+                    Stockpiles.Add(orbits[i], default);
             Galaxy.Register(record, clusterId, Clock.CurrentTick);
             if (rebuildGraph)
                 Graph.Rebuild(Starlanes);
             return clusterId;
         }
 
-        internal void GenerateSystem(ulong systemSeed, int clusterId, bool rebuildGraph)
+        // Entity indexes are recycled once anything is destroyed, so a system generated mid-game can land anywhere in
+        // the dense stores: its sites and lanes are tracked by entity, never by store position.
+        internal EntityId[] GenerateSystem(ulong systemSeed, int clusterId, bool rebuildGraph)
         {
-            int firstSite = Sites.Count;
-            int firstLane = Starlanes.Count;
-            SystemSeedGenerator.GenerateSystem(World, Sites, Balance.Universe, systemSeed, clusterId);
-            StarlaneGenerator.LinkSystem(World, Sites, Starlanes, Balance.Starlanes, systemSeed, clusterId, firstSite);
+            var orbits = new EntityId[Balance.Universe.SitesPerSystem];
+            SystemSeedGenerator.GenerateSystem(World, Sites, Balance.Universe, systemSeed, clusterId, orbits);
+            _newLanes.Clear();
+            StarlaneGenerator.LinkSystem(World, Sites, Starlanes, Balance.Starlanes, systemSeed, orbits, _newLanes);
 
-            for (int i = firstSite; i < Sites.Count; i++)
-                if (!Weather.Has(Sites.EntityAt(i)))
-                    Weather.Add(Sites.EntityAt(i), default);
-            for (int i = firstLane; i < Starlanes.Count; i++)
-                if (!LaneWeather.Has(Starlanes.EntityAt(i)))
-                    LaneWeather.Add(Starlanes.EntityAt(i), default);
+            for (int i = 0; i < orbits.Length; i++)
+                if (!Weather.Has(orbits[i]))
+                    Weather.Add(orbits[i], default);
+            for (int i = 0; i < _newLanes.Count; i++)
+                if (!LaneWeather.Has(_newLanes[i]))
+                    LaneWeather.Add(_newLanes[i], default);
             if (rebuildGraph)
                 Graph.Rebuild(Starlanes);
+            return orbits;
         }
+
+        private readonly List<EntityId> _newLanes = new List<EntityId>();
     }
 }

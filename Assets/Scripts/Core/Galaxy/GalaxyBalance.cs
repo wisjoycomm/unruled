@@ -28,13 +28,17 @@ namespace Unruled.Core.Galaxy
         public readonly int PlayersPerHub; // players whose homes gate into one hub
         public readonly int SearchRadiusSectors; // how far around a hub its homes and frontiers are looked for
         public readonly int HubSpacingSectors; // a new hub sits at least this far from the last one
+        public readonly int SurveyFuel; // fuel a fleet burns to chart a new neighbour star
+        public readonly int SurveyLaneLength; // length of the highway a survey opens to the new system
 
         public GalaxyBalance(
             int sectorSize, int radiusSectors, int coreRadiusSectors, int armCount, int armWindingPerSector,
             int armWidthAngle, int maxStarsPerSector, int armStarsPerSector, int fieldStarsPerSector, int neighbourCount,
             int maxNeighbourDistance, int hubSharePermille, int homeSharePermille, int spawnRingSectors, int playersPerHub,
-            int searchRadiusSectors, int hubSpacingSectors)
+            int searchRadiusSectors, int hubSpacingSectors, int surveyFuel, int surveyLaneLength)
         {
+            if (surveyFuel < 0) throw new ArgumentOutOfRangeException(nameof(surveyFuel));
+            if (surveyLaneLength < 1) throw new ArgumentOutOfRangeException(nameof(surveyLaneLength));
             if (sectorSize < 1) throw new ArgumentOutOfRangeException(nameof(sectorSize));
             if (radiusSectors < 1 || radiusSectors > 1 << 14) throw new ArgumentOutOfRangeException(nameof(radiusSectors));
             if (coreRadiusSectors < 0 || coreRadiusSectors > radiusSectors) throw new ArgumentOutOfRangeException(nameof(coreRadiusSectors));
@@ -70,6 +74,8 @@ namespace Unruled.Core.Galaxy
             PlayersPerHub = playersPerHub;
             SearchRadiusSectors = searchRadiusSectors;
             HubSpacingSectors = hubSpacingSectors;
+            SurveyFuel = surveyFuel;
+            SurveyLaneLength = surveyLaneLength;
         }
 
         public int RadiusUnits => RadiusSectors * SectorSize;

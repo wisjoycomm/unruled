@@ -2,6 +2,7 @@ using System;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
+using Unruled.Core.Galaxy;
 using Unruled.Core.Military;
 using Unruled.Core.Research;
 using Unruled.Core.Simulation;
@@ -53,7 +54,8 @@ namespace Unruled.Core.AI
         MergeFleets = 34,
         RaidConvoys = 35,
         FlankSplit = 36,
-        FlankMove = 37
+        FlankMove = 37,
+        Survey = 38
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -110,6 +112,9 @@ namespace Unruled.Core.AI
     /// <item>A fleet ready at its own outpost (Siege_Conquest): rigs on each bare deposit with ore left, unloading the rig
     /// cost it carried from the core base first (it loads that for every deposit of a site with the claim cost); then
     /// home.</item>
+    /// <item>A conquering preset's fleet ready at the core base, loaded with the claim cost, with nothing to raid, besiege
+    /// or develop: chart the next frontier star that neighbours the home system (Siege_Conquest at half), so the empire
+    /// grows into the galaxy instead of idling.</item>
     /// <item>A convoy-only fleet without a route (Resupply_Logistics): at the core base, a convoy route to an outpost with
     /// rigs that no convoy serves; elsewhere, home. The player builds a convoy fleet when such an outpost has no idle
     /// convoy or convoy order, and a core-base refinery for a refined item it lacks once both inputs are stocked.</item>
@@ -155,6 +160,7 @@ namespace Unruled.Core.AI
         private readonly CommandIssuer _issuer;
         private readonly RoutePlanner _routes;
         private readonly ITechGates _tech;
+        private readonly GalaxySystem _galaxy;
         private readonly AiBalance _balance;
         private readonly CombatBalance _combatBalance;
         private readonly RadarBalance _radarBalance;
@@ -193,7 +199,7 @@ namespace Unruled.Core.AI
             ComponentStore<SystemSanction> sanctions, ComponentStore<FleetRoute> fleetRoutes, Ledger ledger,
             EntityId systemStock, IMarketRates rates,
             CommandIssuer issuer,
-            RoutePlanner routes, ITollGate tolls, ITechGates tech, GameBalanceConfig config)
+            RoutePlanner routes, ITollGate tolls, ITechGates tech, GalaxySystem galaxy, GameBalanceConfig config)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             _controllers = controllers ?? throw new ArgumentNullException(nameof(controllers));
@@ -228,6 +234,7 @@ namespace Unruled.Core.AI
             _routes = routes ?? throw new ArgumentNullException(nameof(routes));
             _tolls = tolls ?? throw new ArgumentNullException(nameof(tolls));
             _tech = tech ?? throw new ArgumentNullException(nameof(tech));
+            _galaxy = galaxy ?? throw new ArgumentNullException(nameof(galaxy));
             _balance = config.Ai;
             _combatBalance = config.Combat;
             _radarBalance = config.Radar;
@@ -913,6 +920,7 @@ namespace Unruled.Core.AI
                 rigDeposit = default, flankTo = default;
             var loadItem = ItemId.None;
             int loadQuantity = 0;
+            StarId surveyStar = default;
             if (docked && motion.Site == player.CoreBase)
             {
                 bool telemetry = NeedsTelemetry(hq);
@@ -958,6 +966,10 @@ namespace Unruled.Core.AI
                 {
                     ConsiderRaidAndSiege(in player, preset, in unit, ref hold, ref best, ref bestScore, out raidTarget,
                         out siegeTarget, out developTarget);
+                    if (siegeTarget.IsNull && developTarget.IsNull && !IsHomeSettler(preset) &&
+                        hold.Get(ItemId.ItemFuel) >= _galaxy.Catalog.Balance.SurveyFuel && CarriesClaimCost(ref hold, 0) &&
+                        _galaxy.TryPickSurvey(_sites.Get(motion.Site).ClusterId, out surveyStar))
+                        Consider(AiAction.Survey, Score(preset.SiegeConquestWeight, Threshold), ref best, ref bestScore);
                 }
             }
             else if (ready && motion.Site != player.CoreBase && FlankWeight(preset) > 0 &&
@@ -1060,6 +1072,10 @@ namespace Unruled.Core.AI
                 case AiAction.RaidConvoys:
                     command.CommandType = CommandType.RaidConvoys;
                     command.ParamA = raid ? 1 : 0;
+                    break;
+                case AiAction.Survey:
+                    command.CommandType = CommandType.Survey;
+                    StarId.Split(surveyStar.Packed, out command.ParamA, out command.ParamB);
                     break;
                 default:
                     command.CommandType = CommandType.Move;

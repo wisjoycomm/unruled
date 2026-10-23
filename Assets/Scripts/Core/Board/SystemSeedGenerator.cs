@@ -15,11 +15,18 @@ namespace Unruled.Core.Board
 
         /// <summary>Creates one site entity per orbit, in orbit order. The RNG draw order is part of the save contract.</summary>
         public static void GenerateSystem(
-            World world, ComponentStore<SiteInfo> sites, UniverseGenBalance balance, ulong systemSeed, int clusterId)
+            World world, ComponentStore<SiteInfo> sites, UniverseGenBalance balance, ulong systemSeed, int clusterId) =>
+            GenerateSystem(world, sites, balance, systemSeed, clusterId, null);
+
+        /// <summary>As above, also writing each orbit's site into <paramref name="orbits"/> (length SitesPerSystem).</summary>
+        public static void GenerateSystem(
+            World world, ComponentStore<SiteInfo> sites, UniverseGenBalance balance, ulong systemSeed, int clusterId,
+            EntityId[] orbits)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (sites == null) throw new ArgumentNullException(nameof(sites));
             if (balance == null) throw new ArgumentNullException(nameof(balance));
+            if (orbits != null && orbits.Length < balance.SitesPerSystem) throw new ArgumentException("Too short.", nameof(orbits));
 
             var rng = new ChaCha8(systemSeed);
             int angle = rng.NextInt(0, FixedMath.AngleMask);
@@ -51,6 +58,8 @@ namespace Unruled.Core.Board
                     LifecycleState = PlanetLifecycleState.PristineWorld,
                     OwnerPlayerId = 0
                 });
+                if (orbits != null)
+                    orbits[i] = entity;
             }
         }
     }
