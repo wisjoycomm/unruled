@@ -1,6 +1,7 @@
 using Unruled.Core.AI;
 using Unruled.Core.Board;
 using Unruled.Core.Economy;
+using Unruled.Core.Galaxy;
 using Unruled.Core.Military;
 using Unruled.Core.Research;
 using Unruled.Core.SystemFactions;
@@ -23,7 +24,28 @@ namespace Unruled.Core.Simulation
                 CreateWtoContractBalance(), CreateSystemAuthorityBalance(),
                 CreateSystemFactionBalance(), CreateAiBalance(), CreateNewGameBalance(),
                 CreateResearchBalance(), CreateShipyardBalance(), CreateSiteControlBalance(),
-                CreateJumpGateBalance(), CreateConvoyBalance(), CreateCitadelBalance());
+                CreateJumpGateBalance(), CreateConvoyBalance(), CreateCitadelBalance(), CreateGalaxyBalance());
+
+        /// <summary>
+        /// PROVISIONAL galaxy shape (No Man's Sky scale, not in the data sheets): a disc 2,000 sectors in radius
+        /// (1,000 units each) holding roughly 25 million stars; a dense core of 60 sectors, two arms winding ~1.5
+        /// turns, 6 stars per arm sector and 2 between arms; each star links to its 3 nearest within one sector;
+        /// 1.5% of stars are hubs (a Citadel) and 12% can host a home outside the core.
+        /// </summary>
+        public static GalaxyBalance CreateGalaxyBalance() => new GalaxyBalance(
+            sectorSize: 1000,
+            radiusSectors: 2000,
+            coreRadiusSectors: 60,
+            armCount: 2,
+            armWindingPerSector: 49,
+            armWidthAngle: 2500,
+            maxStarsPerSector: 12,
+            armStarsPerSector: 6,
+            fieldStarsPerSector: 2,
+            neighbourCount: 3,
+            maxNeighbourDistance: 1000,
+            hubSharePermille: 15,
+            homeSharePermille: 120);
 
         /// <summary>
         /// GDD §1: an alliance that brings down the System Citadel forms The Directorate; Tier-5 nuclear ships are the

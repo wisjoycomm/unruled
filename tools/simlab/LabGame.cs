@@ -71,7 +71,7 @@ namespace Unruled.SimLab
             return new GameBalanceConfig(d.Recipes, d.Universe, d.Starlanes, d.Weather, d.Refinery, d.Mining, d.Lifecycle,
                 d.Latency, d.Radar, d.Fleets, d.Combat, d.Relocation, ledger, d.Sta, d.Leaderboard, d.Wto, d.Contracts,
                 d.Authority, d.SystemFactions, d.Ai, ng, d.Research, d.Shipyard, d.SiteControl, d.JumpGates,
-                d.Convoys, d.Citadel);
+                d.Convoys, d.Citadel, d.Galaxy);
         }
 
         public long Tick => Sim.Clock.CurrentTick;
