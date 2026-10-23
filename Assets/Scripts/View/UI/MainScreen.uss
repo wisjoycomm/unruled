@@ -929,7 +929,6 @@
 
 .unity-button.order-nuke {
     background-image: resource("UI/cmd_nuke");
-    -unity-background-image-tint-color: rgb(11, 18, 32);
 }
 
 .ops__emblem--rig {

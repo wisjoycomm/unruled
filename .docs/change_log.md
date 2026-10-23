@@ -146,3 +146,4 @@
 - 2026-10-23 - Claude - SITE tab PLANET group shows a live Style A planet portrait (lifecycle state, or the capital plate).
 - 2026-10-23 - Claude (art by Antigravity) - Board: Style A stars (home / contested / frontier) in the system view and on the galaxy chart, highways as twin rails with STA toll beacons, bypass hazard markers, fleets as tinted ship tokens (warfleet, convoy, SYSTEM patrol, IAEA inspector) turned along their lane with a traffic trail.
 - 2026-10-23 - Claude - Board preview plate: planet card (portrait, crust cross-section, layer reserves, owner, ESI, rigs, refineries) and star-system card on the galaxy chart (star, planet thumbnails, owners, fleets, gate; second click opens the system).
+- 2026-10-23 - Claude (art by Antigravity) - Style A redraw of the 16 small icons: 9 actions (scan, ECM, mothball, activate, focus, relocate, terraform, market, pause), vent/raid/nuke commands, rig/refinery/relay badges, warning.
