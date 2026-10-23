@@ -44,6 +44,7 @@ namespace Unruled.View
         private readonly List<VisualElement> _glyphs = new List<VisualElement>();
         private readonly Texture2D[] _lifecycleGlyphs = new Texture2D[6];
         private Texture2D _coreGlyph;
+        private Texture2D _citadelGlyph;
         private int _glyphsUsed;
         private readonly List<float> _orbits = new List<float>();
         private readonly List<Vector2> _clusterPos = new List<Vector2>();
@@ -95,6 +96,7 @@ namespace Unruled.View
             if (_coreGlyph == null)
             {
                 _coreGlyph = Resources.Load<Texture2D>("UI/node_core_base");
+                _citadelGlyph = Resources.Load<Texture2D>("UI/node_citadel");
                 _lifecycleGlyphs[(int)PlanetLifecycleState.PristineWorld] = Resources.Load<Texture2D>("UI/node_pristine");
                 _lifecycleGlyphs[(int)PlanetLifecycleState.DeepCoreStripping] = Resources.Load<Texture2D>("UI/node_deep_core");
                 _lifecycleGlyphs[(int)PlanetLifecycleState.DepletedBarrenHusk] = Resources.Load<Texture2D>("UI/node_barren_husk");
@@ -629,7 +631,7 @@ namespace Unruled.View
                 var p = new Vector2(site.PosX, site.PosY);
                 int coreOwner = CoreOwner(entity);
                 if (coreOwner != 0)
-                    _mesh.SquareOutline(p, 30f, 2f, SideColour(coreOwner));
+                    _mesh.SquareOutline(p, 68f, 2f, SideColour(coreOwner));
                 if (_sim.Quarantines.Has(entity) && _sim.Quarantines.Get(entity).IsExportLocked(tick))
                     _mesh.DashedRing(p, 16f, 2f, 3f, 3f, UnruledPalette.Who);
 
@@ -655,14 +657,19 @@ namespace Unruled.View
                     fill = SideColour(site.OwnerPlayerId);
                     stroke = fill;
                 }
-                var glyph = coreOwner != 0 && _coreGlyph != null
-                    ? _coreGlyph
+                bool citadel = _sim.Citadels.Has(entity) && _sim.Citadels.Get(entity).FallenTick == 0;
+                var glyph = irradiated ? _lifecycleGlyphs[(int)PlanetLifecycleState.IrradiatedDeadWorld]
+                    : citadel ? _citadelGlyph
+                    : coreOwner != 0 ? _coreGlyph
                     : _lifecycleGlyphs[(int)site.LifecycleState];
                 if (glyph != null)
                 {
-                    // Lifecycle shape as a sprite, tinted by owner; a dark disc behind keeps lanes from showing through.
-                    _mesh.Disc(p, 15f, UnruledPalette.Board);
-                    PlaceGlyph(p, coreOwner != 0 ? 42f : 32f, glyph, irradiated ? UnruledPalette.Iaea : Husked(stroke, site.LifecycleState));
+                    // Full-colour planet plate; the owner reads from the ring around it, the lanes stop at the dark disc.
+                    _mesh.Disc(p, 16f, UnruledPalette.Board);
+                    float size = citadel || coreOwner != 0 ? 54f : 40f;
+                    if (!citadel)
+                        _mesh.Ring(p, size * 0.5f + 4f, 2f, stroke);
+                    PlaceGlyph(p, size, glyph, Husked(Color.white, site.LifecycleState));
                 }
                 else
                 {
@@ -677,7 +684,7 @@ namespace Unruled.View
                 if (irradiated && glyph == null)
                     _mesh.Line(p + new Vector2(-6f, -6f) * _mesh.UnitsPerPixel, p + new Vector2(6f, 6f) * _mesh.UnitsPerPixel, 2f,
                         UnruledPalette.Iaea);
-                PlaceLabel(p - new Vector2(0f, 26f * _mesh.UnitsPerPixel), UiFormat.SiteName(site), UnruledPalette.InkSoft, true, false);
+                PlaceLabel(p - new Vector2(0f, (coreOwner != 0 ? 40f : 32f) * _mesh.UnitsPerPixel), UiFormat.SiteName(site), UnruledPalette.InkSoft, true, false);
             }
         }
 
@@ -724,16 +731,16 @@ namespace Unruled.View
                 var p = Pos(site);
                 if (citadel.FallenTick != 0)
                 {
-                    _mesh.DashedRing(p, 26f, 2f, 3f, 5f, UnruledPalette.InkDim);
-                    PlaceLabel(p + new Vector2(0f, 40f * _mesh.UnitsPerPixel), "CITADEL FALLEN", UnruledPalette.InkDim, true, true);
+                    _mesh.DashedRing(p, 36f, 2f, 3f, 5f, UnruledPalette.InkDim);
+                    PlaceLabel(p + new Vector2(0f, 50f * _mesh.UnitsPerPixel), "CITADEL FALLEN", UnruledPalette.InkDim, true, true);
                     continue;
                 }
                 var track = UnruledPalette.Sta;
                 track.a = 0.25f;
-                _mesh.Ring(p, 26f, 4f, track);
+                _mesh.Ring(p, 36f, 4f, track);
                 bool hit = tick - citadel.LastHitTick < 60 && citadel.LastHitTick > 0;
-                _mesh.Arc(p, 26f, 4f, max > 0 ? citadel.Integrity / (float)max : 0f, hit ? UnruledPalette.Danger : UnruledPalette.Sta);
-                PlaceLabel(p + new Vector2(0f, 40f * _mesh.UnitsPerPixel),
+                _mesh.Arc(p, 36f, 4f, max > 0 ? citadel.Integrity / (float)max : 0f, hit ? UnruledPalette.Danger : UnruledPalette.Sta);
+                PlaceLabel(p + new Vector2(0f, 50f * _mesh.UnitsPerPixel),
                     "CITADEL · " + UiFormat.Number(max > 0 ? (long)citadel.Integrity * 100 / max : 0) + "% · T" +
                     UiFormat.Number(citadel.DefenceTier), hit ? UnruledPalette.Danger : UnruledPalette.Sta, true, true);
             }
