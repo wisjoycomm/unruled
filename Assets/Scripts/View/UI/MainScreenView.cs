@@ -25,6 +25,7 @@ namespace Unruled.View.UI
         private MarketTradePanel _trade;
         private FleetOpsPanel _fleetOps;
         private BulletinFeed _bulletins;
+        private BoardPreviewCard _preview;
         private ModalPopup _popup;
         private UiArt _art;
         private SimulationWorld _sim;
@@ -34,6 +35,9 @@ namespace Unruled.View.UI
         public VisualElement BoardView { get; private set; }
 
         public FleetCard Fleet => _fleet;
+
+        /// <summary>The planet / star-system preview plate over the board.</summary>
+        public BoardPreviewCard Preview => _preview;
 
         /// <summary>Phone layout switch; null before <see cref="Bind"/>.</summary>
         public CompactLayout Layout { get; private set; }
@@ -69,6 +73,8 @@ namespace Unruled.View.UI
             if (Layout == null)
                 Layout = new CompactLayout(root);
             BoardView = TopTelemetryHud.Require<VisualElement>(root, "board-view");
+            if (_preview == null)
+                _preview = new BoardPreviewCard(BoardView, _art);
             SystemTab = TopTelemetryHud.Require<Button>(root, "tab-system");
             GalaxyTab = TopTelemetryHud.Require<Button>(root, "tab-galaxy");
 
@@ -83,6 +89,7 @@ namespace Unruled.View.UI
             _fleetOps.Bind(sim, playerId);
             _bulletins.Bind(sim, playerId);
             Menu.Bind(sim, playerId);
+            _preview.Bind(sim, playerId);
             _ops.SelectFleet(_fleet.Fleet);
             _fleetOps.SelectFleet(_fleet.Fleet);
             _top.SetSelection(_fleet.Fleet);
@@ -121,6 +128,10 @@ namespace Unruled.View.UI
             _ops.SelectSite(siteOrLane);
             _fleetOps.SelectTarget(siteOrLane);
             _top.SetSelection(siteOrLane);
+            if (_sim.Sites.Has(siteOrLane))
+                _preview.ShowSite(siteOrLane);
+            else
+                _preview.Hide();
             RefreshAll();
         }
 
@@ -138,6 +149,7 @@ namespace Unruled.View.UI
             _shownTick = _sim.Clock.CurrentTick;
             _top.Refresh();
             _dock.Refresh();
+            _preview.Refresh();
             _market.Refresh();
             _fleet.Refresh();
             _inFlight.Refresh();

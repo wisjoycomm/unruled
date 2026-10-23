@@ -957,3 +957,111 @@
 .modal--victory .plate-frame--modal {
     --u-plate-color: var(--u-sta);
 }
+
+/* ---------- Board preview plate (planet / star system) ---------- */
+
+.preview {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 280px;
+    padding: 14px;
+    background-color: var(--u-panel);
+    border-width: 1px;
+    border-color: var(--u-rule-strong);
+}
+
+.preview__head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.preview__portrait {
+    flex-shrink: 0;
+    width: 72px;
+    height: 72px;
+    margin-right: 12px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.preview__titles {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.preview__title {
+    -unity-font-definition: url("Theme/Fonts/ChakraPetch-SemiBold.asset");
+    font-size: 15px;
+    letter-spacing: 0.9px;
+    white-space: normal;
+}
+
+.preview__section {
+    height: 62px;
+    margin-bottom: 8px;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.preview__layer {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.preview__layer-name {
+    width: 78px;
+    font-size: 11px;
+}
+
+.preview__layer-track {
+    flex-grow: 1;
+    height: 8px;
+}
+
+.preview__layer-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.preview__layer-fill--0 {
+    background-color: var(--u-ink-dim);
+}
+
+.preview__layer-fill--1 {
+    background-color: var(--u-you);
+}
+
+.preview__layer-fill--2 {
+    background-color: var(--u-hostile);
+}
+
+.preview__layer-value {
+    width: 76px;
+    -unity-text-align: middle-right;
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-Regular.asset");
+    font-size: 11px;
+    color: var(--u-ink-soft);
+}
+
+.preview__thumbs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.preview__thumb {
+    width: 28px;
+    height: 28px;
+    margin-right: 4px;
+    margin-bottom: 4px;
+    border-bottom-width: 2px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.preview__line {
+    font-size: 11px;
+    margin-top: 2px;
+}
