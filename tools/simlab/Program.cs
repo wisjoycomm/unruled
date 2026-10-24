@@ -6,6 +6,7 @@ using System.Threading;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
@@ -19,11 +20,56 @@ namespace Unruled.SimLab
         {
             if (args.Length > 0 && args[0] == "play")
                 return Play.Run(args);
+            if (args.Length > 0 && args[0] == "server")
+                return ServeWorld(args);
             if (args.Length > 0 && args[0] == "profile")
                 return Profile.Run(args);
             if (args.Length > 0 && args[0] == "batch")
                 return Batch.Run(args);
             return Serve(args);
+        }
+
+        // `server [--port 5090] [--save path] [--seed S]`: the persistent world plus its admin dashboard (server.html).
+        // Localhost only: the admin API has no login yet.
+        private static int ServeWorld(string[] args)
+        {
+            int port = 5090;
+            ulong seed = 4242;
+            string save = System.IO.Path.Combine("..", "..", ".temp", "server", "world.sav");
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] == "--port") port = int.Parse(args[i + 1]);
+                if (args[i] == "--seed") seed = ulong.Parse(args[i + 1]);
+                if (args[i] == "--save") save = args[i + 1];
+            }
+
+            var server = new GameServer(save, seed);
+            var loop = new Thread(server.Loop) { IsBackground = true, Name = "world" };
+            loop.Start();
+
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, WebRootPath = "wwwroot" });
+            builder.WebHost.UseUrls("http://localhost:" + port);
+            var app = builder.Build();
+            app.UseStaticFiles();
+            app.MapGet("/", () => Results.Redirect("/server.html"));
+            app.MapGet("/api/server/status", () => server.Status());
+            app.MapGet("/api/server/players", () => server.Players());
+            app.MapGet("/api/server/log", (long? since) => server.LogSince(since ?? 0));
+            app.MapPost("/api/server/run", (ServerRunRequest r) => server.SetRun(r.Running, r.Speed));
+            app.MapPost("/api/server/save", () => server.Save());
+            app.MapPost("/api/server/reset", (ServerResetRequest r) => server.Reset(r.Seed, r.Confirm));
+            app.MapPost("/api/server/login", (PlayerRequest r) => server.LogIn(r.PlayerId, r.Join));
+            app.MapPost("/api/server/logout", (PlayerRequest r) => server.LogOut(r.PlayerId, r.Governor));
+            app.MapPost("/api/server/tutorial-done", (PlayerRequest r) => server.EndTutorial(r.PlayerId));
+            app.MapPost("/api/bots/add", (BotRequest r) => server.AddBot(r.Preset ?? 1));
+            app.MapPost("/api/bots/set", (BotRequest r) => server.SetBot(r.PlayerId, r.Preset, r.Hold));
+            app.MapPost("/api/bots/rules", (BotSettings r) => server.SetBotRules(r));
+            app.MapPost("/api/server/stop", (IHostApplicationLifetime life) => { life.StopApplication(); return Results.Ok(); });
+            app.Lifetime.ApplicationStopping.Register(server.Stop);
+
+            Console.WriteLine("Unruled server: http://localhost:" + port + "  (Ctrl+C saves and stops)");
+            app.Run();
+            return 0;
         }
 
         private static int Serve(string[] args)
@@ -263,6 +309,32 @@ namespace Unruled.SimLab
                 return new { from = since, samples = h.GetRange(since, h.Count - since) };
             }
         }
+    }
+
+    public sealed class ServerRunRequest
+    {
+        public bool? Running { get; set; }
+        public int? Speed { get; set; }
+    }
+
+    public sealed class ServerResetRequest
+    {
+        public ulong Seed { get; set; }
+        public bool Confirm { get; set; }
+    }
+
+    public sealed class PlayerRequest
+    {
+        public int PlayerId { get; set; }
+        public bool Join { get; set; }
+        public bool Governor { get; set; }
+    }
+
+    public sealed class BotRequest
+    {
+        public int PlayerId { get; set; }
+        public byte? Preset { get; set; }
+        public bool? Hold { get; set; }
     }
 
     public sealed class RunRequest
