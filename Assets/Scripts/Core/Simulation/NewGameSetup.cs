@@ -417,14 +417,7 @@ namespace Unruled.Core.Simulation
                 }
                 var added = sim.World.Create();
                 deposits.Add(added);
-                sim.Deposits.Add(added, new MineralDeposit
-                {
-                    Site = best,
-                    RawItem = raw,
-                    SurfaceReserve = rules.SurfaceReserve,
-                    DeepCrustReserve = rules.DeepCrustReserve,
-                    CoreFractureReserve = rules.CoreFractureReserve
-                });
+                sim.Deposits.Add(added, RollDeposit(sim, best, raw));
             }
         }
 
@@ -488,15 +481,36 @@ namespace Unruled.Core.Simulation
                 candidates[i] = raw;
                 var deposit = sim.World.Create();
                 added.Add(deposit);
-                sim.Deposits.Add(deposit, new MineralDeposit
-                {
-                    Site = site,
-                    RawItem = raw,
-                    SurfaceReserve = rules.SurfaceReserve,
-                    DeepCrustReserve = rules.DeepCrustReserve,
-                    CoreFractureReserve = rules.CoreFractureReserve
-                });
+                sim.Deposits.Add(deposit, RollDeposit(sim, site, raw));
             }
+        }
+
+        /// <summary>
+        /// A generated deposit: the base reserves scaled by the planet's class and the ore's richness, each layer rolled
+        /// on its own from the planet's terrain seed and the ore (so the roll never shifts any other generation).
+        /// </summary>
+        private static MineralDeposit RollDeposit(SimulationWorld sim, EntityId site, ItemId raw)
+        {
+            var rules = sim.Balance.NewGame;
+            ref var info = ref sim.Sites.Get(site);
+            long richness = (long)rules.RichnessPercent(PlanetClasses.Of(in info, sim.Balance.Universe)) *
+                            rules.RichnessPercent(raw);
+            var rng = new SplitMix64(info.TerrainSeed ^ (0xD1B54A32D192ED03UL * (ulong)(ItemIds.ToSlot(raw) + 1)));
+            return new MineralDeposit
+            {
+                Site = site,
+                RawItem = raw,
+                SurfaceReserve = Roll(ref rng, rules, rules.SurfaceReserve, richness),
+                DeepCrustReserve = Roll(ref rng, rules, rules.DeepCrustReserve, richness),
+                CoreFractureReserve = Roll(ref rng, rules, rules.CoreFractureReserve, richness)
+            };
+        }
+
+        // One layer: base reserve x class% x ore% x a roll in the configured percent band.
+        private static int Roll(ref SplitMix64 rng, NewGameBalance rules, int baseReserve, long richnessPercentSquared)
+        {
+            int roll = rng.NextInt(rules.ReserveRollMinPercent, rules.ReserveRollMaxPercent);
+            return (int)Math.Min(int.MaxValue, baseReserve * richnessPercentSquared * roll / 1_000_000L);
         }
     }
 }

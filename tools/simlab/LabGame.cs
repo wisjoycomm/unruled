@@ -67,12 +67,27 @@ namespace Unruled.SimLab
                     ng.CoreBaseReserveMultiplier, coreDeps, ng.FleetTechTier, ng.FleetLineShips, ng.FleetEwShips,
                     ng.FleetSupplyTenders, ng.FleetCargoConvoys, new[] { ItemId.RawTungsten, ItemId.RawUranium },
                     DefaultGameBalance.CreateRawsByPlanetClass(),
-                    startRefs, coreStock, fleetStock, ng.UninhabitedClustersPerParticipant);
+                    startRefs, coreStock, fleetStock, ng.UninhabitedClustersPerParticipant, ClassRichness(ng), RawRichness(ng),
+                    ng.ReserveRollMinPercent, ng.ReserveRollMaxPercent);
             }
             return new GameBalanceConfig(d.Recipes, d.Universe, d.Starlanes, d.Weather, d.Refinery, d.Mining, d.Lifecycle,
                 d.Latency, d.Radar, d.Fleets, d.Combat, d.Relocation, ledger, d.Sta, d.Leaderboard, d.Wto, d.Contracts,
                 d.Authority, d.SystemFactions, d.Ai, ng, d.Research, d.Shipyard, d.SiteControl, d.JumpGates,
                 d.Convoys, d.Citadel, d.Galaxy);
+        }
+
+        private static int[] ClassRichness(NewGameBalance ng)
+        {
+            var percents = new int[Unruled.Core.Board.PlanetClasses.Count];
+            for (int i = 0; i < percents.Length; i++) percents[i] = ng.RichnessPercent((Unruled.Core.Board.PlanetClass)i);
+            return percents;
+        }
+
+        private static int[] RawRichness(NewGameBalance ng)
+        {
+            var percents = new int[ItemIds.RawCount];
+            for (int i = 0; i < percents.Length; i++) percents[i] = ng.RichnessPercent(ItemIds.FromSlot(i));
+            return percents;
         }
 
         public long Tick => Sim.Clock.CurrentTick;

@@ -43,6 +43,12 @@ namespace Unruled.Core.Simulation
         private readonly ItemId[] _startingRefineries;
         private readonly ItemStack[] _coreBaseStock;
         private readonly ItemStack[] _fleetStock;
+        private readonly int[] _richnessPercentByPlanetClass;
+        private readonly int[] _richnessPercentByRaw;
+
+        /// <summary>Each layer of a generated deposit rolls its own share of the base reserve, in percent.</summary>
+        public readonly int ReserveRollMinPercent;
+        public readonly int ReserveRollMaxPercent;
 
         public NewGameBalance(
             int rivalCount, int depositsPerSite, int surfaceReserve, int deepCrustReserve, int coreFractureReserve,
@@ -50,7 +56,8 @@ namespace Unruled.Core.Simulation
             ItemStack[] coreBaseDeposits, byte fleetTechTier, int fleetLineShips, int fleetEwShips, int fleetSupplyTenders,
             int fleetCargoConvoys, ItemId[] homeExcludedRaws, ItemId[][] rawsByPlanetClass, ItemId[] startingRefineries,
             ItemStack[] coreBaseStock,
-            ItemStack[] fleetStock, int uninhabitedClustersPerParticipant = 1)
+            ItemStack[] fleetStock, int uninhabitedClustersPerParticipant = 1, int[] richnessPercentByPlanetClass = null,
+            int[] richnessPercentByRaw = null, int reserveRollMinPercent = 100, int reserveRollMaxPercent = 100)
         {
             if (rivalCount < 0) throw new ArgumentOutOfRangeException(nameof(rivalCount));
             if (uninhabitedClustersPerParticipant < 0)
@@ -84,6 +91,12 @@ namespace Unruled.Core.Simulation
                     _rawMaskByPlanetClass[c] |= 1 << ItemIds.ToSlot(raw);
                 }
             }
+            _richnessPercentByPlanetClass = Percents(richnessPercentByPlanetClass, PlanetClasses.Count, nameof(richnessPercentByPlanetClass));
+            _richnessPercentByRaw = Percents(richnessPercentByRaw, ItemIds.RawCount, nameof(richnessPercentByRaw));
+            if (reserveRollMinPercent < 0 || reserveRollMaxPercent < reserveRollMinPercent)
+                throw new ArgumentOutOfRangeException(nameof(reserveRollMaxPercent), "Needs 0 <= min <= max.");
+            ReserveRollMinPercent = reserveRollMinPercent;
+            ReserveRollMaxPercent = reserveRollMaxPercent;
             if (startingRefineries == null) throw new ArgumentNullException(nameof(startingRefineries));
             for (int i = 0; i < startingRefineries.Length; i++)
                 if (!ItemIds.IsRefined(startingRefineries[i]))
@@ -123,7 +136,32 @@ namespace Unruled.Core.Simulation
         public int CoreBaseStockCount => _coreBaseStock.Length;
         public ItemStack CoreBaseStock(int index) => _coreBaseStock[index];
 
+        /// <summary>How rich a planet of this class is, in percent of the base reserves (big worlds hold more).</summary>
+        public int RichnessPercent(PlanetClass planet) => _richnessPercentByPlanetClass[(int)planet];
+
+        /// <summary>How rich deposits of this raw are, in percent of the base reserves (rare ores run thin).</summary>
+        public int RichnessPercent(ItemId raw) => _richnessPercentByRaw[ItemIds.ToSlot(raw)];
+
         public int FleetStockCount => _fleetStock.Length;
         public ItemStack FleetStock(int index) => _fleetStock[index];
+
+        // A copy of a per-class or per-raw percent table; null means 100% for all.
+        private static int[] Percents(int[] values, int count, string name)
+        {
+            var result = new int[count];
+            if (values == null)
+            {
+                for (int i = 0; i < count; i++)
+                    result[i] = 100;
+                return result;
+            }
+            if (values.Length != count) throw new ArgumentException($"Needs {count} entries.", name);
+            for (int i = 0; i < count; i++)
+            {
+                if (values[i] < 0) throw new ArgumentOutOfRangeException(name, "Percents cannot be negative.");
+                result[i] = values[i];
+            }
+            return result;
+        }
     }
 }

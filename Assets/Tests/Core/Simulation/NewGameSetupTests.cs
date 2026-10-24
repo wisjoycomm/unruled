@@ -1,5 +1,6 @@
 using System;
 using NUnit.Framework;
+using Unruled.Core.Board;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
 using Unruled.Core.Simulation;
@@ -98,8 +99,43 @@ namespace Unruled.Tests.Core.Simulation
                 }
                 Assert.IsTrue(ItemIds.IsRaw(deposit.RawItem));
                 bool lifeSupport = IsAnyCoreBase(sim, deposit.Site) && IsCoreBaseDeposit(rules, deposit.RawItem);
-                Assert.AreEqual(rules.SurfaceReserve * (lifeSupport ? rules.CoreBaseReserveMultiplier : 1), deposit.SurfaceReserve);
+                if (lifeSupport)
+                {
+                    Assert.AreEqual(rules.SurfaceReserve * rules.CoreBaseReserveMultiplier, deposit.SurfaceReserve);
+                    continue;
+                }
+                long richness = (long)rules.RichnessPercent(PlanetClasses.Of(in sim.Sites.Get(deposit.Site), sim.Balance.Universe)) *
+                                rules.RichnessPercent(deposit.RawItem);
+                Assert.That(deposit.SurfaceReserve, Is.InRange(
+                    rules.SurfaceReserve * richness * rules.ReserveRollMinPercent / 1_000_000L,
+                    rules.SurfaceReserve * richness * rules.ReserveRollMaxPercent / 1_000_000L), deposit.RawItem.ToString());
             }
+        }
+
+        [Test]
+        public void Create_GeneratedDepositsDiffer_ByPlanetOreAndRoll()
+        {
+            var sim = NewWorld();
+            NewGameSetup.Create(sim, 1);
+            var rules = sim.Balance.NewGame;
+            var seen = new System.Collections.Generic.HashSet<long>();
+            int generated = 0;
+            for (int i = 0; i < sim.Deposits.Count; i++)
+            {
+                ref var deposit = ref sim.Deposits.At(i);
+                if (IsAnyCoreBase(sim, deposit.Site) && IsCoreBaseDeposit(rules, deposit.RawItem))
+                    continue;
+                generated++;
+                seen.Add((long)deposit.SurfaceReserve << 32 ^ deposit.DeepCrustReserve);
+            }
+            Assert.Greater(generated, 20);
+            Assert.Greater(seen.Count, generated * 9 / 10, "almost every deposit holds its own amounts");
+
+            var again = NewWorld();
+            NewGameSetup.Create(again, 1);
+            Assert.AreEqual(sim.Deposits.Count, again.Deposits.Count);
+            for (int i = 0; i < sim.Deposits.Count; i++)
+                Assert.AreEqual(sim.Deposits.At(i).DeepCrustReserve, again.Deposits.At(i).DeepCrustReserve, "same seed, same rolls");
         }
 
         [Test]
