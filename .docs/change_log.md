@@ -168,3 +168,4 @@
 
 - 2026-10-24 - Claude - Charts in the View (D6): board, galaxy and region views draw only systems the player knows (warp lanes and gates into unknown systems read as UNCHARTED exits); MARKET tab STAR CHARTS block steps through offers (world shop first) with Buy, and Sell (world shop when first surveyor) / Withdraw / Share for the system picked on the board. Verified in Play Mode: hidden system, buy, share.
 - 2026-10-24 - Claude - Star charts docs (D7): roadmap decision (per-player charts, chart market, first-surveyor world shop) and overview Galaxy/ section; plan archived to .docs/plan/star-charts.md.
+- 2026-10-24 - Claude - Planet preview card lists each raw ore the planet holds, with the amount left (all depths) and its rigs, under the depth bars.

@@ -1095,3 +1095,9 @@
     font-size: 11px;
     margin-top: 2px;
 }
+
+.preview__ores {
+    white-space: normal;
+    color: var(--u-ink);
+    margin-top: 6px;
+}

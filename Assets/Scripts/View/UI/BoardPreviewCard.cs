@@ -20,7 +20,7 @@ namespace Unruled.View.UI
         private static readonly string[] LayerNames = { "SURFACE", "DEEP CRUST", "CORE" };
 
         private readonly VisualElement _card, _portrait, _section, _thumbRow;
-        private readonly Label _title, _meta, _line1, _line2;
+        private readonly Label _title, _meta, _ores, _line1, _line2;
         private readonly VisualElement[] _layerRows = new VisualElement[Layers];
         private readonly VisualElement[] _layerFills = new VisualElement[Layers];
         private readonly Label[] _layerValues = new Label[Layers];
@@ -96,6 +96,10 @@ namespace Unruled.View.UI
             }
             _card.Add(_thumbRow);
 
+            _ores = NewLabel("u-caption");
+            _ores.AddToClassList("preview__line");
+            _ores.AddToClassList("preview__ores");
+            _card.Add(_ores);
             _line1 = NewLabel("u-caption");
             _line1.AddToClassList("preview__line");
             _line2 = NewLabel("u-caption");
@@ -193,8 +197,26 @@ namespace Unruled.View.UI
             SetLayer(0, surface, max);
             SetLayer(1, crust, max);
             SetLayer(2, core, max);
+            _ores.text = OreList();
             _line1.text = "ESI " + Esi(site.CurrentEsiMilli) + " · " + UiFormat.Number(deposits) + " DEPOSITS";
             _line2.text = UiFormat.Number(rigs) + " RIGS · " + UiFormat.Number(refineries) + " REFINERIES";
+        }
+
+        // One line per raw ore the planet holds: what it is, how much is left in all three depths, and its drills.
+        private string OreList()
+        {
+            string text = "";
+            for (int d = 0; d < _sim.Deposits.Count; d++)
+            {
+                ref var deposit = ref _sim.Deposits.At(d);
+                if (deposit.Site != _site)
+                    continue;
+                long left = (long)deposit.SurfaceReserve + deposit.DeepCrustReserve + deposit.CoreFractureReserve;
+                text += (text.Length > 0 ? "\n" : "") +ContractAndMarketUI.ItemCode(deposit.RawItem) + " · " +
+                        UiFormat.Thousands(left) + " LEFT" +
+                        (deposit.RigCount > 0 ? " · " + UiFormat.Number(deposit.RigCount) + " RIGS" : "");
+            }
+            return text.Length > 0 ? text : "NO ORE";
         }
 
         // The planet's own painted sprite, its lifecycle drawn into it.
@@ -274,6 +296,7 @@ namespace Unruled.View.UI
             _section.style.display = _crust != null ? on : DisplayStyle.None;
             for (int i = 0; i < Layers; i++)
                 _layerRows[i].style.display = on;
+            _ores.style.display = on;
             _thumbRow.style.display = site ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
