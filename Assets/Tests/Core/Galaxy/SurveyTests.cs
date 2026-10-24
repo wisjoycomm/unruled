@@ -157,7 +157,12 @@ namespace Unruled.Tests.Core.Galaxy
                 var outer = _sim.Galaxy.OuterOrbit(c);
                 Assert.IsFalse(entry.IsNull, $"cluster {c} orbit 0");
                 Assert.AreEqual(c, _sim.Sites.Get(outer).ClusterId);
-                Assert.AreEqual(_sim.Balance.Universe.SitesPerSystem - 1, _sim.Sites.Get(outer).OrbitIndex);
+                int planets = 0;
+                for (int i = 0; i < _sim.Sites.Count; i++)
+                    if (_sim.Sites.At(i).ClusterId == c)
+                        planets++;
+                Assert.AreEqual(planets - 1, _sim.Sites.Get(outer).OrbitIndex);
+                Assert.That(planets, Is.InRange(_sim.Balance.Universe.MinSitesPerSystem, _sim.Balance.Universe.SitesPerSystem));
             }
         }
     }

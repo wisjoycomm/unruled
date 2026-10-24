@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using Unruled.Core.Board;
 using Unruled.Core.Galaxy;
 using Unruled.Core.Persistence;
 using Unruled.Core.Simulation;
@@ -24,7 +25,9 @@ namespace Unruled.Tests.Core.Galaxy
 
             int cluster = sim.MaterialiseStar(star.Id);
             Assert.AreEqual(0, cluster);
-            Assert.AreEqual(sim.Balance.Universe.SitesPerSystem, sim.Sites.Count);
+            int expected = SystemSeedGenerator.PlanetCount(sim.Balance.Universe, star.SystemSeed,
+                star.Class == StarClass.Frontier ? 0 : sim.Balance.Universe.SettledMinSites);
+            Assert.AreEqual(expected, sim.Sites.Count);
             Assert.AreEqual(1, sim.StarSystems.Count);
             Assert.AreEqual(star.Id.Packed, sim.StarSystems.At(0).StarId);
             Assert.AreEqual(star.X, sim.StarSystems.At(0).X);

@@ -21,7 +21,14 @@ namespace Unruled.Tests.Core.Simulation
             int totalClusters = participants + 1 + participants * rules.UninhabitedClustersPerParticipant;
             Assert.AreEqual(participants, sim.Players.Count);
             Assert.AreEqual(rules.RivalCount, sim.AiControllers.Count);
-            Assert.AreEqual(totalClusters * sim.Balance.Universe.SitesPerSystem, sim.Sites.Count, "homes + contested + uninhabited");
+            Assert.AreEqual(totalClusters, sim.Galaxy.NextClusterId(), "homes + contested + uninhabited");
+            var planets = new int[totalClusters];
+            for (int i = 0; i < sim.Sites.Count; i++)
+                planets[sim.Sites.At(i).ClusterId]++;
+            var universe = sim.Balance.Universe;
+            for (int c = 0; c < totalClusters; c++)
+                Assert.That(planets[c], Is.InRange(c <= participants ? universe.SettledMinSites : universe.MinSitesPerSystem,
+                    universe.SitesPerSystem), $"cluster {c} planets");
             for (int i = 0; i < sim.Sites.Count; i++)
                 Assert.IsTrue(sim.Stockpiles.Has(sim.Sites.EntityAt(i)), "every site has a stockpile");
         }

@@ -346,7 +346,8 @@ namespace Unruled.Core.Simulation
             if (!Galaxy.Catalog.TryGetStar(star, out var record))
                 throw new ArgumentException("No such star in the catalog.", nameof(star));
             int clusterId = Galaxy.NextClusterId();
-            orbits = GenerateSystem(record.SystemSeed, clusterId, rebuildGraph: false);
+            orbits = GenerateSystem(record.SystemSeed, clusterId, rebuildGraph: false,
+                record.Class == StarClass.Frontier ? 0 : Balance.Universe.SettledMinSites);
             for (int i = 0; i < orbits.Length; i++)
                 if (!Stockpiles.Has(orbits[i]))
                     Stockpiles.Add(orbits[i], default);
@@ -358,10 +359,10 @@ namespace Unruled.Core.Simulation
 
         // Entity indexes are recycled once anything is destroyed, so a system generated mid-game can land anywhere in
         // the dense stores: its sites and lanes are tracked by entity, never by store position.
-        internal EntityId[] GenerateSystem(ulong systemSeed, int clusterId, bool rebuildGraph)
+        internal EntityId[] GenerateSystem(ulong systemSeed, int clusterId, bool rebuildGraph, int atLeast = 0)
         {
-            var orbits = new EntityId[Balance.Universe.SitesPerSystem];
-            SystemSeedGenerator.GenerateSystem(World, Sites, Balance.Universe, systemSeed, clusterId, orbits);
+            var orbits = new EntityId[SystemSeedGenerator.PlanetCount(Balance.Universe, systemSeed, atLeast)];
+            SystemSeedGenerator.GenerateSystem(World, Sites, Balance.Universe, systemSeed, clusterId, orbits, orbits.Length);
             _newLanes.Clear();
             StarlaneGenerator.LinkSystem(World, Sites, Starlanes, Balance.Starlanes, systemSeed, orbits, _newLanes);
 

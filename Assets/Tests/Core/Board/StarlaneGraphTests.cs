@@ -39,7 +39,7 @@ namespace Unruled.Tests.Core.Board
             for (ulong seed = 1; seed <= 20; seed++)
             {
                 var sim = Build(seed);
-                int sites = sim.Balance.Universe.SitesPerSystem;
+                int sites = sim.Sites.Count;
                 var lanes = Lanes(sim);
                 for (int orbit = 0; orbit + 1 < sites; orbit++)
                     Assert.IsTrue(lanes.Exists(l => l.Item1 == orbit && l.Item2 == orbit + 1 && l.Item3 == StarlaneTier.StaHighway),

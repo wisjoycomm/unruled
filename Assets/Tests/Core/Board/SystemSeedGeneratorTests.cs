@@ -26,8 +26,38 @@ namespace Unruled.Tests.Core.Board
         {
             var a = Generate(123456789UL);
             var b = Generate(123456789UL);
-            Assert.AreEqual(Balance.SitesPerSystem, a.Length);
+            Assert.AreEqual(SystemSeedGenerator.PlanetCount(Balance, 123456789UL, 0), a.Length);
             CollectionAssert.AreEqual(a, b);
+        }
+
+        [Test]
+        public void PlanetCount_VariesBySeed_WithinTheRange_AndHonoursAMinimum()
+        {
+            int min = int.MaxValue, max = 0;
+            for (ulong seed = 0; seed < 500; seed++)
+            {
+                int n = SystemSeedGenerator.PlanetCount(Balance, seed, 0);
+                min = System.Math.Min(min, n);
+                max = System.Math.Max(max, n);
+                Assert.GreaterOrEqual(SystemSeedGenerator.PlanetCount(Balance, seed, Balance.SettledMinSites), Balance.SettledMinSites);
+            }
+            Assert.AreEqual(Balance.MinSitesPerSystem, min);
+            Assert.AreEqual(Balance.SitesPerSystem, max);
+        }
+
+        [Test]
+        public void KeptOrbits_LayOutTheSame_WhateverTheCount()
+        {
+            var world = new World();
+            var few = world.CreateStore<SiteInfo>();
+            var many = world.CreateStore<SiteInfo>();
+            SystemSeedGenerator.GenerateSystem(world, few, Balance, 77UL, 0, null, 5);
+            SystemSeedGenerator.GenerateSystem(world, many, Balance, 77UL, 0, null, 12);
+            for (int i = 0; i < few.Count; i++)
+            {
+                Assert.AreEqual(many.At(i).PosX, few.At(i).PosX);
+                Assert.AreEqual(many.At(i).BaseEsiMilli, few.At(i).BaseEsiMilli);
+            }
         }
 
         [Test]
@@ -80,7 +110,9 @@ namespace Unruled.Tests.Core.Board
                         best = i;
 
                 Assert.GreaterOrEqual(sites[best].BaseEsiMilli, 700, $"seed {seed}: habitable world (ESI >= 0.70)");
-                Assert.LessOrEqual(sites[sites.Length - 1].BaseEsiMilli, 350, $"seed {seed}: harsh outer world (ESI <= 0.35)");
+                // Systems that reach past the habitable zone end on a harsh world (orbit 7 sits ~1560 out).
+                if (sites.Length >= 8)
+                    Assert.LessOrEqual(sites[sites.Length - 1].BaseEsiMilli, 350, $"seed {seed}: harsh outer world (ESI <= 0.35)");
             }
         }
 
@@ -90,7 +122,7 @@ namespace Unruled.Tests.Core.Board
             Assert.Throws<ArgumentException>(() => new UniverseGenBalance(
                 sitesPerSystem: 8, minRadius: 300, radiusStep: 150, radiusNoise: 20, minSiteSpacing: 120,
                 angleStep: 40503, angleJitter: 0, habitableRadius: 840, habitableWidth: 700, atmoNoiseMilli: 0,
-                iceLineRadius: 1450, superEarthPermille: 350));
+                iceLineRadius: 1450, superEarthPermille: 350, minSitesPerSystem: 5, settledMinSites: 8));
         }
     }
 }

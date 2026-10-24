@@ -7,7 +7,9 @@ namespace Unruled.Core.Board
     {
         public const int PositionRoundingMargin = 4;
 
-        public readonly int SitesPerSystem;
+        public readonly int SitesPerSystem; // the most planets a system can have
+        public readonly int MinSitesPerSystem; // the fewest
+        public readonly int SettledMinSites; // a home or hub system has at least this many (gates, Citadel, core base)
         public readonly int MinRadius;
         public readonly int RadiusStep;
         public readonly int RadiusNoise;
@@ -23,8 +25,10 @@ namespace Unruled.Core.Board
         public UniverseGenBalance(
             int sitesPerSystem, int minRadius, int radiusStep, int radiusNoise, int minSiteSpacing,
             int angleStep, int angleJitter, int habitableRadius, int habitableWidth, int atmoNoiseMilli,
-            int iceLineRadius, int superEarthPermille)
+            int iceLineRadius, int superEarthPermille, int minSitesPerSystem, int settledMinSites)
         {
+            if (minSitesPerSystem < 1 || minSitesPerSystem > sitesPerSystem) throw new ArgumentOutOfRangeException(nameof(minSitesPerSystem));
+            if (settledMinSites < minSitesPerSystem || settledMinSites > sitesPerSystem) throw new ArgumentOutOfRangeException(nameof(settledMinSites));
             if (iceLineRadius <= habitableRadius + habitableWidth / 2) throw new ArgumentOutOfRangeException(nameof(iceLineRadius));
             if (superEarthPermille < 0 || superEarthPermille > 1000) throw new ArgumentOutOfRangeException(nameof(superEarthPermille));
             if (sitesPerSystem < 1) throw new ArgumentOutOfRangeException(nameof(sitesPerSystem));
@@ -40,6 +44,8 @@ namespace Unruled.Core.Board
             if (atmoNoiseMilli < 0) throw new ArgumentOutOfRangeException(nameof(atmoNoiseMilli));
 
             SitesPerSystem = sitesPerSystem;
+            MinSitesPerSystem = minSitesPerSystem;
+            SettledMinSites = settledMinSites;
             MinRadius = minRadius;
             RadiusStep = radiusStep;
             RadiusNoise = radiusNoise;

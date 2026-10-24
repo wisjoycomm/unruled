@@ -147,7 +147,8 @@ namespace Unruled.Core.Simulation
         // Generates a catalog star's system under `clusterId` and registers it with the galaxy; returns its orbits.
         private static EntityId[] Materialise(SimulationWorld sim, in StarRecord star, int clusterId)
         {
-            var orbits = sim.GenerateSystem(star.SystemSeed, clusterId, rebuildGraph: false);
+            var orbits = sim.GenerateSystem(star.SystemSeed, clusterId, rebuildGraph: false,
+                star.Class == StarClass.Frontier ? 0 : sim.Balance.Universe.SettledMinSites);
             sim.Galaxy.Register(star, clusterId, sim.Clock.CurrentTick);
             return orbits;
         }

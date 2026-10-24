@@ -496,13 +496,14 @@ namespace Unruled.Core.Simulation
             whoQuarantineTicks: 300);
 
         /// <summary>
-        /// 8 orbits from r = 300 to ~1560 (step 180 ± 25, min spacing 120), golden-angle spacing ±10°, habitable zone
+        /// 5–12 orbits per system by seed (PROVISIONAL; homes and hubs at least 8 so gates, Citadel and core base fit),
+        /// from r = 300 out by 180 ± 25 (to ~2280 at 12, min spacing 120), golden-angle spacing ±10°, habitable zone
         /// centred on orbit 3 (R_HZ 840, W_HZ 700, ±0.05 atmo noise). Planet classes (NASA types, PROVISIONAL):
         /// orbits inside r 490 are hot Terrestrials, 490–1190 Terrestrial or (35%) Super-Earth, past 1190 Gas Giants,
         /// past the 1450 ice line Neptune-likes, so every system has rocky inner worlds and giants outside.
         /// </summary>
         public static UniverseGenBalance CreateUniverseGenBalance() => new UniverseGenBalance(
-            sitesPerSystem: 8,
+            sitesPerSystem: 12,
             minRadius: 300,
             radiusStep: 180,
             radiusNoise: 25,
@@ -513,7 +514,9 @@ namespace Unruled.Core.Simulation
             habitableWidth: 700,
             atmoNoiseMilli: 50,
             iceLineRadius: 1450,
-            superEarthPermille: 350);
+            superEarthPermille: 350,
+            minSitesPerSystem: 5,
+            settledMinSites: 8);
 
         public static RecipeDatabase CreateRecipeDatabase()
         {
