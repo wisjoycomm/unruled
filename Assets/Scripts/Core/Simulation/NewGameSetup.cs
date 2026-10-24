@@ -37,7 +37,7 @@ namespace Unruled.Core.Simulation
     /// Every system is a star from the seeded <see cref="GalaxyCatalog"/>: the hub is a hub-class star on the spawn
     /// ring, homes are the home-class stars nearest it and frontiers the frontier stars nearest it, each materialised
     /// with its catalog system seed (so the same world seed always lays out the same galaxy).
-    /// Runs once, before the clock starts.
+    /// <see cref="Create"/> runs once, before the clock starts; <see cref="Join"/> adds one more player to a running game.
     /// </summary>
     public static class NewGameSetup
     {
@@ -64,6 +64,130 @@ namespace Unruled.Core.Simulation
             ChartSpawnGroup(sim, playerId, participants);
             sim.Graph.Rebuild(sim.Starlanes);
             return player;
+        }
+
+        /// <summary>
+        /// A player (or a bot, when <paramref name="archetype"/> is not 0) joins a running game: the next free player
+        /// id, a free home-class star nearest the hub, set up as a new game's home is (system, core base, rigs,
+        /// refineries, stock, fleet), a dormant jump gate from its outermost orbit to a hub orbit that is not the
+        /// Citadel's, its own uninhabited frontier systems linked from that orbit, catalog hyperlanes to every
+        /// materialised neighbour, and charts of its home, the hub and its frontiers. The hub is the Citadel system with
+        /// the fewest jump gates landing in it. Deterministic for a world seed and join order. Changes nothing that is
+        /// saved in a new shape, so a game saved after a join loads as any other.
+        /// </summary>
+        public static NewGame Join(SimulationWorld sim, byte archetype = 0)
+        {
+            if (sim == null) throw new ArgumentNullException(nameof(sim));
+            if (sim.Citadels.Count == 0) throw new InvalidOperationException("The game has no hub to join.");
+            if (archetype > sim.Balance.Ai.Count) throw new ArgumentOutOfRangeException(nameof(archetype));
+            int playerId = 1;
+            for (int i = 0; i < sim.Players.Count; i++)
+                playerId = Math.Max(playerId, sim.Players.At(i).PlayerId + 1);
+
+            var hubSite = QuietestHub(sim);
+            int hub = sim.Sites.Get(hubSite).ClusterId;
+            var galaxy = sim.Galaxy;
+            galaxy.TryGetStar(hub, out var hubStar);
+            galaxy.Catalog.TryGetStar(hubStar, out var hubRecord);
+            galaxy.Catalog.SectorOf(hubRecord.X, hubRecord.Y, out int hx, out int hy);
+            var used = UsedStars(sim);
+            var home = Nearest(galaxy.Catalog, hx, hy, StarClass.Home, used, galaxy.Catalog.Balance.RadiusSectors);
+            used.Add(home.Id.Packed);
+
+            int homeCluster = galaxy.NextClusterId();
+            var joined = SetUpParticipant(sim, home, playerId, homeCluster);
+            if (archetype != 0)
+                sim.Ai.Assign(joined.PlayerHq, archetype);
+            var far = FreeHubOrbit(sim, hub, hubSite);
+            sim.JumpGates.Add(sim.World.Create(), new JumpGate
+            {
+                OwnerPlayerId = playerId, HomeSite = galaxy.OuterOrbit(homeCluster), FarSite = far
+            });
+
+            int perParticipant = sim.Balance.NewGame.UninhabitedClustersPerParticipant;
+            int length = sim.Balance.JumpGates.LaneLength;
+            int firstLane = sim.Starlanes.Count;
+            long tick = sim.Clock.CurrentTick;
+            var link = far;
+            var newClusters = new List<int> { homeCluster };
+            for (int k = 0; k < perParticipant; k++)
+            {
+                var frontier = Nearest(galaxy.Catalog, hx, hy, StarClass.Frontier, used, galaxy.Catalog.Balance.RadiusSectors);
+                used.Add(frontier.Id.Packed);
+                int cluster = galaxy.NextClusterId();
+                var orbits = Materialise(sim, frontier, cluster);
+                StockFrontier(sim, frontier.SystemSeed, orbits);
+                AddInterSystemLane(sim, link, orbits[0], StarlaneTier.StaHighway, length, firstLane);
+                link = Outer(orbits);
+                newClusters.Add(cluster);
+                galaxy.Learn(playerId, cluster, ChartSource.Spawn, tick);
+            }
+            for (int i = 0; i < newClusters.Count; i++)
+                LinkHyperlanesOf(sim, newClusters[i]);
+            galaxy.Learn(playerId, homeCluster, ChartSource.Spawn, tick);
+            galaxy.Learn(playerId, hub, ChartSource.Spawn, tick);
+            sim.Graph.Rebuild(sim.Starlanes);
+            return joined;
+        }
+
+        // The Citadel whose system the fewest jump gates land in (lowest cluster on a tie): late joiners spread over hubs.
+        private static EntityId QuietestHub(SimulationWorld sim)
+        {
+            EntityId best = default;
+            int bestGates = int.MaxValue, bestCluster = int.MaxValue;
+            for (int c = 0; c < sim.Citadels.Count; c++)
+            {
+                var site = sim.Citadels.EntityAt(c);
+                int cluster = sim.Sites.Get(site).ClusterId;
+                int gates = 0;
+                for (int g = 0; g < sim.JumpGates.Count; g++)
+                {
+                    var gateFar = sim.JumpGates.At(g).FarSite;
+                    if (sim.Sites.Has(gateFar) && sim.Sites.Get(gateFar).ClusterId == cluster)
+                        gates++;
+                }
+                if (gates < bestGates || (gates == bestGates && cluster < bestCluster))
+                {
+                    best = site;
+                    bestGates = gates;
+                    bestCluster = cluster;
+                }
+            }
+            return best;
+        }
+
+        // The hub orbit with the fewest gates landing on it, never the Citadel (lowest orbit on a tie).
+        private static EntityId FreeHubOrbit(SimulationWorld sim, int hub, EntityId citadel)
+        {
+            EntityId best = default;
+            int bestGates = int.MaxValue, bestOrbit = int.MaxValue;
+            for (int i = 0; i < sim.Sites.Count; i++)
+            {
+                ref var site = ref sim.Sites.At(i);
+                var entity = sim.Sites.EntityAt(i);
+                if (site.ClusterId != hub || entity == citadel)
+                    continue;
+                int gates = 0;
+                for (int g = 0; g < sim.JumpGates.Count; g++)
+                    if (sim.JumpGates.At(g).FarSite == entity)
+                        gates++;
+                if (gates < bestGates || (gates == bestGates && site.OrbitIndex < bestOrbit))
+                {
+                    best = entity;
+                    bestGates = gates;
+                    bestOrbit = site.OrbitIndex;
+                }
+            }
+            if (best.IsNull) throw new InvalidOperationException($"Hub {hub} has no orbit besides its Citadel.");
+            return best;
+        }
+
+        private static HashSet<long> UsedStars(SimulationWorld sim)
+        {
+            var used = new HashSet<long>();
+            for (int i = 0; i < sim.StarSystems.Count; i++)
+                used.Add(sim.StarSystems.At(i).StarId);
+            return used;
         }
 
         /// <summary>The contested cluster's id in a game with this many participants.</summary>
@@ -249,19 +373,27 @@ namespace Unruled.Core.Simulation
             int firstInterLane = sim.Starlanes.Count;
             int clusters = galaxy.NextClusterId();
             for (int c = 0; c < clusters; c++)
+                LinkHyperlanesOf(sim, c, neighbours, length, firstInterLane);
+        }
+
+        // One system's catalog hyperlanes to materialised neighbours, as above (a lane that exists is not doubled).
+        private static void LinkHyperlanesOf(SimulationWorld sim, int cluster) =>
+            LinkHyperlanesOf(sim, cluster, new List<int>(), sim.Balance.Galaxy.SurveyLaneLength, 0);
+
+        private static void LinkHyperlanesOf(SimulationWorld sim, int c, List<int> neighbours, int length, int searchFrom)
+        {
+            var galaxy = sim.Galaxy;
+            if (!galaxy.TryGetStar(c, out var star))
+                return;
+            galaxy.MaterialisedNeighbours(star, neighbours);
+            for (int i = 0; i < neighbours.Count; i++)
             {
-                if (!galaxy.TryGetStar(c, out var star))
+                int n = neighbours[i];
+                if (n == c)
                     continue;
-                galaxy.MaterialisedNeighbours(star, neighbours);
-                for (int i = 0; i < neighbours.Count; i++)
-                {
-                    int n = neighbours[i];
-                    if (n == c)
-                        continue;
-                    int low = Math.Min(c, n), high = Math.Max(c, n);
-                    AddInterSystemLane(sim, galaxy.OuterOrbit(low), galaxy.SiteAtOrbit(high, 0), StarlaneTier.StaHighway,
-                        length, firstInterLane);
-                }
+                int low = Math.Min(c, n), high = Math.Max(c, n);
+                AddInterSystemLane(sim, galaxy.OuterOrbit(low), galaxy.SiteAtOrbit(high, 0), StarlaneTier.StaHighway,
+                    length, searchFrom);
             }
         }
 

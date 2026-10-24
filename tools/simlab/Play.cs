@@ -63,6 +63,15 @@ namespace Unruled.SimLab
                     Save(sim, save);
                     Console.Write(Status(sim));
                     return 0;
+                case "join":
+                {
+                    // play join [archetype]: a bot (or an idle human seat with 0) joins the running game.
+                    byte preset = args.Length > 2 ? byte.Parse(args[2]) : (byte)1;
+                    var joined = NewGameSetup.Join(sim, preset);
+                    Save(sim, save);
+                    Console.WriteLine($"P{sim.Players.Get(joined.PlayerHq).PlayerId} joined at {Site(sim, joined.CoreBase)}");
+                    return 0;
+                }
                 case "route":
                 {
                     // play route fleet site [tollfree]: the lanes a Move would take, with fuel and toll per lane.
