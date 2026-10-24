@@ -177,3 +177,4 @@
 - 2026-10-24 - Claude - fleet moves say why they fail: FleetMovementSystem.CheckMove (fuel, toll, tier, route, charts, readiness) on the FLEET card and in Sim Lab play
 - 2026-10-24 - Claude - THE SYSTEM opens with a treasury (20,000 cr) and a stock of basics (PROVISIONAL), so selling to and buying from it works on day 1. Soak 10x30d: 0 dry, loan limit and fragmentation not worse.
 - 2026-10-24 - Claude - J-plan done: docs for mid-game join, upkeep at own sites, CheckMove and THE SYSTEM's opening market; plan archived to .docs/plan/join-mid-game.md
+- 2026-10-24 - Claude - fix: a convoy-only fleet's hold takes at most cargo convoys x capacity per item on hand loads (a plain load over it is refused, a fill stops at it)

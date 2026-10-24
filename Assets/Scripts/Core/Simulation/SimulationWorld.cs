@@ -274,7 +274,8 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.ClaimSite, new SiteControlSystem(
                 Sites, Players, Fleets, FleetMotions, FleetReadiness, FleetCombat, Stockpiles, balance.SiteControl));
             Commands.Register(CommandType.TransferCargo, new CargoTransferSystem(
-                Fleets, FleetMotions, FleetCombat, Sites, Stockpiles, ContractCargo, StolenGoods, balance.Ai.CoreSupplyReserve));
+                Fleets, FleetMotions, FleetCombat, Sites, Stockpiles, ContractCargo, StolenGoods, balance.Convoys.CapacityPerConvoy,
+                balance.Ai.CoreSupplyReserve));
             Commands.Register(CommandType.OpenJumpGate, new JumpGateSystem(
                 World, JumpGates, Starlanes, LaneWeather, Players, Sites, Stockpiles, Graph, TechGates, balance.JumpGates));
             Clock.Register(ContractSystem);

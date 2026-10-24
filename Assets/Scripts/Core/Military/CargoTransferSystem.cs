@@ -10,7 +10,8 @@ namespace Unruled.Core.Military
     /// <see cref="CommandType.TransferCargo"/> (target: a fleet; ParamA = item; ParamB = quantity, positive loads from the
     /// site into the hold, negative unloads into the site; ParamC = 1 fills the hold up to ParamB from what the site has,
     /// so a repeated fill changes nothing). The fleet must be the player's, docked at a site the player owns, out of combat
-    /// and not a WTO contract convoy. A plain transfer is all or nothing. Stolen units move first, so their
+    /// and not a WTO contract convoy. A convoy-only fleet holds at most its cargo convoys x the capacity per convoy of each
+    /// item (a fill stops there). A plain transfer is all or nothing. Stolen units move first, so their
     /// <see cref="StolenGoods"/> tags follow them.
     /// </summary>
     public sealed class CargoTransferSystem : ICommandHandler
@@ -23,12 +24,15 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<ContractCargo> _contracts;
         private readonly ComponentStore<StolenGoods> _stolen;
         private readonly int _coreSupplyReserve;
+        private readonly int _capacityPerConvoy;
 
         public CargoTransferSystem(
             ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions, ComponentStore<FleetCombatState> combat,
             ComponentStore<SiteInfo> sites, ComponentStore<Stockpile> stockpiles, ComponentStore<ContractCargo> contracts,
-            ComponentStore<StolenGoods> stolen, int coreSupplyReserve = 0)
+            ComponentStore<StolenGoods> stolen, int capacityPerConvoy, int coreSupplyReserve = 0)
         {
+            if (capacityPerConvoy < 1) throw new ArgumentOutOfRangeException(nameof(capacityPerConvoy));
+            _capacityPerConvoy = capacityPerConvoy;
             _units = units ?? throw new ArgumentNullException(nameof(units));
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
             _combat = combat ?? throw new ArgumentNullException(nameof(combat));
@@ -70,12 +74,18 @@ namespace Unruled.Core.Military
                         ? Math.Min(_coreSupplyReserve, 50)
                         : 0;
                 quantity = Math.Min(command.ParamB - _stockpiles.Get(fleet).Get(item), source.Get(item) - reserve);
+                if (_units.Get(fleet).IsConvoyOnly)
+                    quantity = (int)Math.Min(quantity, Room(fleet, item));
                 if (quantity <= 0)
                     return;
             }
-            if (!source.Has(item, quantity))
+            if (!source.Has(item, quantity) || (load && _units.Get(fleet).IsConvoyOnly && quantity > Room(fleet, item)))
                 return;
             CargoMover.Move(_stockpiles, _stolen, from, to, item, quantity);
         }
+
+        // What a convoy-only fleet's hold can still take of an item.
+        private long Room(EntityId fleet, ItemId item) =>
+            (long)_units.Get(fleet).CargoConvoys * _capacityPerConvoy - _stockpiles.Get(fleet).Get(item);
     }
 }

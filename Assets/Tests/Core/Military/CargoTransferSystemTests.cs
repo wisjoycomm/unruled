@@ -100,6 +100,25 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
+        public void ConvoyHold_TakesAtMostItsCapacity_PlainLoadsOverItAreRefused_FillsStopAtIt()
+        {
+            int capacity = _sim.Balance.Convoys.CapacityPerConvoy;
+            var convoy = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Player, TechTier = 1, CargoConvoys = 2 }, _core);
+            Site.Add(ItemId.ItemFuel, 10 * capacity);
+
+            Transfer(convoy, ItemId.ItemFuel, 2 * capacity + 1);
+            Assert.AreEqual(0, _sim.Stockpiles.Get(convoy).Get(ItemId.ItemFuel), "over capacity: refused");
+
+            Transfer(convoy, ItemId.ItemFuel, capacity);
+            Transfer(convoy, ItemId.ItemFuel, 5 * capacity, fill: 1);
+            Assert.AreEqual(2 * capacity, _sim.Stockpiles.Get(convoy).Get(ItemId.ItemFuel), "a fill stops at capacity");
+
+            Site.Add(ItemId.ItemSteel, capacity);
+            Transfer(convoy, ItemId.ItemSteel, capacity);
+            Assert.AreEqual(capacity, _sim.Stockpiles.Get(convoy).Get(ItemId.ItemSteel), "capacity is per item");
+        }
+
+        [Test]
         public void ContractConvoy_CannotTransfer()
         {
             Hold.Add(ItemId.ItemSteel, 10);
