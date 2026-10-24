@@ -20,7 +20,7 @@ namespace Unruled.View
 
         public BoardMesh()
         {
-            Mesh = new Mesh { name = "Board" };
+            Mesh = new Mesh { name = "Board", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
             Mesh.MarkDynamic();
         }
 

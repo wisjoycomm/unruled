@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Unruled.Core.Board;
+using Unruled.Core.Galaxy;
 using Unruled.Core.Military;
 using Unruled.Core.Simulation;
 using Unruled.Core.SystemFactions;
@@ -18,10 +19,14 @@ namespace Unruled.View
     /// the Citadel's shield arc), fleets as tier chevrons with state marks (engaged, mothballed, warming up,
     /// unsupplied, guns locked, RWR alarm, WTO contract convoy), the selected fleet's route and convoy run, and NOAA
     /// storm discs the player's bracket can see; a jump gate or inter-system lane is a ring on its site.
-    /// The galaxy tab instead shows every star system: the contested cluster in the middle, homes on the inner ring,
-    /// uninhabited frontier systems on the outer ring, gate/inter-system links and own fleet counts; clicking a system opens it.
-    /// One mesh, rebuilt only when the sim tick or the board's screen area changes. Names are pooled UI Toolkit labels over
-    /// the board view. Clicks select through <see cref="MainScreenView"/>; this class never writes simulation state.
+    /// The board is one continuous zoom over the galaxy catalog (wheel or pinch, drag to pan), drawn at the level of
+    /// detail the zoom calls for: the whole galaxy as star-density dust with the players' systems as dots; a star region
+    /// with every catalog star in view, hyperlanes when close, and the charted systems with their links, owners and own
+    /// fleets; zoomed onto a charted system, that system as above; closer still onto a planet, its preview card. Clicking
+    /// a charted system in a region previews it, a second click flies into it. The SYSTEM and GALAXY tabs fly to the
+    /// last system and to the whole galaxy. One mesh, rebuilt only when the sim tick, the camera or the board's screen
+    /// area changes. Names are pooled UI Toolkit labels over the board view. Clicks select through
+    /// <see cref="MainScreenView"/>; this class never writes simulation state.
     /// </summary>
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public sealed class MapBoardRenderer : MonoBehaviour
@@ -31,6 +36,18 @@ namespace Unruled.View
         private const float FleetPickPx = 20f;
         private const float FleetOffsetPx = 30f;
         private const float ClusterPickPx = 40f;
+
+        // Zoom levels, in galaxy units of the camera's fit radius (half the shorter side of the board).
+        private const float SystemFootprint = 120f; // a charted system's outer orbit spans this on the galaxy map
+        private const float EnterSystemHalf = SystemFootprint * 1.6f; // closer than this, the nearest system opens
+        private const float PlanetZoom = 0.3f; // a system zoomed under this share of its extent previews a planet
+        private const float RegionMaxHalf = 12_000f; // further out than this, stars give way to density dust
+        private const float HyperlaneMaxHalf = 2_500f;
+        private const int RegionStarLimit = 6_000;
+        private const int HyperlaneStarLimit = 400;
+        private const int DustCellsAcross = 90;
+        private const float WheelStep = 1.12f;
+        private const float DragThresholdPx = 6f;
 
         private static readonly string[] StormLevelNames = { "", "MINOR", "MODERATE", "STRONG", "SEVERE", "EXTREME" };
         private static readonly char[] StormScaleLetters = { ' ', 'R', 'S', 'G' };
@@ -47,11 +64,14 @@ namespace Unruled.View
         private UiArt _art;
         private int _glyphsUsed;
         private readonly List<float> _orbits = new List<float>();
-        private readonly List<Vector2> _clusterPos = new List<Vector2>();
-        private readonly List<byte> _clusterKinds = new List<byte>();
-        private readonly GalaxyLayout _layout = new GalaxyLayout();
+        private readonly List<Vector2Int> _systemPos = new List<Vector2Int>(); // per cluster, galaxy units
+        private readonly List<float> _systemExtent = new List<float>(); // per cluster, outer orbit radius x margin
         private readonly List<int> _clusterFleets = new List<int>();
         private readonly Dictionary<int, int> _portalStack = new Dictionary<int, int>();
+        private readonly List<StarRecord> _stars = new List<StarRecord>(RegionStarLimit);
+        private readonly List<Vector2Int> _hyperlanes = new List<Vector2Int>(); // pairs of galaxy positions
+        private readonly List<StarId> _neighbours = new List<StarId>();
+        private readonly Dictionary<int, Vector2> _pointers = new Dictionary<int, Vector2>();
         private int _labelsUsed;
 
         private SimulationWorld _sim;
@@ -62,12 +82,23 @@ namespace Unruled.View
         private VisualElement _sectorBadge;
         private Label _sectorBadgeLabel;
         private int _playerId;
-        private int _clusterId;
-        private bool _galaxy;
-        private int _contestedId = -1;
-        private float _extent = 1f;
+        private int _clusterId; // the system the SYSTEM tab returns to: the last one shown
+        private int _systemCluster = -1; // the system on the board, -1 when the board shows a region or the galaxy
+        private int _shownLevel = -1;
+        private float _extent = 1f; // the shown system's extent, local units
+        private float _systemScale = 1f; // galaxy units per local unit of the shown system
+        private double _camX, _camY; // camera centre, galaxy units
+        private float _camHalf = 1f; // camera fit radius, galaxy units
+        private bool _camDirty = true;
+        private Vector2 _viewCentre; // centre of the drawn view, in the units the mesh is built in
         private float _halfWidth = 1f, _halfHeight = 1f;
+        private int _systemCount = -1;
+        private bool _starsValid;
+        private bool _dragging;
+        private Vector2 _pressPos;
+        private float _pinchDistance;
         private int _previewCluster = -1;
+        private EntityId _planetPreview;
         private long _drawnTick = -1;
         private Rect _drawnRect;
         private EntityId _drawnSelection;
@@ -86,6 +117,10 @@ namespace Unruled.View
             _boardView = screen.BoardView;
             _boardView.pickingMode = PickingMode.Position;
             _boardView.RegisterCallback<PointerDownEvent>(OnPointerDown);
+            _boardView.RegisterCallback<PointerMoveEvent>(OnPointerMove);
+            _boardView.RegisterCallback<PointerUpEvent>(OnPointerUp);
+            _boardView.RegisterCallback<PointerCancelEvent>(OnPointerCancel);
+            _boardView.RegisterCallback<WheelEvent>(OnWheel);
             if (_labelLayer == null)
             {
                 _labelLayer = new VisualElement { pickingMode = PickingMode.Ignore };
@@ -94,6 +129,7 @@ namespace Unruled.View
                 _labelLayer.style.top = 0;
                 _labelLayer.style.right = 0;
                 _labelLayer.style.bottom = 0;
+                _labelLayer.style.overflow = Overflow.Hidden; // zoomed in, names past the board's edge stay off the panels
             }
             _boardView.Insert(0, _labelLayer);
             if (_coreGlyph == null)
@@ -113,10 +149,6 @@ namespace Unruled.View
                 _lifecycleGlyphs[(int)PlanetLifecycleState.TerraformedRecovery] = Resources.Load<Texture2D>("UI/node_terraformed");
             }
             EnsureTelemetryOverlays();
-            _contestedId = _sim.JumpGates.Count > 0 && _sim.Sites.Has(_sim.JumpGates.At(0).FarSite)
-                ? _sim.Sites.Get(_sim.JumpGates.At(0).FarSite).ClusterId
-                : -1;
-            BuildGalaxyLayout();
             screen.SystemTab.clicked -= OnSystemTab;
             screen.SystemTab.clicked += OnSystemTab;
             screen.GalaxyTab.clicked -= ShowGalaxy;
@@ -125,69 +157,122 @@ namespace Unruled.View
             _clusterId = 0;
             if (HudQueries.TryFindHq(sim, playerId, out var hq) && sim.Sites.Has(sim.Players.Get(hq).CoreBase))
                 _clusterId = sim.Sites.Get(sim.Players.Get(hq).CoreBase).ClusterId;
+            _systemCount = -1;
             ShowCluster(_clusterId);
         }
 
-        /// <summary>Switches the board to another star system.</summary>
+        /// <summary>Flies the camera onto a charted star system, framing its outer orbit.</summary>
         public void ShowCluster(int clusterId)
         {
-            _galaxy = false;
-            _previewCluster = -1;
-            _backdropLayer.style.display = DisplayStyle.Flex;
-            _screen.Preview.Hide();
+            EnsureSystems();
+            if (clusterId < 0 || clusterId >= _systemPos.Count)
+                return;
             _clusterId = clusterId;
-            _screen.ShowBoardTab(false, clusterId);
-            _orbits.Clear();
-            float max = 1f;
-            for (int i = 0; i < _sim.Sites.Count; i++)
-            {
-                ref var site = ref _sim.Sites.At(i);
-                if (site.ClusterId != clusterId)
-                    continue;
-                float r = new Vector2(site.PosX, site.PosY).magnitude;
-                _orbits.Add(r);
-                if (r > max)
-                    max = r;
-            }
-            _extent = max * FitMargin;
-            _drawnTick = -1;
-            UpdateSectorBadge(false, clusterId);
+            _camX = _systemPos[clusterId].x;
+            _camY = _systemPos[clusterId].y;
+            _camHalf = SystemFootprint;
+            _camDirty = true;
         }
 
-        /// <summary>Switches the board to the galaxy overview.</summary>
+        /// <summary>Pulls the camera out to the whole galaxy.</summary>
         public void ShowGalaxy()
         {
-            _galaxy = true;
-            _previewCluster = -1;
-            _screen.Preview.Hide();
-            _contestedId = _sim.JumpGates.Count > 0 && _sim.Sites.Has(_sim.JumpGates.At(0).FarSite)
-                ? _sim.Sites.Get(_sim.JumpGates.At(0).FarSite).ClusterId
-                : -1;
-            BuildGalaxyLayout();
-            _extent = GalaxyLayout.Radius * 1.08f;
-            _backdropLayer.style.display = DisplayStyle.None; // the chart draws its own star field
-            _drawnTick = -1;
-            _screen.ShowBoardTab(true, _clusterId);
-            UpdateSectorBadge(true, _clusterId);
+            _camX = 0;
+            _camY = 0;
+            _camHalf = _sim.Balance.Galaxy.RadiusUnits * 1.05f;
+            _camDirty = true;
         }
 
         private void OnSystemTab() => ShowCluster(_clusterId);
 
-        // Lays the systems out on a seeded spiral galaxy; the system view also uses it for the bearing of exits.
-        private void BuildGalaxyLayout()
+        // Where each charted system sits on the galaxy map, and how big its orbits are: rebuilt when a system is charted.
+        private void EnsureSystems()
         {
-            int clusters = 0;
-            for (int i = 0; i < _sim.Sites.Count; i++)
-                clusters = Mathf.Max(clusters, _sim.Sites.At(i).ClusterId + 1);
-            _clusterKinds.Clear();
+            int clusters = _sim.Galaxy.NextClusterId();
+            if (clusters == _systemCount)
+                return;
+            _systemCount = clusters;
+            _systemPos.Clear();
+            _systemExtent.Clear();
             for (int c = 0; c < clusters; c++)
-                _clusterKinds.Add(c == _contestedId ? GalaxyLayout.Contested
-                    : ClusterCoreOwner(c) != 0 ? GalaxyLayout.Home
-                    : GalaxyLayout.Frontier);
-            _layout.Build(_sim.WorldSeed, _clusterKinds, UnruledPalette.InkSoft, UnruledPalette.Sta, UnruledPalette.Hostile,
-                UnruledPalette.You, UnruledPalette.Wto);
-            _clusterPos.Clear();
-            _clusterPos.AddRange(_layout.Systems);
+            {
+                var system = _sim.Galaxy.SystemOf(c);
+                _systemPos.Add(!system.IsNull && _sim.StarSystems.Has(system)
+                    ? new Vector2Int(_sim.StarSystems.Get(system).X, _sim.StarSystems.Get(system).Y)
+                    : Vector2Int.zero);
+                _systemExtent.Add(1f);
+            }
+            for (int i = 0; i < _sim.Sites.Count; i++)
+            {
+                ref var site = ref _sim.Sites.At(i);
+                if (site.ClusterId < 0 || site.ClusterId >= clusters)
+                    continue;
+                float r = new Vector2(site.PosX, site.PosY).magnitude * FitMargin;
+                if (r > _systemExtent[site.ClusterId])
+                    _systemExtent[site.ClusterId] = r;
+            }
+        }
+
+        // The zoom level the camera calls for: 0 galaxy dust, 1 star region, 2 a system, 3 a planet of it.
+        private int Level(out int cluster)
+        {
+            cluster = -1;
+            if (_camHalf > RegionMaxHalf)
+                return 0;
+            if (_camHalf > EnterSystemHalf)
+                return 1;
+            double best = double.MaxValue;
+            for (int c = 0; c < _systemPos.Count; c++)
+            {
+                double dx = _systemPos[c].x - _camX, dy = _systemPos[c].y - _camY;
+                double d = dx * dx + dy * dy;
+                if (d < best)
+                {
+                    best = d;
+                    cluster = c;
+                }
+            }
+            if (cluster < 0 || best > (double)EnterSystemHalf * EnterSystemHalf)
+            {
+                cluster = -1;
+                return 1;
+            }
+            return _camHalf < SystemFootprint * PlanetZoom ? 3 : 2;
+        }
+
+        // Sets what the drawing code reads for the current level: the shown system (local units), or the galaxy view.
+        private void ApplyLevel(int level, int cluster)
+        {
+            bool system = level >= 2;
+            if (system && cluster != _systemCluster)
+            {
+                _systemCluster = cluster;
+                _clusterId = cluster;
+                _orbits.Clear();
+                for (int i = 0; i < _sim.Sites.Count; i++)
+                {
+                    ref var site = ref _sim.Sites.At(i);
+                    if (site.ClusterId == cluster)
+                        _orbits.Add(new Vector2(site.PosX, site.PosY).magnitude);
+                }
+                _extent = _systemExtent[cluster];
+                _systemScale = SystemFootprint / _extent;
+                _screen.Preview.Hide();
+                _previewCluster = -1;
+            }
+            else if (!system)
+                _systemCluster = -1;
+            if (level == _shownLevel && (!system || cluster == _clusterId))
+                return;
+            if (level < 2 && _shownLevel >= 2 || level == 2 && _shownLevel == 3)
+            {
+                _screen.Preview.Hide();
+                _planetPreview = default;
+            }
+            _shownLevel = level;
+            _backdropLayer.style.display = system ? DisplayStyle.Flex : DisplayStyle.None;
+            _screen.ShowBoardTab(!system, _clusterId);
+            UpdateSectorBadge(!system, _clusterId);
         }
 
 
@@ -200,34 +285,85 @@ namespace Unruled.View
             if (panelRoot == null || rect.width <= 0f || rect.height <= 0f)
                 return;
             var selection = _screen.Fleet.Fleet;
-            if (_sim.Clock.CurrentTick == _drawnTick && rect == _drawnRect && selection == _drawnSelection)
+            EnsureSystems();
+            if (_sim.Clock.CurrentTick == _drawnTick && rect == _drawnRect && selection == _drawnSelection && !_camDirty)
                 return;
+            if (_camDirty)
+                _starsValid = false;
             _drawnTick = _sim.Clock.CurrentTick;
             _drawnRect = rect;
             _drawnSelection = selection;
+            _camDirty = false;
 
+            int level = Level(out int cluster);
+            ApplyLevel(level, cluster);
+
+            // The mesh is built around the view centre: in the shown system's local units, or in galaxy units relative
+            // to the camera (so huge galaxy coordinates never lose float precision).
+            float half;
+            if (level >= 2)
+            {
+                _viewCentre = new Vector2((float)((_camX - _systemPos[cluster].x) / _systemScale),
+                    (float)((_camY - _systemPos[cluster].y) / _systemScale));
+                half = _camHalf / _systemScale;
+            }
+            else
+            {
+                _viewCentre = Vector2.zero;
+                half = _camHalf;
+            }
             var root = panelRoot.worldBound;
             _camera.rect = new Rect(rect.xMin / root.width, 1f - rect.yMax / root.height, rect.width / root.width,
                 rect.height / root.height);
             float aspect = rect.width / rect.height;
-            _halfHeight = aspect >= 1f ? _extent : _extent / aspect;
+            _halfHeight = aspect >= 1f ? half : half / aspect;
             _halfWidth = _halfHeight * aspect;
             _camera.orthographic = true;
             _camera.orthographicSize = _halfHeight;
+            _camera.transform.localPosition = new Vector3(_viewCentre.x, _viewCentre.y, -10f);
             _mesh.UnitsPerPixel = 2f * _halfHeight / rect.height;
 
-            Rebuild(selection);
+            Rebuild(selection, level);
+            if (level == 3)
+                PreviewNearestPlanet();
         }
 
-        private void Rebuild(EntityId selection)
+        // Zoomed in on a planet: the preview card follows the planet nearest the view centre.
+        private void PreviewNearestPlanet()
+        {
+            var nearest = default(EntityId);
+            float best = float.MaxValue;
+            for (int i = 0; i < _sim.Sites.Count; i++)
+            {
+                ref var site = ref _sim.Sites.At(i);
+                if (site.ClusterId != _systemCluster)
+                    continue;
+                float d = (new Vector2(site.PosX, site.PosY) - _viewCentre).sqrMagnitude;
+                if (d < best)
+                {
+                    best = d;
+                    nearest = _sim.Sites.EntityAt(i);
+                }
+            }
+            if (nearest.IsNull || nearest == _planetPreview)
+                return;
+            _planetPreview = nearest;
+            _screen.Preview.ShowSite(nearest);
+        }
+
+        private void Rebuild(EntityId selection, int level)
         {
             long tick = _sim.Clock.CurrentTick;
             _mesh.Clear();
             _labelsUsed = 0;
             _glyphsUsed = 0;
-            if (_galaxy)
+            if (level < 2)
             {
-                DrawGalaxy();
+                if (level == 0)
+                    DrawDust();
+                else
+                    DrawRegion();
+                DrawGalaxy(level);
                 _mesh.Upload();
                 for (int i = _labelsUsed; i < _labels.Count; i++)
                     _labels[i].style.display = DisplayStyle.None;
@@ -326,8 +462,8 @@ namespace Unruled.View
                 return;
             int far = _sim.Sites.Get(there).ClusterId;
             Vector2 dir;
-            if (_clusterId < _clusterPos.Count && far < _clusterPos.Count && (_clusterPos[far] - _clusterPos[_clusterId]).sqrMagnitude > 1f)
-                dir = (_clusterPos[far] - _clusterPos[_clusterId]).normalized;
+            if (_systemCluster >= 0 && far >= 0 && far < _systemPos.Count && _systemPos[far] != _systemPos[_systemCluster])
+                dir = ((Vector2)(_systemPos[far] - _systemPos[_systemCluster])).normalized;
             else
                 dir = from.sqrMagnitude > 1f ? from.normalized : Vector2.up;
             float u = _mesh.UnitsPerPixel;
@@ -397,7 +533,7 @@ namespace Unruled.View
 
         private Texture2D StarTexture(int clusterId)
         {
-            if (clusterId == _contestedId)
+            if (IsHub(clusterId))
                 return _starContested;
             return ClusterCoreOwner(clusterId) != 0 ? _starHome : _starFrontier;
         }
@@ -552,11 +688,120 @@ namespace Unruled.View
             }
         }
 
-        private void DrawGalaxy()
+        // A hub: a system holding one of THE SYSTEM's Citadels (works for systems from before the catalog too).
+        private bool IsHub(int clusterId)
         {
-            DrawGalaxyField();
+            for (int i = 0; i < _sim.Citadels.Count; i++)
+            {
+                var site = _sim.Citadels.EntityAt(i);
+                if (_sim.Sites.Has(site) && _sim.Sites.Get(site).ClusterId == clusterId)
+                    return true;
+            }
+            return false;
+        }
+
+        // A charted system's place in the drawn galaxy view (relative to the camera).
+        private Vector2 SystemAt(int clusterId) =>
+            new Vector2((float)(_systemPos[clusterId].x - _camX), (float)(_systemPos[clusterId].y - _camY));
+
+        private Vector2 GalaxyAt(int x, int y) => new Vector2((float)(x - _camX), (float)(y - _camY));
+
+        // Whole galaxy: star density sampled from the catalog on a coarse grid over the view, faint where the field is
+        // thin, bright along the arms and the core. Cached until the camera moves.
+        private readonly List<Vector3> _dust = new List<Vector3>(); // x, y (galaxy units), density 0..1
+        private float _dustCell;
+
+        private void DrawDust()
+        {
+            var catalog = _sim.Galaxy.Catalog;
+            if (!_starsValid)
+            {
+                _starsValid = true;
+                _dust.Clear();
+                int size = catalog.Balance.SectorSize;
+                float max = catalog.Balance.MaxStarsPerSector;
+                _dustCell = 2f * Mathf.Max(_halfWidth, _halfHeight) / DustCellsAcross;
+                int across = Mathf.CeilToInt(_halfWidth * 2f / _dustCell) + 1;
+                int down = Mathf.CeilToInt(_halfHeight * 2f / _dustCell) + 1;
+                for (int j = 0; j < down; j++)
+                for (int i = 0; i < across; i++)
+                {
+                    double gx = _camX - _halfWidth + (i + 0.5) * _dustCell;
+                    double gy = _camY - _halfHeight + (j + 0.5) * _dustCell;
+                    // Four sectors per cell: one alone reads as noise.
+                    float sum = 0f;
+                    for (int k = 0; k < 4; k++)
+                    {
+                        double sx = gx + ((k & 1) - 0.5) * _dustCell * 0.5;
+                        double sy = gy + ((k >> 1) - 0.5) * _dustCell * 0.5;
+                        sum += catalog.StarCount((int)System.Math.Round(sx / size), (int)System.Math.Round(sy / size));
+                    }
+                    float density = sum / (4f * max);
+                    if (density > 0f)
+                        _dust.Add(new Vector3((float)(gx - _camX), (float)(gy - _camY), density));
+                }
+            }
+            // Soft overlapping blobs: the thin field between the arms barely shows, the arms glow, the core burns warm.
+            float cellPx = _dustCell / _mesh.UnitsPerPixel;
+            var ink = (Color32)UnruledPalette.InkSoft;
+            var warm = (Color32)UnruledPalette.Sta;
+            for (int i = 0; i < _dust.Count; i++)
+            {
+                var d = _dust[i];
+                var c = d.z > 0.75f ? warm : ink;
+                c.a = (byte)Mathf.Clamp(d.z * d.z * 120f, 0f, 120f);
+                if (c.a < 3)
+                    continue;
+                _mesh.Disc(new Vector2(d.x, d.y), cellPx * 0.85f, c);
+            }
+        }
+
+        // A star region: every catalog star in view (capped), hub stars red, home-class soft, frontier dim; close in,
+        // the hyperlanes between them. Cached until the camera moves.
+        private void DrawRegion()
+        {
+            var catalog = _sim.Galaxy.Catalog;
+            if (!_starsValid)
+            {
+                _starsValid = true;
+                catalog.StarsInRect((int)(_camX - _halfWidth), (int)(_camY - _halfHeight), (int)(_camX + _halfWidth),
+                    (int)(_camY + _halfHeight), _stars, RegionStarLimit);
+                _hyperlanes.Clear();
+                if (_camHalf <= HyperlaneMaxHalf && _stars.Count <= HyperlaneStarLimit)
+                    for (int i = 0; i < _stars.Count; i++)
+                    {
+                        catalog.Neighbours(_stars[i].Id, _neighbours);
+                        for (int n = 0; n < _neighbours.Count; n++)
+                        {
+                            if (_neighbours[n].Packed < _stars[i].Id.Packed || !catalog.TryGetStar(_neighbours[n], out var other))
+                                continue;
+                            _hyperlanes.Add(new Vector2Int(_stars[i].X, _stars[i].Y));
+                            _hyperlanes.Add(new Vector2Int(other.X, other.Y));
+                        }
+                    }
+            }
+            var lane = (Color32)UnruledPalette.Rule;
+            for (int i = 0; i + 1 < _hyperlanes.Count; i += 2)
+                _mesh.Line(GalaxyAt(_hyperlanes[i].x, _hyperlanes[i].y), GalaxyAt(_hyperlanes[i + 1].x, _hyperlanes[i + 1].y),
+                    1f, lane);
+            float sizePx = _camHalf < HyperlaneMaxHalf ? 3f : 1.6f;
+            for (int i = 0; i < _stars.Count; i++)
+            {
+                var star = _stars[i];
+                var c = star.Class == StarClass.Hub ? UnruledPalette.Danger
+                    : star.Class == StarClass.Home ? UnruledPalette.InkSoft
+                    : UnruledPalette.InkDim;
+                _mesh.Disc(GalaxyAt(star.X, star.Y), star.Class == StarClass.Hub ? sizePx * 1.5f : sizePx, c);
+            }
+        }
+
+        // Charted systems over the dust or region: links between them, owner colours, and (in a region) names and fleets.
+        private void DrawGalaxy(int level)
+        {
+            bool detailed = level == 1;
+            int count = _systemPos.Count;
             _clusterFleets.Clear();
-            for (int c = 0; c < _clusterPos.Count; c++)
+            for (int c = 0; c < count; c++)
                 _clusterFleets.Add(0);
             for (int i = 0; i < _sim.Fleets.Count; i++)
             {
@@ -573,9 +818,11 @@ namespace Unruled.View
                 ref var gate = ref _sim.JumpGates.At(i);
                 if (!_sim.Sites.Has(gate.HomeSite) || !_sim.Sites.Has(gate.FarSite))
                     continue;
-                var a = _clusterPos[_sim.Sites.Get(gate.HomeSite).ClusterId];
-                var b = _clusterPos[_sim.Sites.Get(gate.FarSite).ClusterId];
-                DrawRoute(a, b, gate.IsOpen ? UnruledPalette.Sta : UnruledPalette.Unclaimed, gate.IsOpen ? 3f : 2f, !gate.IsOpen);
+                int gA = _sim.Sites.Get(gate.HomeSite).ClusterId, gB = _sim.Sites.Get(gate.FarSite).ClusterId;
+                if (gA < 0 || gB < 0 || gA >= count || gB >= count)
+                    continue;
+                DrawRoute(SystemAt(gA), SystemAt(gB), gate.IsOpen ? UnruledPalette.Sta : UnruledPalette.Unclaimed,
+                    gate.IsOpen ? 3f : 2f, !gate.IsOpen);
             }
 
             for (int i = 0; i < _sim.Starlanes.Count; i++)
@@ -588,10 +835,10 @@ namespace Unruled.View
                     continue;
                 int cA = _sim.Sites.Get(lane.SiteA).ClusterId;
                 int cB = _sim.Sites.Get(lane.SiteB).ClusterId;
-                if (cA == cB || cA < 0 || cB < 0 || cA >= _clusterPos.Count || cB >= _clusterPos.Count)
+                if (cA == cB || cA < 0 || cB < 0 || cA >= count || cB >= count)
                     continue;
-                var a = _clusterPos[cA];
-                var b = _clusterPos[cB];
+                var a = SystemAt(cA);
+                var b = SystemAt(cB);
                 if (lane.Tier == StarlaneTier.StaHighway)
                 {
                     var gold = UnruledPalette.Sta;
@@ -602,12 +849,19 @@ namespace Unruled.View
                     DrawRoute(a, b, UnruledPalette.Unclaimed, 1.8f, true);
             }
 
-            for (int c = 0; c < _clusterPos.Count; c++)
+            for (int c = 0; c < count; c++)
             {
-                var p = _clusterPos[c];
+                var p = SystemAt(c);
                 int owner = ClusterCoreOwner(c);
-                bool contested = c == _contestedId;
+                bool contested = IsHub(c);
                 Color colour = contested ? UnruledPalette.Danger : owner != 0 ? SideColour(owner) : UnruledPalette.Unclaimed;
+                if (!detailed)
+                {
+                    _mesh.Disc(p, owner == _playerId ? 5f : 3.5f, colour);
+                    if (owner == _playerId)
+                        _mesh.Ring(p, 10f, 1.5f, UnruledPalette.You);
+                    continue;
+                }
                 if (c == _clusterId)
                     _mesh.SquareOutline(p, 64f, 2f, UnruledPalette.Ink);
                 var starTex = StarTexture(c);
@@ -634,28 +888,6 @@ namespace Unruled.View
             }
         }
 
-        // The galaxy behind the systems: faint nebula rings, the spiral star field and a bright core.
-        private void DrawGalaxyField()
-        {
-            for (int i = 0; i < _layout.Nebula.Count; i++)
-            {
-                var n = _layout.Nebula[i];
-                var c = _layout.NebulaColours[i];
-                for (int k = 1; k <= 3; k++)
-                {
-                    c.a = (byte)(26 - k * 5);
-                    _mesh.RingWorld(new Vector2(n.x, n.y), n.z * (0.45f + 0.28f * k), 1.5f, c);
-                }
-            }
-            var core = (Color32)UnruledPalette.Sta;
-            for (int k = 4; k >= 1; k--)
-            {
-                core.a = (byte)(14 + (4 - k) * 12);
-                _mesh.DiscWorld(Vector2.zero, GalaxyLayout.Radius * 0.05f * k, core);
-            }
-            for (int i = 0; i < _layout.Stars.Count; i++)
-                _mesh.Disc(_layout.Stars[i], _layout.StarSizes[i] * 0.5f, _layout.StarColours[i]);
-        }
 
         // A route between two systems on the chart, bowed gently so crossing routes stay readable.
         private void DrawRoute(Vector2 a, Vector2 b, Color colour, float widthPx, bool dashed)
@@ -756,11 +988,11 @@ namespace Unruled.View
             if (galaxy)
             {
                 _sectorBadgeLabel.style.color = UnruledPalette.You;
-                UiFormat.Set(_sectorBadgeLabel, "ASTROMETRIC GALAXY CHART");
+                UiFormat.Set(_sectorBadgeLabel, _shownLevel == 0 ? "ASTROMETRIC GALAXY CHART" : "STAR REGION · SCROLL TO ZOOM");
                 return;
             }
             int owner = ClusterCoreOwner(clusterId);
-            bool contested = clusterId == _contestedId;
+            bool contested = IsHub(clusterId);
             string tag = contested
                 ? " · CONTESTED CORE SECTOR"
                 : owner == _playerId
@@ -1060,21 +1292,139 @@ namespace Unruled.View
             return motion.Lane.IsNull && _sim.Sites.Has(motion.Site) && _sim.Sites.Get(motion.Site).OwnerPlayerId == _playerId;
         }
 
+        // Board pixels to the units the mesh is drawn in.
+        private Vector2 ToWorld(Vector2 local)
+        {
+            var size = _boardView.layout.size;
+            return _viewCentre + new Vector2((local.x / size.x * 2f - 1f) * _halfWidth, (1f - local.y / size.y * 2f) * _halfHeight);
+        }
+
+        // Galaxy units per drawn unit at the current level.
+        private float GalaxyPerWorld => _shownLevel >= 2 ? _systemScale : 1f;
+
         private void OnPointerDown(PointerDownEvent evt)
         {
             if (_sim == null)
                 return;
-            var local = (Vector2)evt.localPosition;
+            _pointers[evt.pointerId] = evt.localPosition;
+            _boardView.CapturePointer(evt.pointerId);
+            if (_pointers.Count == 1)
+            {
+                _pressPos = evt.localPosition;
+                _dragging = false;
+            }
+            else
+                _pinchDistance = PinchDistance();
+        }
+
+        private void OnPointerMove(PointerMoveEvent evt)
+        {
+            if (!_pointers.TryGetValue(evt.pointerId, out var last))
+                return;
+            Vector2 now = evt.localPosition;
+            _pointers[evt.pointerId] = now;
+            if (_pointers.Count >= 2)
+            {
+                float d = PinchDistance();
+                if (_pinchDistance > 1f && d > 1f)
+                    ZoomAt(PinchCentre(), _pinchDistance / d);
+                _pinchDistance = d;
+                _dragging = true;
+                return;
+            }
+            if (!_dragging && (now - _pressPos).magnitude < DragThresholdPx)
+                return;
+            _dragging = true;
             var size = _boardView.layout.size;
-            var world = new Vector2((local.x / size.x * 2f - 1f) * _halfWidth, (1f - local.y / size.y * 2f) * _halfHeight);
-            if (_galaxy)
+            float galaxyPerPx = 2f * _halfHeight / size.y * GalaxyPerWorld;
+            _camX -= (now.x - last.x) * galaxyPerPx;
+            _camY += (now.y - last.y) * galaxyPerPx;
+            _camDirty = true;
+        }
+
+        private void OnPointerUp(PointerUpEvent evt)
+        {
+            if (!_pointers.Remove(evt.pointerId))
+                return;
+            if (_boardView.HasPointerCapture(evt.pointerId))
+                _boardView.ReleasePointer(evt.pointerId);
+            if (_pointers.Count == 0 && !_dragging)
+                Click(evt.localPosition);
+            if (_pointers.Count == 0)
+                _dragging = false;
+        }
+
+        private void OnPointerCancel(PointerCancelEvent evt)
+        {
+            _pointers.Remove(evt.pointerId);
+            if (_pointers.Count == 0)
+                _dragging = false;
+        }
+
+        private void OnWheel(WheelEvent evt)
+        {
+            if (_sim == null)
+                return;
+            ZoomAt(evt.localMousePosition, evt.delta.y > 0f ? WheelStep : 1f / WheelStep);
+            evt.StopPropagation();
+        }
+
+        // Zooms by `factor` (above 1 = out) keeping the galaxy point under `local` fixed on screen.
+        private void ZoomAt(Vector2 local, float factor)
+        {
+            float min = SystemFootprint * PlanetZoom * 0.25f;
+            float max = _sim.Balance.Galaxy.RadiusUnits * 1.2f;
+            float next = Mathf.Clamp(_camHalf * factor, min, max);
+            var size = _boardView.layout.size;
+            if (size.y <= 0f)
+                return;
+            float aspect = size.x / size.y;
+            float halfH = aspect >= 1f ? _camHalf : _camHalf / aspect;
+            double ox = (local.x / size.x * 2f - 1f) * halfH * aspect;
+            double oy = (1f - local.y / size.y * 2f) * halfH;
+            double k = 1.0 - next / _camHalf;
+            _camX += ox * k;
+            _camY += oy * k;
+            _camHalf = next;
+            _camDirty = true;
+        }
+
+        private float PinchDistance()
+        {
+            Vector2 a = default, b = default;
+            int n = 0;
+            foreach (var p in _pointers.Values)
+            {
+                if (n == 0) a = p;
+                else if (n == 1) b = p;
+                n++;
+            }
+            return n >= 2 ? Vector2.Distance(a, b) : 0f;
+        }
+
+        private Vector2 PinchCentre()
+        {
+            Vector2 sum = default;
+            int n = 0;
+            foreach (var p in _pointers.Values)
+            {
+                sum += p;
+                n++;
+            }
+            return n > 0 ? sum / n : sum;
+        }
+
+        private void Click(Vector2 local)
+        {
+            var world = ToWorld(local);
+            if (_shownLevel < 2)
             {
                 float pick = ClusterPickPx * _mesh.UnitsPerPixel;
-                for (int c = 0; c < _clusterPos.Count; c++)
+                for (int c = 0; c < _systemPos.Count; c++)
                 {
-                    if (Vector2.Distance(_clusterPos[c], world) > pick)
+                    if (Vector2.Distance(SystemAt(c), world) > pick)
                         continue;
-                    // First click previews the system; a second click on it opens the system view.
+                    // First click previews the system; a second click on it flies into it.
                     if (c == _previewCluster)
                         ShowCluster(c);
                     else
@@ -1152,8 +1502,8 @@ namespace Unruled.View
             glyph.style.display = DisplayStyle.Flex;
             glyph.style.width = sizePx;
             glyph.style.height = sizePx;
-            glyph.style.left = (world.x / _halfWidth + 1f) * 0.5f * size.x - sizePx * 0.5f;
-            glyph.style.top = (1f - world.y / _halfHeight) * 0.5f * size.y - sizePx * 0.5f;
+            glyph.style.left = ((world.x - _viewCentre.x) / _halfWidth + 1f) * 0.5f * size.x - sizePx * 0.5f;
+            glyph.style.top = (1f - (world.y - _viewCentre.y) / _halfHeight) * 0.5f * size.y - sizePx * 0.5f;
             glyph.style.backgroundImage = new StyleBackground(texture);
             glyph.style.unityBackgroundImageTintColor = tint;
             glyph.style.rotate = new Rotate(degrees);
@@ -1176,8 +1526,8 @@ namespace Unruled.View
             }
             _labelsUsed++;
             var size = _boardView.layout.size;
-            float x = (world.x / _halfWidth + 1f) * 0.5f * size.x;
-            float y = (1f - world.y / _halfHeight) * 0.5f * size.y;
+            float x = ((world.x - _viewCentre.x) / _halfWidth + 1f) * 0.5f * size.x;
+            float y = (1f - (world.y - _viewCentre.y) / _halfHeight) * 0.5f * size.y;
             label.style.display = DisplayStyle.Flex;
             label.style.left = x;
             label.style.top = y;
@@ -1233,7 +1583,13 @@ namespace Unruled.View
         private void OnDestroy()
         {
             if (_boardView != null)
+            {
                 _boardView.UnregisterCallback<PointerDownEvent>(OnPointerDown);
+                _boardView.UnregisterCallback<PointerMoveEvent>(OnPointerMove);
+                _boardView.UnregisterCallback<PointerUpEvent>(OnPointerUp);
+                _boardView.UnregisterCallback<PointerCancelEvent>(OnPointerCancel);
+                _boardView.UnregisterCallback<WheelEvent>(OnWheel);
+            }
             if (_mesh != null)
                 Destroy(_mesh.Mesh);
         }
