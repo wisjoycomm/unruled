@@ -19,7 +19,7 @@ namespace Unruled.Core.Galaxy
     /// <see cref="SystemName.TryEncode"/>) names a system for its current owner and is published as a bulletin; an
     /// order from anyone else, or a name that doesn't decode to a legal one, changes nothing.
     /// </summary>
-    public sealed class GalaxySystem : ISimSystem, ICommandHandler, IChartLog
+    public sealed class GalaxySystem : ISimSystem, ICommandHandler, IStarCharts
     {
         public const int OwnerRefreshTicks = 60;
 
@@ -117,9 +117,12 @@ namespace Unruled.Core.Galaxy
             return _catalog.TryGetStar(star, out var record) && record.Class == StarClass.Frontier;
         }
 
-        /// <summary>Whether the player knows the system of <paramref name="clusterId"/>; THE SYSTEM (id 0 or less) knows all.</summary>
+        /// <summary>
+        /// Whether the player knows the system of <paramref name="clusterId"/>. THE SYSTEM (id 0 or less) knows all, and
+        /// a cluster with no system (a hand-wired world) is open to everyone: charts cover registered systems only.
+        /// </summary>
         public bool Knows(int playerId, int clusterId) =>
-            playerId <= 0 || _chartOf.ContainsKey(ChartKey(playerId, clusterId));
+            playerId <= 0 || SystemOf(clusterId).IsNull || _chartOf.ContainsKey(ChartKey(playerId, clusterId));
 
         /// <summary>
         /// The one door into a player's charts: the player now knows the system (no-op if it already did or the cluster
@@ -134,6 +137,9 @@ namespace Unruled.Core.Galaxy
             _chartOf[ChartKey(playerId, clusterId)] = chart;
             return true;
         }
+
+        public bool KnowsSite(int playerId, EntityId site) =>
+            playerId <= 0 || !_sites.Has(site) || Knows(playerId, _sites.Get(site).ClusterId);
 
         /// <summary>A fleet arrived at a site: its owner learns that system.</summary>
         public void FleetArrived(int playerId, EntityId site, long tick)

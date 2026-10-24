@@ -165,12 +165,15 @@ namespace Unruled.Core.Simulation
             TechGates = new TechGates(TechProgress, Players, balance.Research);
             Latency = new SignalLatencySolver(Graph, Starlanes, Weather, LaneWeather, Players, Relays, Fleets, FleetMotions,
                 balance.Latency, TechGates);
-            Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, FleetMotions, Deposits, Players, Relocations);
             FleetFactory = new FleetFactory(
                 World, Sites, Fleets, FleetMotions, FleetRoutes, FleetSensors, FleetReadiness, FleetCombat, Stockpiles, balance.Combat);
-            Routes = new RoutePlanner(Graph, Starlanes, balance.Starlanes, balance.Fleets);
             Authority = new SystemAuthorityManager(
                 World, Sanctions, Bulletins, Sites, Players, Stockpiles, Ledger, FleetFactory, balance.Fleets, balance.Authority);
+            // Built early: orders and movement read the star charts; it ticks last, after the watchers.
+            Galaxy = new GalaxySystem(World, StarSystems, SystemNames, SystemCharts, Sites,
+                new GalaxyCatalog(balance.Galaxy, worldSeed), Authority);
+            Issuer = new CommandIssuer(Clock, Latency, Sites, Starlanes, FleetMotions, Deposits, Players, Relocations, Galaxy);
+            Routes = new RoutePlanner(Graph, Starlanes, balance.Starlanes, balance.Fleets);
             ContractSystem = new WtoContractSystem(
                 World, Contracts, ContractCargo, FleetMotions, Starlanes, Stockpiles, Sites, Ledger, WtoEscrow, WtoFeePool, Rates,
                 FleetFactory, Routes, Clock, balance.Fleets, balance.Contracts);
@@ -211,9 +214,6 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Activate, upkeep);
 
             Tolls = new StaTollGate(Ledger, Standings, StaTollPool, balance.Starlanes, balance.Leaderboard, balance.Sta);
-            // Built before movement, which reports arrivals to it; it ticks last, after the watchers.
-            Galaxy = new GalaxySystem(World, StarSystems, SystemNames, SystemCharts, Sites,
-                new GalaxyCatalog(balance.Galaxy, worldSeed), Authority);
             Movement = new FleetMovementSystem(
                 Fleets, FleetMotions, FleetRoutes, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, Routes,
                 Tolls, Galaxy, balance.Starlanes, balance.Fleets);

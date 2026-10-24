@@ -2486,6 +2486,8 @@ namespace Unruled.Core.AI
         private bool PlanTrip(EntityId from, EntityId to, in FleetUnit unit, int trips, int maxLanes, out bool tollFree)
         {
             tollFree = false;
+            if (!_galaxy.KnowsSite(unit.OwnerPlayerId, to))
+                return false; // fleets fly only to charted systems
             if (!_routes.TryPlan(from, to, unit.TechTier, tollFree: false, default, maxLanes, out bool hasTolls, ref _route))
                 return false;
             if (!hasTolls)

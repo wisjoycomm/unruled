@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Galaxy;
 using Unruled.Core.Military;
@@ -23,7 +24,7 @@ namespace Unruled.Tests.Core.Galaxy
         private int Participants => 1 + _sim.Balance.NewGame.RivalCount;
         private int HomeCluster => _sim.Sites.Get(_game.CoreBase).ClusterId;
 
-        private void Survey(StarId star, int playerId, Unruled.Core.Ecs.EntityId fleet)
+        private void Survey(StarId star, int playerId, EntityId fleet)
         {
             var command = new DelayedPlayerCommand
             {
@@ -106,6 +107,40 @@ namespace Unruled.Tests.Core.Galaxy
                     return _sim.SystemCharts.At(i);
             Assert.Fail($"no chart for player {player} cluster {cluster}");
             return default;
+        }
+
+        private int RivalHome() => 1; // participant 2's home cluster
+
+        private IssueResult Move(EntityId destination, int playerId = 1)
+        {
+            var command = new DelayedPlayerCommand
+            {
+                PlayerId = playerId, CommandType = CommandType.Move, Target = _game.Fleet, ParamEntity = destination
+            };
+            return _sim.Issuer.Issue(command, out _);
+        }
+
+        [Test]
+        public void Orders_IntoAnUnknownSystem_AreRefusedAsUncharted_AndAllowedOnceKnown()
+        {
+            var rivalSite = _sim.Galaxy.SiteAtOrbit(RivalHome(), 0);
+            Assert.IsFalse(_sim.Galaxy.Knows(1, RivalHome()));
+            Assert.AreEqual(IssueResult.Uncharted, Move(rivalSite), "a move into an unknown system");
+            var claim = new DelayedPlayerCommand { PlayerId = 1, CommandType = CommandType.ClaimSite, Target = rivalSite };
+            Assert.AreEqual(IssueResult.Uncharted, _sim.Issuer.Issue(claim, out _), "an order aimed at an unknown site");
+
+            _sim.Galaxy.Learn(1, RivalHome(), ChartSource.Share, _sim.Clock.CurrentTick);
+            Assert.AreNotEqual(IssueResult.Uncharted, Move(rivalSite));
+        }
+
+        [Test]
+        public void Movement_RefusesARouteToAnUnknownSystem_EvenWhenTheOrderWasQueuedDirectly()
+        {
+            var rivalSite = _sim.Galaxy.SiteAtOrbit(RivalHome(), 0);
+            var motion = _sim.FleetMotions.Get(_game.Fleet);
+            Assert.IsFalse(_sim.Movement.TryMoveTo(_game.Fleet, rivalSite, _sim.Clock.CurrentTick));
+            Assert.AreEqual(motion.Site, _sim.FleetMotions.Get(_game.Fleet).Site);
+            Assert.IsTrue(_sim.FleetMotions.Get(_game.Fleet).Lane.IsNull, "still docked");
         }
 
         [Test]

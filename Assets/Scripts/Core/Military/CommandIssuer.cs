@@ -13,14 +13,16 @@ namespace Unruled.Core.Military
         Unreachable = 2,
         Blackout = 3,
         UnknownTarget = 4,
-        Paralysed = 5
+        Paralysed = 5,
+        Uncharted = 6 // the target (or a Move's destination) is in a system the player doesn't know
     }
 
     /// <summary>
     /// The door for player and AI orders: stamps <see cref="DelayedPlayerCommand.ExecuteAtTick"/> with the signal
     /// latency to the target's location (a site, a lane, the site/lane a fleet is on, or a deposit's site) and queues
     /// it on the clock.
-    /// Refuses every order while the player's command network is paralysed (capital convoy destroyed).
+    /// Refuses every order while the player's command network is paralysed (capital convoy destroyed), and orders aimed
+    /// into a system the player has no chart of (<see cref="IStarCharts"/>).
     /// </summary>
     public sealed class CommandIssuer
     {
@@ -32,13 +34,15 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<MineralDeposit> _deposits;
         private readonly ComponentStore<PlayerHq> _players;
         private readonly ComponentStore<CapitalRelocation> _relocations;
+        private readonly IStarCharts _charts;
 
         public CommandIssuer(
             SimClock clock, SignalLatencySolver solver, ComponentStore<SiteInfo> sites,
             ComponentStore<StarlaneEdge> lanes, ComponentStore<FleetMotion> fleets, ComponentStore<MineralDeposit> deposits,
             ComponentStore<PlayerHq> players,
-            ComponentStore<CapitalRelocation> relocations)
+            ComponentStore<CapitalRelocation> relocations, IStarCharts charts)
         {
+            _charts = charts ?? throw new ArgumentNullException(nameof(charts));
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _solver = solver ?? throw new ArgumentNullException(nameof(solver));
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
@@ -74,6 +78,8 @@ namespace Unruled.Core.Military
             {
                 site = _deposits.Get(target).Site;
             }
+            if (!Charted(in command, site, lane))
+                return IssueResult.Uncharted;
 
             LatencyStatus status;
             int latency;
@@ -109,6 +115,25 @@ namespace Unruled.Core.Military
             }
             executeAtTick = command.ExecuteAtTick;
             return IssueResult.Issued;
+        }
+
+        // The target site, a lane with neither end charted, or a Move's destination (site or lane) in an unknown system.
+        private bool Charted(in DelayedPlayerCommand command, EntityId site, EntityId lane)
+        {
+            int player = command.PlayerId;
+            if (!site.IsNull && !_charts.KnowsSite(player, site) && !_fleets.Has(command.Target))
+                return false;
+            if (!lane.IsNull && _lanes.Has(lane) && !_fleets.Has(command.Target) &&
+                !_charts.KnowsSite(player, _lanes.Get(lane).SiteA) && !_charts.KnowsSite(player, _lanes.Get(lane).SiteB))
+                return false;
+            if (command.CommandType != CommandType.Move)
+                return true;
+            var to = command.ParamEntity;
+            if (_sites.Has(to))
+                return _charts.KnowsSite(player, to);
+            if (_lanes.Has(to) && !site.IsNull)
+                return _charts.KnowsSite(player, _lanes.Get(to).OtherEnd(site));
+            return true;
         }
 
         private int _syncedVersion = -1;

@@ -345,6 +345,7 @@ namespace Unruled.View.UI
                 case IssueResult.Blackout: return "RADIO BLACKOUT";
                 case IssueResult.UnknownTarget: return "UNKNOWN TARGET";
                 case IssueResult.Paralysed: return "COMMAND PARALYSED";
+                case IssueResult.Uncharted: return "UNCHARTED SYSTEM";
                 default: return "ERROR";
             }
         }

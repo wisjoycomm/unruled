@@ -12,7 +12,8 @@ namespace Unruled.Core.Military
     /// destination site; ParamC 1 = route around STA toll lanes) departs at once. A destination is routed by
     /// <see cref="RoutePlanner"/> once, at the order;
     /// on each arrival the fleet departs on the next lane of its route the same tick, and its owner learns the system
-    /// it arrived in (<see cref="IChartLog"/>).
+    /// it arrived in (<see cref="IStarCharts"/>). A destination, or a lane's far end, in a system the owner doesn't
+    /// know is refused: fleets fly only to charted space (they may pass through, and so learn, systems on the way).
     /// Every departure pays fuel from the fleet's hold (ships x fuel per 100 units x length x tier fuel multiplier,
     /// rounded up) and whatever the <see cref="ITollGate"/> charges for the lane; if either can't be paid the fleet
     /// stays at the site, nothing is paid, and the rest of its route is dropped. Lanes above the
@@ -34,7 +35,7 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly RoutePlanner _planner;
         private readonly ITollGate _tolls;
-        private readonly IChartLog _charts;
+        private readonly IStarCharts _charts;
         private readonly StarlaneBalance _laneBalance;
         private readonly FleetBalance _balance;
 
@@ -42,7 +43,7 @@ namespace Unruled.Core.Military
             ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions, ComponentStore<FleetRoute> routes,
             ComponentStore<FleetReadiness> readiness, ComponentStore<FleetCombatState> combat,
             ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes, ComponentStore<Stockpile> stockpiles,
-            RoutePlanner planner, ITollGate tolls, IChartLog charts, StarlaneBalance laneBalance, FleetBalance balance)
+            RoutePlanner planner, ITollGate tolls, IStarCharts charts, StarlaneBalance laneBalance, FleetBalance balance)
         {
             _charts = charts ?? throw new ArgumentNullException(nameof(charts));
             _units = units ?? throw new ArgumentNullException(nameof(units));
@@ -127,7 +128,8 @@ namespace Unruled.Core.Military
             if (_lanes.Has(lane))
             {
                 route.Clear();
-                TryDepart(fleet, ref motion, lane);
+                if (_charts.KnowsSite(playerId, _lanes.Get(lane).OtherEnd(motion.Site)))
+                    TryDepart(fleet, ref motion, lane);
                 return;
             }
             TryMoveTo(fleet, lane, tick, tollFree);
@@ -146,7 +148,9 @@ namespace Unruled.Core.Military
             if (motion.Site.IsNull)
                 return false;
             ref var route = ref _routes.Get(fleet);
-            if (!_planner.TryPlan(motion.Site, site, _units.Get(fleet).TechTier, tollFree, ref route))
+            ref var unit = ref _units.Get(fleet);
+            if (!_charts.KnowsSite(unit.OwnerPlayerId, site) ||
+                !_planner.TryPlan(motion.Site, site, unit.TechTier, tollFree, ref route))
                 return false;
             if (TryDepart(fleet, ref motion, route.LaneAt(route.Next++)))
                 return true;
