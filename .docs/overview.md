@@ -106,6 +106,16 @@ methods, in this order (rule 4).
   - `GalaxySystem`: owns `StarSystem` (a catalog star materialised as a simulated cluster, its owner = the player
     holding most of its planets) and `SystemName` (the owner's name for it); handles `RenameSystem` and reports
     renames to THE SYSTEM's bulletins. `SimulationWorld.MaterialiseStar` is the one door from catalog to simulation.
+    It also owns `SystemChart` (one entity per player and known system, with how it was learnt) and is the one door
+    into a player's knowledge (`Learn`: spawn, survey, fleet arrival, share, purchase, save migration); it implements
+    `IStarCharts` so `CommandIssuer` refuses orders into unknown systems (`IssueResult.Uncharted`) and
+    `FleetMovementSystem` / AI trip planning never route there. The world stays one shared simulation; only knowledge
+    is per player. `StarSystem.FirstSurveyorPlayerId` records who charted a system first.
+  - `ChartMarket`: owns `ChartListing`; commands `ShareChart` (free), `ListChart` (own shop: anyone who knows the
+    system; THE SYSTEM's world shop: the first surveyor only, STA fee, STA registry bulletin), `BuyChart` (fixed
+    price, paid once, the buyer keeps the chart; the STA keeps a cut on the world shop) and `CancelChartListing`.
+    Every chart order travels to the player's own base and names the system by cluster id (`ParamC`). The AI lists
+    and buys charts once an hour. View: `ChartShopPanel` (MARKET tab), and the board draws only known systems.
   - `SurveySystem`: the `Survey` command; a docked fleet burns fuel to chart an uncharted frontier neighbour, which
     is materialised and linked to every charted neighbour. Conquering AIs survey when nothing is left to take.
 - **Economy/**:
