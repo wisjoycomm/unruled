@@ -24,7 +24,16 @@ namespace Unruled.Core.Simulation
                 CreateWtoContractBalance(), CreateSystemAuthorityBalance(),
                 CreateSystemFactionBalance(), CreateAiBalance(), CreateNewGameBalance(),
                 CreateResearchBalance(), CreateShipyardBalance(), CreateSiteControlBalance(),
-                CreateJumpGateBalance(), CreateConvoyBalance(), CreateCitadelBalance(), CreateGalaxyBalance());
+                CreateJumpGateBalance(), CreateConvoyBalance(), CreateCitadelBalance(), CreateGalaxyBalance(),
+                CreatePresenceBalance());
+
+        /// <summary>
+        /// PROVISIONAL offline shield (user decision 2026-10-24, not in the data sheets): it rises 10 minutes after
+        /// logout (or after the last fight), lasts at most 8 hours per logout and 48 hours per game week.
+        /// </summary>
+        public static PresenceBalance CreatePresenceBalance() => new PresenceBalance(
+            shieldDelayTicks: 10 * SimTick.TicksPerMinute, shieldMaxTicks: 8 * SimTick.TicksPerHour,
+            shieldWeeklyTicks: 48 * SimTick.TicksPerHour);
 
         /// <summary>
         /// PROVISIONAL galaxy shape (No Man's Sky scale, not in the data sheets): a disc 2,000 sectors in radius

@@ -19,6 +19,9 @@ namespace Unruled.Core.Military
     /// if one of its fleets there is set to RaidConvoys. Two players are hostile when either fires on the other, so
     /// convoys with no guns between them never pin each other. A convoy nobody raids is not engaged, fires at nobody
     /// and takes no damage.</item>
+    /// <item>Nobody fights a player <see cref="IProtection"/> protects there (a newcomer, or an offline shield at its own
+    /// site), and a protected player fights nobody there. Players who fight are reported to it (a shield not up yet waits),
+    /// and turning RaidConvoys on is a hostile act that ends the raider's own protection.</item>
     /// <item>Each player fires at the hostile player with the lowest id: damage max(0, Psi - Omega) lands on the focus
     /// class of its lowest fleet, then spills to the other classes. Damage is resolved simultaneously.</item>
     /// <item>Thermal: T += heat x ROF² - passive - vent; above the overheat line guns lock and ammo cooks off a share of
@@ -45,6 +48,7 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<ContractCargo> _cargo;
         private readonly ComponentStore<StolenGoods> _stolen;
         private readonly IOffenceLog _offences;
+        private readonly IProtection _protection;
         private readonly CombatBalance _balance;
         private readonly RelocationBalance _relocationBalance;
         private readonly FleetBalance _fleetBalance;
@@ -65,6 +69,7 @@ namespace Unruled.Core.Military
         private bool[] _raids = new bool[4]; // has a fleet here set to raid convoys
         private bool[] _guns = new bool[4]; // has line ships here
         private bool[] _raided = new bool[4]; // a hostile player here raids convoys
+        private bool[] _protected = new bool[4]; // can't be fought here, and fights nobody
         private long[] _dirX = new long[4];
         private long[] _dirY = new long[4];
 
@@ -74,7 +79,7 @@ namespace Unruled.Core.Military
             ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes, ComponentStore<Stockpile> stockpiles,
             ComponentStore<PlayerHq> players, ComponentStore<CapitalRelocation> relocations,
             ComponentStore<ContractCargo> cargo, ComponentStore<StolenGoods> stolen, IOffenceLog offences,
-            CombatBalance balance,
+            IProtection protection, CombatBalance balance,
             FleetBalance fleetBalance, RelocationBalance relocationBalance)
         {
             _world = world ?? throw new ArgumentNullException(nameof(world));
@@ -90,6 +95,7 @@ namespace Unruled.Core.Military
             _cargo = cargo ?? throw new ArgumentNullException(nameof(cargo));
             _stolen = stolen ?? throw new ArgumentNullException(nameof(stolen));
             _offences = offences ?? throw new ArgumentNullException(nameof(offences));
+            _protection = protection ?? throw new ArgumentNullException(nameof(protection));
             _balance = balance ?? throw new ArgumentNullException(nameof(balance));
             _fleetBalance = fleetBalance ?? throw new ArgumentNullException(nameof(fleetBalance));
             _relocationBalance = relocationBalance ?? throw new ArgumentNullException(nameof(relocationBalance));
@@ -143,8 +149,11 @@ namespace Unruled.Core.Military
                         _combat.Get(fleet).IsVenting = true;
                     break;
                 case CommandType.RaidConvoys:
-                    if (own)
-                        _combat.Get(fleet).RaidsConvoys = command.ParamA != 0;
+                    if (!own)
+                        break;
+                    _combat.Get(fleet).RaidsConvoys = command.ParamA != 0;
+                    if (command.ParamA != 0)
+                        _protection.EndProtection(command.PlayerId, tick);
                     break;
                 default:
                     throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
@@ -174,11 +183,18 @@ namespace Unruled.Core.Military
             _playerCount = 0;
             for (int k = start; k < end; k++)
                 SlotOf(_units.At(Dense(_keys[k])).OwnerPlayerId, Dense(_keys[k]));
-            if (_playerCount < 2 || !PickTargets(start, end))
+            if (_playerCount < 2)
                 return;
-
             var firstMotion = _motions.Get(_units.EntityAt(Dense(_keys[start])));
             var site = firstMotion.Lane.IsNull ? firstMotion.Site : default;
+            if (!PickTargets(start, end, site, tick))
+                return;
+            for (int p = 0; p < _playerCount; p++)
+                if (_target[p] >= 0)
+                {
+                    _protection.NoteCombat(_playerIds[p], tick);
+                    _protection.NoteCombat(_playerIds[_target[p]], tick);
+                }
 
             for (int k = start; k < end; k++)
                 Resupply(Dense(_keys[k]), start, end, site);
@@ -249,11 +265,13 @@ namespace Unruled.Core.Military
 
         private bool Hostile(int p, int q) => Fires(p, q) || Fires(q, p);
 
-        // Each player's target is the hostile player with the lowest id (-1 = none). False when nobody fights.
-        private bool PickTargets(int start, int end)
+        // Each player's target is the hostile player with the lowest id (-1 = none), never a protected one, and a
+        // protected player targets nobody. False when nobody fights.
+        private bool PickTargets(int start, int end, EntityId site, long tick)
         {
             for (int p = 0; p < _playerCount; p++)
             {
+                _protected[p] = _protection.IsProtectedAt(_playerIds[p], site, tick);
                 _armed[p] = false;
                 _raids[p] = false;
                 _raided[p] = false;
@@ -278,7 +296,7 @@ namespace Unruled.Core.Military
                 int t = -1;
                 for (int q = 0; q < _playerCount; q++)
                 {
-                    if (q == p || !Hostile(p, q))
+                    if (q == p || _protected[p] || _protected[q] || !Hostile(p, q))
                         continue;
                     _raided[p] |= _raids[q];
                     if (t < 0 || _playerIds[q] < _playerIds[t])
@@ -322,6 +340,7 @@ namespace Unruled.Core.Military
                 Array.Resize(ref _raids, size);
                 Array.Resize(ref _raided, size);
                 Array.Resize(ref _guns, size);
+                Array.Resize(ref _protected, size);
             }
             _playerIds[_playerCount] = playerId;
             _lead[_playerCount] = denseIndex;

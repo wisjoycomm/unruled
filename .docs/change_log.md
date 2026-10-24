@@ -179,3 +179,4 @@
 - 2026-10-24 - Claude - J-plan done: docs for mid-game join, upkeep at own sites, CheckMove and THE SYSTEM's opening market; plan archived to .docs/plan/join-mid-game.md
 - 2026-10-24 - Claude - fix: a convoy-only fleet's hold takes at most cargo convoys x capacity per item on hand loads (a plain load over it is refused, a fill stops at it)
 - 2026-10-24 - Claude - roadmap: product target recorded (10k+ player MMO + single-player campaign, authoritative server)
+- 2026-10-24 - Claude - O1 offline shield: PresenceSystem (LogIn/LogOut/EndProtection), shield 10 min after logout, max 8 h per logout and 48 h per week, newcomers protected until the tutorial ends; combat, claims and strikes respect it. Save schema 8.

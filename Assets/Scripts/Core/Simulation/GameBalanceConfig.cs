@@ -40,6 +40,7 @@ namespace Unruled.Core.Simulation
         public readonly ConvoyBalance Convoys;
         public readonly CitadelBalance Citadel;
         public readonly GalaxyBalance Galaxy;
+        public readonly PresenceBalance Presence;
 
         public GameBalanceConfig(
             RecipeDatabase recipes, UniverseGenBalance universe, StarlaneBalance starlanes, NoaaBalance weather,
@@ -49,7 +50,8 @@ namespace Unruled.Core.Simulation
             WtoBalance wto, WtoContractBalance contracts, SystemAuthorityBalance authority,
             SystemFactionBalance systemFactions, AiBalance ai, NewGameBalance newGame,
             ResearchBalance research, ShipyardBalance shipyard, SiteControlBalance siteControl,
-            JumpGateBalance jumpGates, ConvoyBalance convoys, CitadelBalance citadel, GalaxyBalance galaxy)
+            JumpGateBalance jumpGates, ConvoyBalance convoys, CitadelBalance citadel, GalaxyBalance galaxy,
+            PresenceBalance presence)
         {
             Recipes = recipes ?? throw new ArgumentNullException(nameof(recipes));
             Universe = universe ?? throw new ArgumentNullException(nameof(universe));
@@ -79,6 +81,7 @@ namespace Unruled.Core.Simulation
             Convoys = convoys ?? throw new ArgumentNullException(nameof(convoys));
             Citadel = citadel ?? throw new ArgumentNullException(nameof(citadel));
             Galaxy = galaxy ?? throw new ArgumentNullException(nameof(galaxy));
+            Presence = presence ?? throw new ArgumentNullException(nameof(presence));
         }
     }
 }

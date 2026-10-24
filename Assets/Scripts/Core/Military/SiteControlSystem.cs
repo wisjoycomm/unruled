@@ -15,6 +15,8 @@ namespace Unruled.Core.Military
     /// <item>a rival player's site is taken only while none of the owner's fleets is docked there, and never a core
     /// base (core bases move only through relocation);</item>
     /// <item>THE SYSTEM's sites cannot be claimed.</item>
+    /// <item>A site its owner's <see cref="IProtection"/> covers cannot be claimed; taking a rival's site is a hostile
+    /// act that ends the claimant's own protection.</item>
     /// </list>
     /// The site's stock, deposits and refineries pass to the new owner. Invalid or unaffordable orders change nothing.
     /// </summary>
@@ -28,12 +30,15 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<FleetCombatState> _combat;
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly SiteControlBalance _balance;
+        private readonly IProtection _protection;
 
         public SiteControlSystem(
             ComponentStore<SiteInfo> sites, ComponentStore<PlayerHq> players, ComponentStore<FleetUnit> units,
             ComponentStore<FleetMotion> motions, ComponentStore<FleetReadiness> readiness,
-            ComponentStore<FleetCombatState> combat, ComponentStore<Stockpile> stockpiles, SiteControlBalance balance)
+            ComponentStore<FleetCombatState> combat, ComponentStore<Stockpile> stockpiles, IProtection protection,
+            SiteControlBalance balance)
         {
+            _protection = protection ?? throw new ArgumentNullException(nameof(protection));
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
             _players = players ?? throw new ArgumentNullException(nameof(players));
             _units = units ?? throw new ArgumentNullException(nameof(units));
@@ -54,7 +59,7 @@ namespace Unruled.Core.Military
             int owner = _sites.Get(site).OwnerPlayerId;
             if (owner < 0 || owner == command.PlayerId)
                 return;
-            if (owner > 0 && (IsCoreBase(site) || HasDockedFleet(owner, site)))
+            if (owner > 0 && (IsCoreBase(site) || HasDockedFleet(owner, site) || _protection.IsProtectedAt(owner, site, tick)))
                 return;
 
             for (int i = 0; i < _units.Count; i++)
@@ -67,6 +72,8 @@ namespace Unruled.Core.Military
                 for (int c = 0; c < _balance.ClaimCostCount; c++)
                     hold.Add(_balance.ClaimCost(c).Item, -_balance.ClaimCost(c).Quantity);
                 _sites.Get(site).OwnerPlayerId = command.PlayerId;
+                if (owner > 0)
+                    _protection.EndProtection(command.PlayerId, tick);
                 return;
             }
         }

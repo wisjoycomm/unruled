@@ -13,6 +13,7 @@ namespace Unruled.Core.Military
     /// that neither the player nor THE SYSTEM owns (its Citadel keeps its own shield rules) and that is not irradiated, carrying
     /// <see cref="LifecycleBalance.StrikeNuclearCores"/> nuclear cores. The cores leave the hold and the site becomes an
     /// irradiated dead world through <see cref="PlanetLifecycleSystem.ApplyNuclearStrike"/> (the IAEA posts the strike).
+    /// A site its owner's <see cref="IProtection"/> covers can't be struck; a strike ends the striker's own protection.
     /// Anything else changes nothing. A strike is not a Call-to-Arms offence.
     /// </summary>
     public sealed class NuclearStrikeSystem : ICommandHandler
@@ -24,12 +25,14 @@ namespace Unruled.Core.Military
         private readonly PlanetLifecycleSystem _lifecycle;
         private readonly LifecycleBalance _balance;
         private readonly ITechGates _tech;
+        private readonly IProtection _protection;
 
         public NuclearStrikeSystem(
             ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions, ComponentStore<SiteInfo> sites,
             ComponentStore<Stockpile> stockpiles, PlanetLifecycleSystem lifecycle, LifecycleBalance balance,
-            ITechGates tech)
+            ITechGates tech, IProtection protection)
         {
+            _protection = protection ?? throw new ArgumentNullException(nameof(protection));
             _units = units ?? throw new ArgumentNullException(nameof(units));
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
             _sites = sites ?? throw new ArgumentNullException(nameof(sites));
@@ -56,9 +59,11 @@ namespace Unruled.Core.Military
             ref var info = ref _sites.Get(site);
             ref var hold = ref _stockpiles.Get(fleet);
             if (info.OwnerPlayerId == command.PlayerId || info.OwnerPlayerId < 0 || info.IsIrradiated(tick) ||
-                !hold.Has(ItemId.ItemNuclearCore, _balance.StrikeNuclearCores))
+                !hold.Has(ItemId.ItemNuclearCore, _balance.StrikeNuclearCores) ||
+                _protection.IsProtectedAt(info.OwnerPlayerId, site, tick))
                 return;
             hold.Add(ItemId.ItemNuclearCore, -_balance.StrikeNuclearCores);
+            _protection.EndProtection(command.PlayerId, tick);
             _lifecycle.ApplyNuclearStrike(site, tick);
         }
     }

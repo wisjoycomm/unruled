@@ -466,6 +466,32 @@ namespace Unruled.Core.Persistence
             return v;
         }
 
+        // PlayerPresence: [online, newcomer, shield from, shield until, week, week shield ticks].
+        internal static void Write(MsgPackWriter w, in PlayerPresence v)
+        {
+            w.WriteArrayHeader(6);
+            w.Write(v.IsOnline);
+            w.Write(v.IsNewcomer);
+            w.Write(v.ShieldFromTick);
+            w.Write(v.ShieldUntilTick);
+            w.Write(v.WeekIndex);
+            w.Write(v.WeekShieldTicks);
+        }
+
+        internal static PlayerPresence ReadPlayerPresence(MsgPackReader r)
+        {
+            int n = r.ReadArrayHeader();
+            var v = new PlayerPresence();
+            if (n > 0) v.IsOnline = r.ReadBool();
+            if (n > 1) v.IsNewcomer = r.ReadBool();
+            if (n > 2) v.ShieldFromTick = r.ReadInt64();
+            if (n > 3) v.ShieldUntilTick = r.ReadInt64();
+            if (n > 4) v.WeekIndex = r.ReadInt64();
+            if (n > 5) v.WeekShieldTicks = r.ReadInt64();
+            SkipNewer(r, n, 6);
+            return v;
+        }
+
         // ChartListing: [seller, cluster, price cents, shop, listed tick, sales].
         internal static void Write(MsgPackWriter w, in ChartListing v)
         {

@@ -50,6 +50,8 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<SystemName> SystemNames;
         public readonly ComponentStore<SystemChart> SystemCharts;
         public readonly ComponentStore<ChartListing> ChartListings;
+        public readonly ComponentStore<PlayerPresence> Presences;
+        public readonly PresenceSystem Presence;
         public readonly ChartMarket Charts;
         public readonly GalaxySystem Galaxy;
         public readonly ComponentStore<WtoOrder> WtoOrders;
@@ -146,8 +148,13 @@ namespace Unruled.Core.Simulation
             SystemNames = World.CreateStore<SystemName>();
             SystemCharts = World.CreateStore<SystemChart>();
             ChartListings = World.CreateStore<ChartListing>();
+            Presences = World.CreateStore<PlayerPresence>();
 
             Ledger = new Ledger(Wallets);
+            Presence = new PresenceSystem(Presences, Players, Sites, balance.Presence);
+            Commands.Register(CommandType.LogIn, Presence);
+            Commands.Register(CommandType.LogOut, Presence);
+            Commands.Register(CommandType.EndProtection, Presence);
             WtoFeePool = World.Create();
             Wallets.Add(WtoFeePool, new Wallet { Pool = TaxPoolKind.WtoMarketFees });
             Stockpiles.Add(WtoFeePool, default); // THE SYSTEM's stock: what it bought and resells (see WtoMarketEngine)
@@ -233,7 +240,7 @@ namespace Unruled.Core.Simulation
 
             var combat = new SalvoCombatEngine(
                 World, Fleets, FleetMotions, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, Players, Relocations,
-                ContractCargo, StolenGoods, Authority, balance.Combat, balance.Fleets, balance.Relocation);
+                ContractCargo, StolenGoods, Authority, Presence, balance.Combat, balance.Fleets, balance.Relocation);
             Clock.Register(combat);
             Commands.Register(CommandType.SetRof, combat);
             Commands.Register(CommandType.SetFocus, combat);
@@ -270,9 +277,9 @@ namespace Unruled.Core.Simulation
             Clock.Register(relays);
             Commands.Register(CommandType.BuildRelay, relays);
             Commands.Register(CommandType.NuclearStrike, new NuclearStrikeSystem(
-                Fleets, FleetMotions, Sites, Stockpiles, Lifecycle, balance.Lifecycle, TechGates));
+                Fleets, FleetMotions, Sites, Stockpiles, Lifecycle, balance.Lifecycle, TechGates, Presence));
             Commands.Register(CommandType.ClaimSite, new SiteControlSystem(
-                Sites, Players, Fleets, FleetMotions, FleetReadiness, FleetCombat, Stockpiles, balance.SiteControl));
+                Sites, Players, Fleets, FleetMotions, FleetReadiness, FleetCombat, Stockpiles, Presence, balance.SiteControl));
             Commands.Register(CommandType.TransferCargo, new CargoTransferSystem(
                 Fleets, FleetMotions, FleetCombat, Sites, Stockpiles, ContractCargo, StolenGoods, balance.Convoys.CapacityPerConvoy,
                 balance.Ai.CoreSupplyReserve));
@@ -329,6 +336,7 @@ namespace Unruled.Core.Simulation
             Wallets.Add(hq, new Wallet { OwnerPlayerId = playerId });
             Standings.Add(hq, new PlayerStanding { Bracket = LeaderboardBalance.Unrated });
             Loans.Add(hq, default);
+            Presences.Add(hq, default);
             TechProgress.Add(hq, Unruled.Core.Research.TechProgress.Create(1));
             Ledger.Grant(hq, Balance.Ledger.StartingCents);
             return hq;

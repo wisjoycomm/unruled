@@ -12,10 +12,10 @@ namespace Unruled.Core.Persistence
     public static class SaveGame
     {
         /// <summary>Bump when a saved shape changes, and add a migration test for the older version.</summary>
-        public const int SchemaVersion = 7;
+        public const int SchemaVersion = 8;
 
         private const int TopLevelKeys = 6;
-        private const int StoreCount = 42;
+        private const int StoreCount = 43;
 
         private delegate void Writer<T>(MsgPackWriter w, in T value);
         private delegate T Reader<T>(MsgPackReader r);
@@ -82,6 +82,7 @@ namespace Unruled.Core.Persistence
             if (storeCount > 39) WriteStore(w, sim.SystemNames, ComponentFormatters.Write);
             if (storeCount > 40) WriteStore(w, sim.SystemCharts, ComponentFormatters.Write);
             if (storeCount > 41) WriteStore(w, sim.ChartListings, ComponentFormatters.Write);
+            if (storeCount > 42) WriteStore(w, sim.Presences, ComponentFormatters.Write);
             return w.ToArray();
         }
 
@@ -151,6 +152,9 @@ namespace Unruled.Core.Persistence
             if (stores > 39) ReadStore(r, sim.World, sim.SystemNames, ComponentFormatters.ReadSystemName);
             if (stores > 40) ReadStore(r, sim.World, sim.SystemCharts, ComponentFormatters.ReadSystemChart);
             if (stores > 41) ReadStore(r, sim.World, sim.ChartListings, ComponentFormatters.ReadChartListing);
+            if (stores > 42) ReadStore(r, sim.World, sim.Presences, ComponentFormatters.ReadPlayerPresence);
+            else
+                AddMissingPresences(sim); // schema 7 and older: every player offline, unprotected
             if (stores > StoreCount) r.Skip(stores - StoreCount);
             r.Skip(keys - TopLevelKeys);
             if (!r.End) throw new FormatException("Save has bytes after its end.");
@@ -201,6 +205,13 @@ namespace Unruled.Core.Persistence
                 return default;
             ref var motion = ref sim.FleetMotions.Get(fleet);
             return motion.Site.IsNull ? motion.FromSite : motion.Site;
+        }
+
+        private static void AddMissingPresences(SimulationWorld sim)
+        {
+            for (int i = 0; i < sim.Players.Count; i++)
+                if (!sim.Presences.Has(sim.Players.EntityAt(i)))
+                    sim.Presences.Add(sim.Players.EntityAt(i), default);
         }
 
         private static void AddMissingLoans(SimulationWorld sim)
