@@ -100,7 +100,7 @@ namespace Unruled.View.UI
         /// <summary>Marks the board tab that is showing; the system tab names the last system shown.</summary>
         public void ShowBoardTab(bool galaxy, int clusterId)
         {
-            SystemTab.text = "SYSTEM " + UiFormat.StarName(clusterId);
+            SystemTab.text = "SYSTEM " + UiFormat.SystemLabel(_sim, clusterId);
             SystemTab.EnableInClassList(ActiveTabClass, !galaxy);
             GalaxyTab.EnableInClassList(ActiveTabClass, galaxy);
         }

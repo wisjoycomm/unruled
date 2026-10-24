@@ -446,6 +446,7 @@
                         <ui:VisualElement class="orders">
                             <ui:Button name="do-claim" class="u-btn" text="Claim site" />
                             <ui:Button name="do-relay" class="u-btn u-btn--secondary" text="Build relay" />
+                            <ui:Button name="do-rename-system" class="u-btn u-btn--secondary" text="Rename system" />
                         </ui:VisualElement>
                         <ui:VisualElement class="item-picker">
                             <ui:Button name="item-prev" class="u-btn u-btn--secondary item-picker__step" text="‹" />
@@ -601,6 +602,7 @@
             <ui:ScrollView name="modal-scroll" class="modal__scroll">
                 <ui:Label name="modal-body" class="u-text modal__body" text="" />
             </ui:ScrollView>
+            <ui:TextField name="modal-field" class="modal__field" style="display: none;" />
             <ui:VisualElement name="modal-actions" class="modal__actions" />
             <theme:PlateFrame class="plate-frame plate-frame--modal" />
         </ui:VisualElement>

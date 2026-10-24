@@ -139,11 +139,11 @@ namespace Unruled.View.UI
             {
                 string text = name + " · " + FleetText(target);
                 if (command.CommandType == CommandType.Move && _sim.Sites.Has(command.ParamEntity))
-                    text += " → " + UiFormat.SiteName(_sim.Sites.Get(command.ParamEntity));
+                    text += " → " + UiFormat.SiteName(_sim, _sim.Sites.Get(command.ParamEntity));
                 return text;
             }
             if (_sim.Sites.Has(target))
-                return name + " · " + UiFormat.SiteName(_sim.Sites.Get(target));
+                return name + " · " + UiFormat.SiteName(_sim, _sim.Sites.Get(target));
             if (_sim.Starlanes.Has(target))
                 return name + " · " + LaneName(target);
             return name;
@@ -158,7 +158,7 @@ namespace Unruled.View.UI
             ref var edge = ref _sim.Starlanes.Get(lane);
             if (!_sim.Sites.Has(edge.SiteA) || !_sim.Sites.Has(edge.SiteB))
                 return "lane";
-            return UiFormat.SiteName(_sim.Sites.Get(edge.SiteA)) + "–" + UiFormat.SiteName(_sim.Sites.Get(edge.SiteB));
+            return UiFormat.SiteName(_sim, _sim.Sites.Get(edge.SiteA)) + "–" + UiFormat.SiteName(_sim, _sim.Sites.Get(edge.SiteB));
         }
     }
 }

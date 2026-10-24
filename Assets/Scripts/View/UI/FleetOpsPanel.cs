@@ -314,7 +314,7 @@ namespace Unruled.View.UI
         private string LaneName(EntityId id)
         {
             ref var lane = ref _sim.Starlanes.Get(id);
-            return UiFormat.SiteName(in _sim.Sites.Get(lane.SiteA)) + " ↔ " + UiFormat.SiteName(in _sim.Sites.Get(lane.SiteB));
+            return UiFormat.SiteName(_sim, in _sim.Sites.Get(lane.SiteA)) + " ↔ " + UiFormat.SiteName(_sim, in _sim.Sites.Get(lane.SiteB));
         }
 
         private void Send(CommandType type, EntityId target, int paramA, int paramB = 0)

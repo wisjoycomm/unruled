@@ -897,6 +897,26 @@
     color: var(--u-ink-soft);
 }
 
+.modal__field {
+    margin: 0 0 16px 0;
+}
+
+.modal__field > .unity-base-text-field__input {
+    -unity-font-definition: url("Theme/Fonts/IBMPlexMono-SemiBold.asset");
+    font-size: 16px;
+    min-height: 40px;
+    padding: 0 10px;
+    color: var(--u-ink);
+    background-color: var(--u-void);
+    border-width: 1px;
+    border-color: var(--u-rule-strong);
+    border-radius: 0;
+}
+
+.modal__field:focus > .unity-base-text-field__input {
+    border-color: var(--u-you);
+}
+
 .modal__actions {
     flex-direction: row;
     justify-content: flex-end;

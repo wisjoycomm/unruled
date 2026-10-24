@@ -29,6 +29,8 @@ namespace Unruled.View.UI
 
         private SimulationWorld _sim;
         private EntityId _stockSite;
+        private bool _stockIsCore;
+        private string _shownLabel;
 
         public LeftInventoryDock(VisualElement root)
         {
@@ -62,16 +64,32 @@ namespace Unruled.View.UI
                 _qtyCache[slot] = -1;
                 _trendCache[slot] = long.MinValue;
             }
-            if (_sim != null && _sim.Sites.Has(site))
-                _site.text = UiFormat.SiteName(_sim.Sites.Get(site)) + (isCore ? " · CORE" : string.Empty);
-            else
+            _stockIsCore = isCore;
+            _shownLabel = null;
+            ShowSiteName();
+        }
+
+        // The header follows the system's label, so a rename shows here as soon as it lands.
+        private void ShowSiteName()
+        {
+            if (_sim == null || !_sim.Sites.Has(_stockSite))
+            {
                 _site.text = "—";
+                return;
+            }
+            ref var info = ref _sim.Sites.Get(_stockSite);
+            var label = UiFormat.SystemLabel(_sim, info.ClusterId);
+            if (ReferenceEquals(label, _shownLabel))
+                return;
+            _shownLabel = label;
+            _site.text = UiFormat.SiteName(_sim, in info) + (_stockIsCore ? " · CORE" : string.Empty);
         }
 
         public void Refresh()
         {
             if (_sim == null || !_sim.Stockpiles.Has(_stockSite))
                 return;
+            ShowSiteName();
             ref var stock = ref _sim.Stockpiles.Get(_stockSite);
             long minute = _sim.Clock.CurrentTick / SimTick.TicksPerMinute;
             if (minute != _lastSampleMinute)

@@ -169,7 +169,7 @@ namespace Unruled.View.UI
 
         private string BulletinText(in SystemBulletin bulletin)
         {
-            string where = _sim.Sites.Has(bulletin.Site) ? UiFormat.SiteName(in _sim.Sites.Get(bulletin.Site)) : "UNKNOWN SITE";
+            string where = _sim.Sites.Has(bulletin.Site) ? UiFormat.SiteName(_sim, in _sim.Sites.Get(bulletin.Site)) : "UNKNOWN SITE";
             string who = bulletin.PlayerId == _playerId ? "YOU" : bulletin.PlayerId > 0 ? "P" + UiFormat.Number(bulletin.PlayerId) : "—";
             switch (bulletin.Kind)
             {
@@ -186,23 +186,21 @@ namespace Unruled.View.UI
             }
         }
 
-        private readonly char[] _nameChars = new char[SystemName.Capacity];
-
         private string RenamedText(EntityId system)
         {
             if (!_sim.StarSystems.Has(system))
                 return "A SYSTEM WAS RENAMED";
-            string star = UiFormat.StarName(_sim.StarSystems.Get(system).ClusterId);
+            ref var info = ref _sim.StarSystems.Get(system);
+            string star = info.StarId != 0 ? UiFormat.CatalogCode(StarId.FromPacked(info.StarId)) : "A SYSTEM";
             if (!_sim.SystemNames.Has(system))
                 return star + " RENAMED";
-            int length = _sim.SystemNames.Get(system).CopyTo(_nameChars);
-            return star + " IS NOW " + new string(_nameChars, 0, length);
+            return star + " IS NOW " + UiFormat.SystemLabel(_sim, info.ClusterId);
         }
 
-        private static string StormText(in StormFront storm, long tick)
+        private string StormText(in StormFront storm, long tick)
         {
             string scale = storm.Scale == StormScale.Radio ? "R" : storm.Scale == StormScale.Solar ? "S" : "G";
-            return "STORM " + scale + UiFormat.Number(storm.Level) + " IN " + UiFormat.StarName(storm.ClusterId) +
+            return "STORM " + scale + UiFormat.Number(storm.Level) + " IN " + UiFormat.SystemLabel(_sim, storm.ClusterId) +
                    " · " + UiFormat.Duration(storm.EndTick - tick) + " LEFT";
         }
 

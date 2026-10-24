@@ -173,6 +173,7 @@ namespace Unruled.View.UI
                 if (_sim.Refineries.At(r).Site == _site)
                     refineries++;
             long key = (long)_site.Index << 40 ^ (surface + crust * 3 + core * 7) ^ (long)site.LifecycleState << 56 ^
+                       (long)LabelKey(site.ClusterId) << 24 ^
                        (long)site.CurrentEsiMilli << 20 ^ (long)(site.OwnerPlayerId + 64) << 48 ^ rigs << 8 ^ refineries;
             if (key == _shownKey)
                 return;
@@ -184,7 +185,7 @@ namespace Unruled.View.UI
             var portrait = capital ? _art.CapitalPlanet : PlanetArt(in site);
             if (portrait != null)
                 _portrait.style.backgroundImage = new StyleBackground(portrait);
-            _title.text = UiFormat.SiteName(in site) + (capital ? " · CAPITAL" : "");
+            _title.text = UiFormat.SiteName(_sim, in site) + (capital ? " · CAPITAL" : "");
             _meta.text = UiFormat.PlanetClassName(PlanetClasses.Of(in site, _sim.Balance.Universe)) + " · " +
                          OwnerText(site.OwnerPlayerId) + " · " + LifecycleText(site.LifecycleState);
 
@@ -232,7 +233,8 @@ namespace Unruled.View.UI
                     fleets++;
             }
             int gate = GateState();
-            long key = (long)_cluster << 40 | (long)own << 30 | (long)rival << 20 | (long)neutral << 10 | (long)fleets << 2 | (uint)gate;
+            long key = ((long)_cluster << 40 | (long)own << 30 | (long)rival << 20 | (long)neutral << 10 | (long)fleets << 2 | (uint)gate) ^
+                       ((long)LabelKey(_cluster) << 8);
             if (key == _shownKey)
                 return;
             _shownKey = key;
@@ -241,12 +243,16 @@ namespace Unruled.View.UI
             SetSiteMode(false);
             for (int i = planets; i < MaxThumbs; i++)
                 _thumbs[i].style.display = DisplayStyle.None;
-            _title.text = "SYSTEM " + UiFormat.StarName(_cluster);
+            _title.text = "SYSTEM " + UiFormat.SystemLabel(_sim, _cluster);
             _meta.text = UiFormat.Number(planets) + " PLANETS";
             _line1.text = "YOURS " + UiFormat.Number(own) + " · RIVAL " + UiFormat.Number(rival) + " · OPEN " + UiFormat.Number(neutral);
             _line2.text = UiFormat.Number(fleets) + (fleets == 1 ? " FLEET HERE" : " FLEETS HERE") +
                           (gate == 2 ? " · GATE OPEN" : gate == 1 ? " · GATE SEALED" : "");
         }
+
+        // The system label is a cached string: its identity changes exactly when the owner renames the system.
+        private int LabelKey(int clusterId) =>
+            System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(UiFormat.SystemLabel(_sim, clusterId));
 
         // 0 = no jump gate touches this system, 1 = sealed, 2 = open.
         private int GateState()

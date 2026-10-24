@@ -5,7 +5,8 @@ using UnityEngine.UIElements;
 namespace Unruled.View.UI
 {
     /// <summary>
-    /// The one modal overlay of the main screen: a title, an icon, a scrolling body and up to three buttons. Confirm
+    /// The one modal overlay of the main screen: a title, an icon, a scrolling body, an optional text field and up to
+    /// three buttons. Confirm
     /// dialogs (risky orders), the alerts log, the pause menu and the end screens all open through it, one at a time.
     /// A full-screen variant shows a backdrop image instead of dimming the board. Layout only; the callbacks it runs
     /// belong to the panel that opened it.
@@ -25,6 +26,8 @@ namespace Unruled.View.UI
 
         private readonly VisualElement _overlay, _backdrop, _modal, _icon, _actions;
         private readonly Label _title, _body;
+        private readonly TextField _field;
+        private Func<string, bool> _fieldValid;
         private readonly Button[] _buttons = new Button[3];
         private readonly Action[] _onClick = new Action[3];
         private readonly bool[] _closes = new bool[3];
@@ -38,6 +41,8 @@ namespace Unruled.View.UI
             _actions = TopTelemetryHud.Require<VisualElement>(root, "modal-actions");
             _title = TopTelemetryHud.Require<Label>(root, "modal-title");
             _body = TopTelemetryHud.Require<Label>(root, "modal-body");
+            _field = TopTelemetryHud.Require<TextField>(root, "modal-field");
+            _field.RegisterValueChangedCallback(OnFieldChanged);
             for (int i = 0; i < _buttons.Length; i++)
             {
                 int index = i;
@@ -57,6 +62,26 @@ namespace Unruled.View.UI
             SetButton(0, "Cancel", "u-btn--secondary", null, true);
             SetButton(1, null, null, null, true);
             SetButton(2, confirmText, tone == Tone.Danger ? "u-btn--danger" : null, confirm, true);
+        }
+
+        /// <summary>
+        /// Asks for a line of text: the field starts at <paramref name="initial"/>, typed letters are upper-cased, and
+        /// <paramref name="confirm"/> (given the text) runs only on Confirm, which is enabled while
+        /// <paramref name="isValid"/> accepts the text.
+        /// </summary>
+        public void Prompt(string title, string body, Texture2D icon, string initial, int maxLength, Func<string, bool> isValid,
+            string confirmText, Action<string> confirm)
+        {
+            Open(title, body, icon, Tone.Normal, null);
+            _fieldValid = isValid;
+            _field.maxLength = maxLength;
+            _field.SetValueWithoutNotify(initial ?? string.Empty);
+            _field.style.display = DisplayStyle.Flex;
+            SetButton(0, "Cancel", "u-btn--secondary", null, true);
+            SetButton(1, null, null, null, true);
+            SetButton(2, confirmText, null, () => confirm(_field.value), true);
+            _buttons[2].SetEnabled(isValid(_field.value));
+            _field.Focus();
         }
 
         /// <summary>An information dialog with one button that closes it.</summary>
@@ -89,6 +114,16 @@ namespace Unruled.View.UI
             _overlay.style.display = DisplayStyle.None;
             for (int i = 0; i < _onClick.Length; i++)
                 _onClick[i] = null;
+            _fieldValid = null;
+        }
+
+        private void OnFieldChanged(ChangeEvent<string> evt)
+        {
+            string upper = evt.newValue.ToUpperInvariant();
+            if (!string.Equals(upper, evt.newValue, StringComparison.Ordinal))
+                _field.SetValueWithoutNotify(upper);
+            if (_fieldValid != null)
+                _buttons[2].SetEnabled(_fieldValid(upper));
         }
 
         private void Open(string title, string body, Texture2D icon, Tone tone, Texture2D backdrop)
@@ -103,6 +138,10 @@ namespace Unruled.View.UI
             _backdrop.style.backgroundImage = backdrop != null ? new StyleBackground(backdrop) : new StyleBackground(StyleKeyword.None);
             _overlay.style.display = DisplayStyle.Flex;
             _overlay.BringToFront();
+            _field.style.display = DisplayStyle.None;
+            _fieldValid = null;
+            for (int i = 0; i < _buttons.Length; i++)
+                _buttons[i].SetEnabled(true);
         }
 
         private void SetButton(int index, string text, string variant, Action onClick, bool closes)

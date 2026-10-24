@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using Unruled.Core.Board;
 using Unruled.Core.Galaxy;
@@ -14,7 +15,7 @@ namespace Unruled.View.UI
     {
         private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
 
-        // Display names for star clusters; sites read as STAR-ORBIT (e.g. KEPLER-3). Presentation only.
+        // Names for systems from before the catalog (old saves). Presentation only.
         private static readonly string[] StarNames =
         {
             "KEPLER", "VEGA", "ALTAIR", "DENEB", "RIGEL", "SIRIUS", "CASTOR", "POLLUX", "ANTARES", "ARCTURUS",
@@ -93,7 +94,42 @@ namespace Unruled.View.UI
             return Number(ticks) + " s";
         }
 
-        public static string SiteName(in SiteInfo site) => StarName(site.ClusterId) + "-" + Number(site.OrbitIndex + 1);
+        /// <summary>A planet reads as its system's label and orbit number, e.g. NEW EDEN-3 or UNR-41.-7-3-3.</summary>
+        public static string SiteName(SimulationWorld sim, in SiteInfo site) =>
+            SystemLabel(sim, site.ClusterId) + "-" + Number(site.OrbitIndex + 1);
+
+        /// <summary>
+        /// A system's label: the name its owner gave it, else its catalog code, else (a system from before the
+        /// catalog) one of the old star names. Built strings are cached, so a steady board builds none.
+        /// </summary>
+        public static string SystemLabel(SimulationWorld sim, int clusterId)
+        {
+            var system = sim.Galaxy.SystemOf(clusterId);
+            if (!system.IsNull && sim.SystemNames.Has(system))
+                return OwnName(system.Index, in sim.SystemNames.Get(system));
+            return sim.Galaxy.TryGetStar(clusterId, out var star) ? CatalogCode(star) : StarName(clusterId);
+        }
+
+        private static readonly Dictionary<long, string> CodeCache = new Dictionary<long, string>();
+        private static readonly Dictionary<int, string> NameCache = new Dictionary<int, string>();
+        private static readonly char[] NameChars = new char[SystemName.Capacity];
+
+        // The cached string for a system's own name, rebuilt only when the name changes.
+        private static string OwnName(int key, in SystemName name)
+        {
+            int length = name.CopyTo(NameChars);
+            if (NameCache.TryGetValue(key, out var cached) && cached.Length == length)
+            {
+                bool same = true;
+                for (int i = 0; i < length && same; i++)
+                    same = cached[i] == NameChars[i];
+                if (same)
+                    return cached;
+            }
+            cached = new string(NameChars, 0, length);
+            NameCache[key] = cached;
+            return cached;
+        }
 
         /// <summary>NASA planet type, as the planet card names it.</summary>
         public static string PlanetClassName(PlanetClass planet)
@@ -107,7 +143,7 @@ namespace Unruled.View.UI
             }
         }
 
-        public static string StarName(int clusterId)
+        private static string StarName(int clusterId)
         {
             int wrap = clusterId / StarNames.Length;
             string name = StarNames[clusterId % StarNames.Length];
@@ -115,8 +151,15 @@ namespace Unruled.View.UI
         }
 
         /// <summary>A catalog star's code: UNR-(sector x).(sector y)-(index), e.g. UNR-41.-7-3.</summary>
-        public static string CatalogCode(StarId star) =>
-            "UNR-" + Number(star.SectorX) + "." + Number(star.SectorY) + "-" + Number(star.Index);
+        public static string CatalogCode(StarId star)
+        {
+            if (!CodeCache.TryGetValue(star.Packed, out var code))
+            {
+                code = "UNR-" + Number(star.SectorX) + "." + Number(star.SectorY) + "-" + Number(star.Index);
+                CodeCache[star.Packed] = code;
+            }
+            return code;
+        }
 
         /// <summary>Fleets read as FLEET A, B, ... in creation order among the owner's fleets.</summary>
         public static string FleetName(int ordinal) => "FLEET " + FleetLetter(ordinal);

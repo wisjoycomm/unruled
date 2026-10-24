@@ -1,6 +1,7 @@
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
+using Unruled.Core.Galaxy;
 using Unruled.Core.Military;
 using Unruled.Core.Research;
 using Unruled.Core.Simulation;
@@ -43,7 +44,7 @@ namespace Unruled.View.UI
         private readonly VisualElement _shipPreview, _loanEmblem, _gateEmblem;
         private readonly Label _siteName, _siteOwner, _item, _drills, _refinery, _cargo, _siteFeedback, _planet;
         private readonly Button _stressTest, _audit, _borrow, _repay, _build, _retrofit, _openGate, _sopPreset, _sopToggle;
-        private readonly Button _claim, _relay, _rig, _pause, _retract, _buildRefinery, _load, _unload, _route, _relocate, _terraform;
+        private readonly Button _claim, _relay, _renameSystem, _rig, _pause, _retract, _buildRefinery, _load, _unload, _route, _relocate, _terraform;
         private readonly ModalPopup _popup;
         private readonly UiArt _art;
         private readonly VisualElement _planetPortrait;
@@ -153,6 +154,7 @@ namespace Unruled.View.UI
             _sopToggle = TopTelemetryHud.Require<Button>(root, "do-sop");
             _claim = TopTelemetryHud.Require<Button>(root, "do-claim");
             _relay = TopTelemetryHud.Require<Button>(root, "do-relay");
+            _renameSystem = TopTelemetryHud.Require<Button>(root, "do-rename-system");
             _rig = TopTelemetryHud.Require<Button>(root, "do-rig");
             _pause = TopTelemetryHud.Require<Button>(root, "do-pause");
             _retract = TopTelemetryHud.Require<Button>(root, "do-retract");
@@ -176,6 +178,7 @@ namespace Unruled.View.UI
             _sopToggle.clicked += IssueStandingOrders;
             _claim.clicked += () => SendSite(CommandType.ClaimSite, _site, 0, 0);
             _relay.clicked += () => SendSite(CommandType.BuildRelay, _site, 0, 0);
+            _renameSystem.clicked += PromptRename;
             _rig.clicked += IssueRig;
             _pause.clicked += IssuePause;
             _retract.clicked += IssueRetract;
@@ -468,10 +471,12 @@ namespace Unruled.View.UI
             if (!_sim.Sites.Has(_site))
                 return;
             ref var site = ref _sim.Sites.Get(_site);
-            long nameKey = (long)_site.Index << 32 | (uint)(site.OwnerPlayerId + int.MaxValue / 2);
+            // The system label is a cached string, so its identity changes exactly when the system is renamed.
+            int label = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(UiFormat.SystemLabel(_sim, site.ClusterId));
+            long nameKey = ((long)_site.Index << 32 | (uint)(site.OwnerPlayerId + int.MaxValue / 2)) ^ ((long)label << 20);
             if (nameKey != _cache[3])
             {
-                UiFormat.Set(_siteName, ref _cache[3], nameKey, UiFormat.SiteName(in site));
+                UiFormat.Set(_siteName, ref _cache[3], nameKey, UiFormat.SiteName(_sim, in site));
                 _siteOwner.text = OwnerText(site.OwnerPlayerId);
             }
             bool own = site.OwnerPlayerId == _playerId;
@@ -479,6 +484,7 @@ namespace Unruled.View.UI
             bool lit = _sim.Relays.Has(_site);
             _relay.text = lit ? "Relay lit" : "Build relay";
             _relay.SetEnabled(own && !lit);
+            _renameSystem.SetEnabled(SystemOwner(site.ClusterId) == _playerId);
             if (_itemSlot != _cache[4])
                 UiFormat.Set(_item, ref _cache[4], _itemSlot, ContractAndMarketUI.ItemCode(Item));
 
@@ -596,7 +602,7 @@ namespace Unruled.View.UI
             var rules = _sim.Balance.Relocation;
             string cost = CostText(rules.TeardownCost) + ", " + CostText(rules.BootstrapCost);
             var target = _site;
-            _popup.Confirm("MOVE CAPITAL TO " + UiFormat.SiteName(in _sim.Sites.Get(_site)),
+            _popup.Confirm("MOVE CAPITAL TO " + UiFormat.SiteName(_sim, in _sim.Sites.Get(_site)),
                 "Three phases: teardown (" + UiFormat.Span(rules.TeardownMinTicks) + "–" +
                 UiFormat.Span(rules.TeardownMaxTicks) + "), the capital convoy (" + UiFormat.Span(rules.ConvoyMinTicks) +
                 "–" + UiFormat.Span(rules.ConvoyMaxTicks) + "), bootstrap (" + UiFormat.Span(rules.BootstrapTicks) +
@@ -604,6 +610,39 @@ namespace Unruled.View.UI
                 "fleet near it. While the convoy flies every order is slower; if it is destroyed your orders are refused for " +
                 UiFormat.Span(rules.ParalysisTicks) + ".",
                 _art.Relocate, "Move capital", () => SendSite(CommandType.RelocateBase, target, 0, 0));
+        }
+
+        // The player holding the most planets of a system (worked out by the galaxy system), 0 for nobody.
+        private int SystemOwner(int clusterId)
+        {
+            var system = _sim.Galaxy.SystemOf(clusterId);
+            return !system.IsNull && _sim.StarSystems.Has(system) ? _sim.StarSystems.Get(system).OwnerPlayerId : 0;
+        }
+
+        private void PromptRename()
+        {
+            if (_sim == null || !_sim.Sites.Has(_site))
+                return;
+            var target = _site;
+            int cluster = _sim.Sites.Get(target).ClusterId;
+            var system = _sim.Galaxy.SystemOf(cluster);
+            string current = !system.IsNull && _sim.SystemNames.Has(system) ? UiFormat.SystemLabel(_sim, cluster) : "";
+            _popup.Prompt("RENAME " + UiFormat.SystemLabel(_sim, cluster),
+                "You hold the most planets here, so the STA registers the name you give it. " +
+                UiFormat.Number(SystemName.MinLength) + "–" + UiFormat.Number(SystemName.MaxLength) +
+                " letters, digits, spaces or hyphens. Every player sees it on the board and in bulletins.",
+                _art.JumpGate, current, SystemName.MaxLength, SystemName.IsValid, "Rename",
+                text => SendRename(target, text));
+        }
+
+        private void SendRename(EntityId site, string text)
+        {
+            if (!SystemName.TryEncode(text, out int a, out int b, out int c))
+                return;
+            var command = Command(CommandType.RenameSystem, site, a);
+            command.ParamB = b;
+            command.ParamC = c;
+            Send(command, _siteFeedback);
         }
 
         private static string CostText(ItemAmount[] cost)
@@ -621,7 +660,7 @@ namespace Unruled.View.UI
                 return;
             var rules = _sim.Balance.Lifecycle;
             var target = _site;
-            _popup.Confirm("TERRAFORM " + UiFormat.SiteName(in _sim.Sites.Get(_site)),
+            _popup.Confirm("TERRAFORM " + UiFormat.SiteName(_sim, in _sim.Sites.Get(_site)),
                 "Spends from this site's stock: " + UiFormat.Number(rules.TerraformWater) + " WATER, " +
                 UiFormat.Number(rules.TerraformNitrogen) + " NITROGEN, " + UiFormat.Number(rules.TerraformBiomass) +
                 " BIOMASS, " + UiFormat.Number(rules.TerraformNuclearCores) + " NUCLEAR CORE.\n\nThe dead world recovers at ESI " +
@@ -641,7 +680,7 @@ namespace Unruled.View.UI
                 string text = !has ? "NO FLEET" : UiFormat.FleetName(HudQueries.FleetOrdinal(_sim, _fleet)) + " · " +
                     UiFormat.Thousands(hold) + " " + ContractAndMarketUI.ItemCode(Item);
                 if (routed)
-                    text += " · ROUTE → " + UiFormat.SiteName(in _sim.Sites.Get(_sim.ConvoyRoutes.Get(_fleet).Outpost));
+                    text += " · ROUTE → " + UiFormat.SiteName(_sim, in _sim.Sites.Get(_sim.ConvoyRoutes.Get(_fleet).Outpost));
                 UiFormat.Set(_cargo, ref _cache[7], cargoKey, text);
             }
             bool docked = has && _sim.FleetMotions.Get(_fleet).Lane.IsNull;

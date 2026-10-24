@@ -92,6 +92,7 @@ namespace Unruled.View
         private Vector2 _viewCentre; // centre of the drawn view, in the units the mesh is built in
         private float _halfWidth = 1f, _halfHeight = 1f;
         private int _systemCount = -1;
+        private string _shownLabel; // the label the tab and badge show for the last system
         private bool _starsValid;
         private bool _dragging;
         private Vector2 _pressPos;
@@ -291,6 +292,14 @@ namespace Unruled.View
 
             int level = Level(out int cluster);
             ApplyLevel(level, cluster);
+            var label = UiFormat.SystemLabel(_sim, _clusterId);
+            if (!ReferenceEquals(label, _shownLabel))
+            {
+                // A rename lands: the tab and the sector badge take the new name.
+                _shownLabel = label;
+                _screen.ShowBoardTab(level < 2, _clusterId);
+                UpdateSectorBadge(level < 2, _clusterId);
+            }
 
             // The mesh is built around the view centre: in the shown system's local units, or in galaxy units relative
             // to the camera (so huge galaxy coordinates never lose float precision).
@@ -656,7 +665,7 @@ namespace Unruled.View
                 else
                     _mesh.DashedRing(p, 20f, 2f, 4f, 4f, UnruledPalette.Unclaimed);
                 DrawExitVector(p, there, gate.IsOpen ? UnruledPalette.Sta : UnruledPalette.Unclaimed);
-                string star = _sim.Sites.Has(there) ? UiFormat.StarName(_sim.Sites.Get(there).ClusterId) : "";
+                string star = _sim.Sites.Has(there) ? UiFormat.SystemLabel(_sim, _sim.Sites.Get(there).ClusterId) : "";
                 int stack = _portalStack.TryGetValue(here.Index, out int n) ? n : 0;
                 _portalStack[here.Index] = stack + 1;
                 PlaceLabel(p + new Vector2(0f, (34f + 16f * stack) * _mesh.UnitsPerPixel),
@@ -680,7 +689,7 @@ namespace Unruled.View
                 var col = lane.Tier == StarlaneTier.StaHighway ? UnruledPalette.Sta : UnruledPalette.Unclaimed;
                 _mesh.DashedRing(p, 24f, 2f, 5f, 3f, col);
                 DrawExitVector(p, there, col);
-                string star = _sim.Sites.Has(there) ? UiFormat.StarName(_sim.Sites.Get(there).ClusterId) : "";
+                string star = _sim.Sites.Has(there) ? UiFormat.SystemLabel(_sim, _sim.Sites.Get(there).ClusterId) : "";
                 int stack = _portalStack.TryGetValue(here.Index, out int k) ? k : 0;
                 _portalStack[here.Index] = stack + 1;
                 PlaceLabel(p + new Vector2(0f, (34f + 16f * stack) * _mesh.UnitsPerPixel), "WARP → " + star, col, true, false);
@@ -901,7 +910,7 @@ namespace Unruled.View
                     _mesh.Disc(p, 18f, UnruledPalette.Void);
                     _mesh.Disc(p, 8f, colour);
                 }
-                string name = UiFormat.StarName(c) +
+                string name = UiFormat.SystemLabel(_sim, c) +
                               (contested ? " · CONTESTED" : owner == _playerId ? " · HOME" : owner == 0 ? " · FRONTIER" : "");
                 bool strong = contested || owner == _playerId;
                 PlaceLabel(p - new Vector2(0f, 40f * _mesh.UnitsPerPixel), name, strong ? UnruledPalette.Ink : UnruledPalette.InkSoft,
@@ -1030,7 +1039,7 @@ namespace Unruled.View
                 : owner == 0
                     ? UnruledPalette.Unclaimed
                     : SideColour(owner);
-            UiFormat.Set(_sectorBadgeLabel, UiFormat.StarName(clusterId) + tag);
+            UiFormat.Set(_sectorBadgeLabel, UiFormat.SystemLabel(_sim, clusterId) + tag);
         }
 
         private void DrawSites(long tick)
@@ -1099,7 +1108,7 @@ namespace Unruled.View
                 if (irradiated && glyph == null)
                     _mesh.Line(p + new Vector2(-6f, -6f) * _mesh.UnitsPerPixel, p + new Vector2(6f, 6f) * _mesh.UnitsPerPixel, 2f,
                         UnruledPalette.Iaea);
-                PlaceLabel(p - new Vector2(0f, (coreOwner != 0 ? 40f : 32f) * _mesh.UnitsPerPixel), UiFormat.SiteName(site), UnruledPalette.InkSoft, true, false);
+                PlaceLabel(p - new Vector2(0f, (coreOwner != 0 ? 40f : 32f) * _mesh.UnitsPerPixel), UiFormat.SiteName(_sim, site), UnruledPalette.InkSoft, true, false);
             }
         }
 
