@@ -109,6 +109,7 @@
   .drawer button.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .drawer ol { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-soft); }
   .drawer .stock { font-size: 13px; color: var(--ink-soft); }
+  .drawer .token { font: 600 15px var(--display); letter-spacing: .04em; background: var(--slate); color: var(--amber); padding: 8px 10px; user-select: all; overflow-wrap: anywhere; }
 
   .log { padding: 0 28px 40px; }
   .log h2 { font: 600 19px var(--display); margin: 0 0 8px; }
@@ -287,6 +288,7 @@ function strip(p) {
   for (const f of p.flags) tags.push(`<span class="tag fault">${f}</span>`);
   if (p.shield) tags.push(`<span class="tag shield">shield, ${hours(p.shieldEndsIn)} left</span>`);
   if (p.newcomer) tags.push(`<span class="tag new">newcomer protection</span>`);
+  if (p.connected) tags.push(`<span class="tag">game client, ${fmt(p.bytesPerSecond)} B/s</span>`);
   if (p.kind === "governed" && p.preset) tags.push(`<span class="tag">governor</span>`);
   el.innerHTML = `
     <div class="callsign">P${p.id}</div>
@@ -331,7 +333,15 @@ function drawer(p) {
       row.append(button("Log in", () => act("/api/server/login", { playerId: p.id }), true));
     }
     if (p.newcomer) row.append(button("End newcomer protection", () => act("/api/server/tutorial-done", { playerId: p.id })));
+    row.append(button(p.hasToken ? "Issue a new login token" : "Issue a login token", () => issueToken(p.id)));
     d.append(row);
+    if (shownToken && shownToken.playerId === p.id) {
+      const t = document.createElement("div");
+      t.className = "token";
+      t.textContent = shownToken.token;
+      t.title = "Shown once. Paste it into the game's Join server screen; a new token replaces this one.";
+      d.append(t);
+    }
   }
   const stock = document.createElement("div");
   stock.className = "stock";
@@ -343,6 +353,16 @@ function drawer(p) {
     d.append(ol);
   }
   return d;
+}
+
+// The last token issued, shown in its player's drawer until the page reloads; the server keeps only its hash.
+let shownToken = null;
+
+async function issueToken(playerId) {
+  const r = await api("/api/server/token", { playerId });
+  if (!r || r.ok === false) { toast(r ? r.error : "The server didn't answer."); return; }
+  shownToken = { playerId: r.playerId, token: r.token };
+  await refresh();
 }
 
 function button(label, onClick, primary) {
