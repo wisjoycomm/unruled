@@ -68,6 +68,53 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
+        public void Upkeep_AtAnOwnSite_TakesOnlyTheShortfallFromItsStock()
+        {
+            _sim.Sites.Get(_s0).OwnerPlayerId = Me;
+            _sim.Stockpiles.Add(_s0, default);
+            int reserve = _sim.Balance.Convoys.HubSupplyReserve;
+            _sim.Stockpiles.Get(_s0).Add(ItemId.ItemOxygen, reserve + 100);
+            _sim.Stockpiles.Get(_s0).Add(ItemId.ItemRations, reserve + 100);
+            var fleet = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Me, TechTier = 1, LineShips = 10 }, _s0);
+            _sim.Stockpiles.Get(fleet).Add(ItemId.ItemOxygen, 4); // 10 due: 6 come from the site
+
+            RunTo(_b.UpkeepIntervalTicks);
+            Assert.IsFalse(_sim.FleetReadiness.Get(fleet).IsUnsupplied);
+            Assert.AreEqual(0, Held(fleet, ItemId.ItemOxygen));
+            Assert.AreEqual(reserve + 100 - 6, _sim.Stockpiles.Get(_s0).Get(ItemId.ItemOxygen), "only the shortfall");
+            Assert.AreEqual(reserve + 100 - 10, _sim.Stockpiles.Get(_s0).Get(ItemId.ItemRations));
+        }
+
+        [Test]
+        public void Upkeep_AtAnOwnSite_NeverTakesTheSitesSupplyReserve()
+        {
+            _sim.Sites.Get(_s0).OwnerPlayerId = Me;
+            _sim.Stockpiles.Add(_s0, default);
+            int reserve = _sim.Balance.Convoys.HubSupplyReserve;
+            _sim.Stockpiles.Get(_s0).Add(ItemId.ItemOxygen, reserve + 3);
+            _sim.Stockpiles.Get(_s0).Add(ItemId.ItemRations, reserve + 50);
+            var fleet = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Me, TechTier = 1, LineShips = 10 }, _s0);
+
+            RunTo(_b.UpkeepIntervalTicks);
+            Assert.IsTrue(_sim.FleetReadiness.Get(fleet).IsUnsupplied, "3 spare oxygen can't feed 10 ships");
+            Assert.AreEqual(reserve, _sim.Stockpiles.Get(_s0).Get(ItemId.ItemOxygen), "the reserve stays");
+        }
+
+        [Test]
+        public void Upkeep_AtSomeoneElsesSite_TakesNothingFromIt()
+        {
+            _sim.Sites.Get(_s0).OwnerPlayerId = Me + 1;
+            _sim.Stockpiles.Add(_s0, default);
+            _sim.Stockpiles.Get(_s0).Add(ItemId.ItemOxygen, 100);
+            _sim.Stockpiles.Get(_s0).Add(ItemId.ItemRations, 100);
+            var fleet = _sim.CreateFleet(new FleetUnit { OwnerPlayerId = Me, TechTier = 1, LineShips = 10 }, _s0);
+
+            RunTo(_b.UpkeepIntervalTicks);
+            Assert.IsTrue(_sim.FleetReadiness.Get(fleet).IsUnsupplied);
+            Assert.AreEqual(100, _sim.Stockpiles.Get(_s0).Get(ItemId.ItemOxygen));
+        }
+
+        [Test]
         public void Mothball_CutsUpkeepByTheDiscount()
         {
             var fleet = Fleet(tier: 1, ships: 10);

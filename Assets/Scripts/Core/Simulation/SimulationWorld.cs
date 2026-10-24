@@ -211,7 +211,8 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.BuyFromSystem, Market);
             Clock.Register(new WhoQuarantineSystem(Quarantines, Stockpiles, balance.SystemFactions));
 
-            var upkeep = new FleetUpkeepSystem(Fleets, FleetReadiness, FleetMotions, Stockpiles, balance.Fleets);
+            var upkeep = new FleetUpkeepSystem(Fleets, FleetReadiness, FleetMotions, Stockpiles, Sites, balance.Fleets,
+                balance.Convoys.HubSupplyReserve);
             Clock.Register(upkeep);
             Commands.Register(CommandType.Mothball, upkeep);
             Commands.Register(CommandType.Activate, upkeep);
