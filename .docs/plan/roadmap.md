@@ -56,6 +56,12 @@ Where the project is heading, why, and rule exceptions. Build order follows GDD 
   have. So no offline player needs a full bot: AI cost stays with the at most 100 bots per world, and server cost
   follows the players online, not the players registered. Bots scale with the players online (half of them, 5..100);
   extras are held under a governor rather than deleted, as Core has no rule for an empire leaving the world.
+- 2026-10-25 — **Client plays on the server through a mirror world**: the server sends each player only what they
+  may see (`PlayerView`: own empire, charted systems, rival fleets where they have eyes, public market), as
+  append-only MessagePack snapshots and hash-based deltas; the Unity client applies them to a `SimulationWorld` it
+  never steps, so every view reads the same stores online and offline and no view code changed. Orders still pass
+  the client's `CommandIssuer` checks, then the server issues them again. No lockstep: clients can't cheat by
+  reading hidden state they never receive. Measured about 75 B per game second per client.
 
 ## Exceptions
 

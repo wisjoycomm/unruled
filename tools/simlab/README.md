@@ -44,7 +44,19 @@ optional random spawns; it wakes a held bot before adding a new one, and holds e
 The dashboard (`wwwroot/server.html`) shows the server clock, players online, bots on duty, tick cost and last save,
 the bot rules, and three bays of flight strips (bots on duty, bots held, players): click a strip for its controls
 (preset, hold, log in or out, end newcomer protection), its core stock, shield time and recent orders. Admin routes
-live under `/api/server/*` and `/api/bots/*`. Localhost only: there is no login yet.
+live under `/api/server/*` and `/api/bots/*`. Localhost only: the admin page has no login yet.
+
+Game clients join over the WebSocket `/ws` with a login token: open a player's strip and press Issue a login token
+(shown once; the server keeps only its hash). In Unity: game menu, Load or join, Join server, then the address
+(`localhost:5090`) and the token. A headless client checks a session end to end:
+
+```powershell
+dotnet run -c Release -- client --join --minutes 10                 # new player, prints bytes/s and sync checks
+dotnet run -c Release -- client --token <token> --pause-checks      # at high speed: pause the world for each check
+dotnet run -c Release -- client --bad-token --minutes 0.2           # exits 0 when the server refuses it
+```
+
+The protocol is in `.docs/plan/backend-api.md`.
 
 ## Batch: survival report over many seeds
 
