@@ -467,7 +467,7 @@ namespace Unruled.View
         {
             float u = _mesh.UnitsPerPixel;
             var start = from + dir * (26f * u);
-            var end = from + dir * (_extent * 0.55f);
+            var end = start + dir * Mathf.Max(_extent * 0.55f - 26f * u, 60f * u);
             var faint = colour;
             faint.a = 0.5f;
             _mesh.DashedLine(start, end, 1.5f, 10f, 6f, faint);
@@ -688,18 +688,15 @@ namespace Unruled.View
             DrawUnchartedExits();
         }
 
-        // Catalog hyperlanes to stars no one has charted yet: a faint exit from the outermost orbit towards each, which
-        // a docked fleet can survey from the FLEET tab.
+        // Catalog hyperlanes to stars no one has charted yet: a faint exit on the system's rim, pointing at the star's
+        // bearing and labelled with its catalog code; a docked fleet can survey it from the FLEET tab.
         private void DrawUnchartedExits()
         {
             var galaxy = _sim.Galaxy;
             if (!galaxy.TryGetStar(_clusterId, out var star) || _clusterId >= _systemPos.Count)
                 return;
-            var outer = galaxy.OuterOrbit(_clusterId);
-            if (outer.IsNull)
-                return;
-            var p = Pos(outer);
             var col = UnruledPalette.InkSoft;
+            float u = _mesh.UnitsPerPixel;
             galaxy.Catalog.Neighbours(star, _neighbours);
             for (int i = 0; i < _neighbours.Count; i++)
             {
@@ -709,8 +706,10 @@ namespace Unruled.View
                 if (dir.sqrMagnitude < 1f)
                     continue;
                 dir.Normalize();
-                DrawExitArrow(p, dir, col);
-                PlaceLabel(p + dir * (_extent * 0.6f), "UNCHARTED · " + UiFormat.CatalogCode(_neighbours[i]), col, true, false);
+                var rim = dir * (_extent * 0.86f);
+                _mesh.DashedRing(rim, 10f, 1.5f, 3f, 3f, col);
+                DrawExitArrow(rim, dir, col);
+                PlaceLabel(rim - dir * (22f * u), "UNCHARTED · " + UiFormat.CatalogCode(_neighbours[i]), col, true, false);
             }
         }
 
