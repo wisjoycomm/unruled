@@ -60,6 +60,14 @@ namespace Unruled.Core.SystemFactions
                 : TollCents(unit, edge, 0);
         }
 
+        public bool CanPay(in FleetUnit unit, in StarlaneEdge edge)
+        {
+            if (!_laneBalance.Get(edge.Tier).ChargesStaToll)
+                return true;
+            return _ledger.TryFindPlayerWallet(unit.OwnerPlayerId, out var wallet) &&
+                   _ledger.Balance(wallet) >= TollCents(unit, edge, DiscountPercent(wallet));
+        }
+
         private int DiscountPercent(EntityId wallet)
         {
             byte bracket = _standings.Has(wallet) ? _standings.Get(wallet).Bracket : LeaderboardBalance.Unrated;

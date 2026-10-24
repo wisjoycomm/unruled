@@ -177,5 +177,49 @@ namespace Unruled.Tests.Core.Military
             Assert.AreEqual(_s0, M(fleet).Site, "out on ticks Start..Start+9, back on Start+10..Start+19");
             Assert.IsFalse(M(fleet).IsReversing);
         }
+
+        [Test]
+        public void CheckMove_SaysWhyAMoveWouldFail_AndQuotesFuelAndToll()
+        {
+            _sim.Graph.Rebuild(_sim.Starlanes);
+            var fleet = Fleet(ships: 10, fuel: 100);
+            var movement = _sim.Movement;
+
+            var ok = movement.CheckMove(fleet, _s1, tollFree: false, tick: 0);
+            Assert.AreEqual(MoveCheck.Ok, ok.Check);
+            Assert.AreEqual(1, ok.Lanes);
+            Assert.Greater(ok.FirstFuel, 0);
+            Assert.AreEqual(ok.FirstFuel, ok.RouteFuel);
+
+            Assert.AreEqual(MoveCheck.NoRoute, movement.CheckMove(fleet, _shortcut, false, 0).Check, "a lane not from here");
+            var atS1 = Fleet(ships: 10, fuel: 100);
+            M(atS1).Site = _s1;
+            Assert.AreEqual(MoveCheck.TierTooLow, movement.CheckMove(atS1, _shortcut, false, 0).Check);
+
+            var dry = Fleet(ships: 10, fuel: 0);
+            var noFuel = movement.CheckMove(dry, _bypass, false, 0);
+            Assert.AreEqual(MoveCheck.NoFuel, noFuel.Check);
+            Assert.AreEqual(0, noFuel.FirstTollCents, "bypass lanes charge no toll");
+
+            Assert.AreEqual(MoveCheck.NoRoute, movement.CheckMove(fleet, _s2, false, 0).Check, "tier 1 can't take the shortcut");
+
+            _sim.FleetReadiness.Get(fleet).IsUnsupplied = true;
+            Assert.AreEqual(MoveCheck.CannotAct, movement.CheckMove(fleet, _s1, false, 0).Check);
+        }
+
+        [Test]
+        public void CheckMove_WithoutCashForTheToll_SaysNoToll_AndChangesNothing()
+        {
+            _sim.Graph.Rebuild(_sim.Starlanes);
+            var fleet = Fleet(ships: 10, fuel: 100);
+            _sim.Ledger.TryFindPlayerWallet(Me, out var wallet);
+            _sim.Wallets.Get(wallet).Cents = 0;
+
+            var quote = _sim.Movement.CheckMove(fleet, _highway, false, 0);
+            Assert.AreEqual(MoveCheck.NoToll, quote.Check);
+            Assert.Greater(quote.FirstTollCents, 0);
+            Assert.AreEqual(100, _sim.Stockpiles.Get(fleet).Get(ItemId.ItemFuel), "a check spends nothing");
+            Assert.AreEqual(_s0, _sim.FleetMotions.Get(fleet).Site);
+        }
     }
 }

@@ -9,5 +9,8 @@ namespace Unruled.Core.Military
 
         /// <summary>What <see cref="TryCharge"/> would take from the owner for this lane now, in cents.</summary>
         long QuoteCents(in FleetUnit unit, in StarlaneEdge edge);
+
+        /// <summary>Whether <see cref="TryCharge"/> would let the fleet depart now (without charging anything).</summary>
+        bool CanPay(in FleetUnit unit, in StarlaneEdge edge);
     }
 }

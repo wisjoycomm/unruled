@@ -120,6 +120,13 @@ namespace Unruled.SimLab
             string pe = ArgString(args, "--pe");
             if (pe != null)
                 command.ParamEntity = ParseId(pe);
+            if (type == CommandType.Move)
+            {
+                var quote = sim.Movement.CheckMove(command.Target, command.ParamEntity, command.ParamC != 0, sim.Clock.CurrentTick);
+                if (quote.Check != MoveCheck.Ok)
+                    return $"Move refused: {quote.Check} (first lane fuel {quote.FirstFuel}, toll {quote.FirstTollCents / 100} cr)";
+                Console.WriteLine($"Move: {quote.Lanes} lanes, fuel {quote.RouteFuel}, toll {quote.RouteTollCents / 100} cr");
+            }
             var result = sim.Issuer.Issue(command, out long at);
             return $"{type} -> {command.Target} : {result}" + (result == IssueResult.Issued ? $", lands in {at - sim.Clock.CurrentTick}t" : "");
         }

@@ -174,3 +174,4 @@
 - 2026-10-24 - Claude - Sim Lab `play` verb: a saved, turn-by-turn game for seat 1 against N bots from the command line (new / status / do / run / route).
 - 2026-10-24 - Claude - Join mid-game (J1): NewGameSetup.Join adds a player or bot to a running game (next id, free home star near the quietest hub, starting kit, dormant gate to a non-Citadel hub orbit, own frontier, hyperlanes, charts); Sim Lab `play join`. No save shape change.
 - 2026-10-24 - Claude - Upkeep at home (J2): a fleet docked at its own site draws its upkeep shortfall from the site stock above the 500 supply reserve, so parked fleets stop starving. Soak 5x30d: all alive, 0 dry, 0 at the loan limit.
+2026-10-24 - Claude - fleet moves say why they fail: FleetMovementSystem.CheckMove (fuel, toll, tier, route, charts, readiness) on the FLEET card and in Sim Lab play

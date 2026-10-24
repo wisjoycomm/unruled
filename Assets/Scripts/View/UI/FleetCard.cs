@@ -239,9 +239,29 @@ namespace Unruled.View.UI
         {
             if (_moveTarget.IsNull)
                 return;
+            var quote = _sim.Movement.CheckMove(_fleet, _moveTarget, false, _sim.Clock.CurrentTick);
+            if (quote.Check != MoveCheck.Ok)
+            {
+                Refuse(MoveRefusal(quote));
+                return;
+            }
             var command = NewCommand(CommandType.Move);
             command.ParamEntity = _moveTarget;
             Send(command);
+        }
+
+        private static string MoveRefusal(in MoveQuote quote)
+        {
+            switch (quote.Check)
+            {
+                case MoveCheck.NotDocked: return "REFUSED · IN TRANSIT: HOLD OR REVERSE FIRST";
+                case MoveCheck.CannotAct: return "REFUSED · UNSUPPLIED, MOTHBALLED OR WARMING UP";
+                case MoveCheck.Uncharted: return "REFUSED · UNCHARTED SYSTEM";
+                case MoveCheck.TierTooLow: return "REFUSED · THE LANE NEEDS A HIGHER TIER FLEET";
+                case MoveCheck.NoFuel: return "REFUSED · NEEDS " + UiFormat.Thousands(quote.FirstFuel) + " FUEL";
+                case MoveCheck.NoToll: return "REFUSED · CAN'T PAY THE " + UiFormat.Price(quote.FirstTollCents) + " CR TOLL";
+                default: return "REFUSED · NO ROUTE";
+            }
         }
 
         private void IssueMerge()

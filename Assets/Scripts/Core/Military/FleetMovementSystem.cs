@@ -6,6 +6,30 @@ using Unruled.Core.Simulation;
 
 namespace Unruled.Core.Military
 {
+    /// <summary>Why a Move order would leave a fleet where it is (see <see cref="FleetMovementSystem.CheckMove"/>).</summary>
+    public enum MoveCheck : byte
+    {
+        Ok = 0,
+        NotDocked = 1, // on a lane: hold or reverse instead
+        CannotAct = 2, // mothballed, unsupplied or warming up
+        Uncharted = 3, // the destination (or the lane's far end) is in a system the owner doesn't know
+        NoRoute = 4, // no lane from here, or no route within reach of the fleet's tier (or toll-free when asked)
+        TierTooLow = 5, // the first lane needs a higher tech tier (storm shortcuts)
+        NoFuel = 6, // the hold lacks the first lane's fuel
+        NoToll = 7 // the owner's wallet can't pay the first lane's STA toll
+    }
+
+    /// <summary>What a Move would cost: the reason it fails (or Ok) and the first lane's and the whole route's fuel and toll.</summary>
+    public struct MoveQuote
+    {
+        public MoveCheck Check;
+        public int FirstFuel;
+        public long FirstTollCents;
+        public int RouteFuel;
+        public long RouteTollCents;
+        public int Lanes;
+    }
+
     /// <summary>
     /// Owns <see cref="FleetMotion"/> and <see cref="FleetRoute"/>.
     /// Move (target: own fleet at a site; <see cref="DelayedPlayerCommand.ParamEntity"/>: a lane from that site, or a
@@ -108,6 +132,82 @@ namespace Unruled.Core.Military
                 default:
                     throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
             }
+        }
+
+        /// <summary>
+        /// What a Move to <paramref name="laneOrSite"/> would do now, without changing anything: why it would be refused
+        /// (the same checks Move and departure run, in their order), and the fuel and STA toll of the first lane and of
+        /// the whole route. The route's later lanes are paid on the way, so only the first lane must be affordable now.
+        /// </summary>
+        public MoveQuote CheckMove(EntityId fleet, EntityId laneOrSite, bool tollFree, long tick)
+        {
+            var quote = new MoveQuote();
+            if (!_units.Has(fleet))
+            {
+                quote.Check = MoveCheck.NoRoute;
+                return quote;
+            }
+            ref var unit = ref _units.Get(fleet);
+            ref var motion = ref _motions.Get(fleet);
+            if (motion.Site.IsNull)
+            {
+                quote.Check = MoveCheck.NotDocked;
+                return quote;
+            }
+            if (!_readiness.Get(fleet).CanAct(tick))
+            {
+                quote.Check = MoveCheck.CannotAct;
+                return quote;
+            }
+            var route = default(FleetRoute);
+            if (_lanes.Has(laneOrSite))
+            {
+                ref var edge = ref _lanes.Get(laneOrSite);
+                if (edge.SiteA != motion.Site && edge.SiteB != motion.Site)
+                {
+                    quote.Check = MoveCheck.NoRoute;
+                    return quote;
+                }
+                if (!_charts.KnowsSite(unit.OwnerPlayerId, edge.OtherEnd(motion.Site)))
+                {
+                    quote.Check = MoveCheck.Uncharted;
+                    return quote;
+                }
+                route.Append(laneOrSite);
+            }
+            else if (!_sites.Has(laneOrSite) || !_charts.KnowsSite(unit.OwnerPlayerId, laneOrSite))
+            {
+                quote.Check = _sites.Has(laneOrSite) ? MoveCheck.Uncharted : MoveCheck.NoRoute;
+                return quote;
+            }
+            else if (!_planner.TryPlan(motion.Site, laneOrSite, unit.TechTier, tollFree, ref route))
+            {
+                quote.Check = MoveCheck.NoRoute;
+                return quote;
+            }
+
+            quote.Lanes = route.Count;
+            for (int i = 0; i < route.Count; i++)
+            {
+                ref var edge = ref _lanes.Get(route.LaneAt(i));
+                int fuel = FuelFor(unit, edge);
+                long toll = _tolls.QuoteCents(unit, edge);
+                quote.RouteFuel += fuel;
+                quote.RouteTollCents += toll;
+                if (i == 0)
+                {
+                    quote.FirstFuel = fuel;
+                    quote.FirstTollCents = toll;
+                }
+            }
+            ref var first = ref _lanes.Get(route.LaneAt(0));
+            if (unit.TechTier < _laneBalance.Get(first.Tier).MinTechTier)
+                quote.Check = MoveCheck.TierTooLow;
+            else if (!_stockpiles.Get(fleet).Has(ItemId.ItemFuel, quote.FirstFuel))
+                quote.Check = MoveCheck.NoFuel;
+            else if (!_tolls.CanPay(unit, first))
+                quote.Check = MoveCheck.NoToll;
+            return quote;
         }
 
         /// <summary>Fuel a fleet pays to cross a lane, in whole units (rounded up).</summary>
