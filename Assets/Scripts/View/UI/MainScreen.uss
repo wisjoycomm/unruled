@@ -741,6 +741,13 @@
     background-image: resource("UI/action_ecm");
 }
 
+.chart-offer {
+    flex-grow: 1;
+    flex-shrink: 1;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
 .market__trade {
     margin-top: 16px;
     padding-top: 12px;

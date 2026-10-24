@@ -355,6 +355,30 @@
                         </ui:VisualElement>
                         <ui:Label name="trade-feedback" class="section-meta ops__feedback" text="" />
                     </ui:VisualElement>
+                    <ui:VisualElement class="market__trade">
+                        <ui:VisualElement class="ops__head">
+                            <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement class="ops__emblem ops__emblem--gate" />
+                                <ui:Label class="gauge__label" text="STAR CHARTS" />
+                            </ui:VisualElement>
+                            <ui:Label name="chart-status" class="section-meta" text="0 OFFERS" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="item-picker">
+                            <ui:Button name="chart-prev" class="u-btn u-btn--secondary item-picker__step" text="‹" />
+                            <ui:Label name="chart-offer" class="section-meta chart-offer" text="NO CHART ON SALE THAT YOU LACK" />
+                            <ui:Button name="chart-next" class="u-btn u-btn--secondary item-picker__step" text="›" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="orders ops__orders">
+                            <ui:Button name="do-buy-chart" class="u-btn" text="Buy chart" />
+                        </ui:VisualElement>
+                        <ui:Label name="chart-selected" class="section-meta ops__feedback" text="PICK A CHARTED SYSTEM ON THE BOARD" />
+                        <ui:VisualElement class="orders ops__orders">
+                            <ui:Button name="do-sell-chart" class="u-btn u-btn--secondary" text="Sell chart" />
+                            <ui:Button name="do-withdraw-chart" class="u-btn u-btn--secondary" text="Withdraw" />
+                            <ui:Button name="do-share-chart" class="u-btn u-btn--secondary" text="Share" />
+                        </ui:VisualElement>
+                        <ui:Label name="chart-feedback" class="section-meta ops__feedback" text="" />
+                    </ui:VisualElement>
                 </ui:ScrollView>
                 <ui:ScrollView name="ops-base" class="ops" style="display: none;">
                     <ui:VisualElement class="ops__group">

@@ -219,6 +219,8 @@ namespace Unruled.View
             double best = double.MaxValue;
             for (int c = 0; c < _systemPos.Count; c++)
             {
+                if (!Known(c))
+                    continue;
                 double dx = _systemPos[c].x - _camX, dy = _systemPos[c].y - _camY;
                 double d = dx * dx + dy * dy;
                 if (d < best)
@@ -665,7 +667,8 @@ namespace Unruled.View
                 else
                     _mesh.DashedRing(p, 20f, 2f, 4f, 4f, UnruledPalette.Unclaimed);
                 DrawExitVector(p, there, gate.IsOpen ? UnruledPalette.Sta : UnruledPalette.Unclaimed);
-                string star = _sim.Sites.Has(there) ? UiFormat.SystemLabel(_sim, _sim.Sites.Get(there).ClusterId) : "";
+                int gateFar = _sim.Sites.Has(there) ? _sim.Sites.Get(there).ClusterId : -1;
+                string star = gateFar < 0 ? "" : Known(gateFar) ? UiFormat.SystemLabel(_sim, gateFar) : "UNCHARTED";
                 int stack = _portalStack.TryGetValue(here.Index, out int n) ? n : 0;
                 _portalStack[here.Index] = stack + 1;
                 PlaceLabel(p + new Vector2(0f, (34f + 16f * stack) * _mesh.UnitsPerPixel),
@@ -687,9 +690,12 @@ namespace Unruled.View
                 var there = lane.OtherEnd(here);
                 var p = Pos(here);
                 var col = lane.Tier == StarlaneTier.StaHighway ? UnruledPalette.Sta : UnruledPalette.Unclaimed;
+                int far = _sim.Sites.Has(there) ? _sim.Sites.Get(there).ClusterId : -1;
+                if (far >= 0 && !Known(far))
+                    continue; // drawn as an uncharted exit below
                 _mesh.DashedRing(p, 24f, 2f, 5f, 3f, col);
                 DrawExitVector(p, there, col);
-                string star = _sim.Sites.Has(there) ? UiFormat.SystemLabel(_sim, _sim.Sites.Get(there).ClusterId) : "";
+                string star = far >= 0 ? UiFormat.SystemLabel(_sim, far) : "";
                 int stack = _portalStack.TryGetValue(here.Index, out int k) ? k : 0;
                 _portalStack[here.Index] = stack + 1;
                 PlaceLabel(p + new Vector2(0f, (34f + 16f * stack) * _mesh.UnitsPerPixel), "WARP → " + star, col, true, false);
@@ -697,8 +703,9 @@ namespace Unruled.View
             DrawUnchartedExits();
         }
 
-        // Catalog hyperlanes to stars no one has charted yet: a faint exit on the system's rim, pointing at the star's
-        // bearing and labelled with its catalog code; a docked fleet can survey it from the FLEET tab.
+        // Catalog hyperlanes to stars the player has no chart of (uncharted, or charted by someone else): a faint exit on
+        // the system's rim, pointing at the star's bearing and labelled with its catalog code; a docked fleet can survey
+        // it from the FLEET tab, or its chart can be bought or shared.
         private void DrawUnchartedExits()
         {
             var galaxy = _sim.Galaxy;
@@ -709,7 +716,8 @@ namespace Unruled.View
             galaxy.Catalog.Neighbours(star, _neighbours);
             for (int i = 0; i < _neighbours.Count; i++)
             {
-                if (galaxy.IsMaterialised(_neighbours[i]) || !galaxy.Catalog.TryGetStar(_neighbours[i], out var other))
+                if ((galaxy.TryGetCluster(_neighbours[i], out int charted) && Known(charted)) ||
+                    !galaxy.Catalog.TryGetStar(_neighbours[i], out var other))
                     continue;
                 var dir = new Vector2(other.X - _systemPos[_clusterId].x, other.Y - _systemPos[_clusterId].y);
                 if (dir.sqrMagnitude < 1f)
@@ -721,6 +729,8 @@ namespace Unruled.View
                 PlaceLabel(rim - dir * (22f * u), "UNCHARTED · " + UiFormat.CatalogCode(_neighbours[i]), col, true, false);
             }
         }
+
+        private bool Known(int clusterId) => _sim.Galaxy.Knows(_playerId, clusterId);
 
         // A hub: a system holding one of THE SYSTEM's Citadels (works for systems from before the catalog too).
         private bool IsHub(int clusterId)
@@ -853,7 +863,7 @@ namespace Unruled.View
                 if (!_sim.Sites.Has(gate.HomeSite) || !_sim.Sites.Has(gate.FarSite))
                     continue;
                 int gA = _sim.Sites.Get(gate.HomeSite).ClusterId, gB = _sim.Sites.Get(gate.FarSite).ClusterId;
-                if (gA < 0 || gB < 0 || gA >= count || gB >= count)
+                if (gA < 0 || gB < 0 || gA >= count || gB >= count || !Known(gA) || !Known(gB))
                     continue;
                 DrawRoute(SystemAt(gA), SystemAt(gB), gate.IsOpen ? UnruledPalette.Sta : UnruledPalette.Unclaimed,
                     gate.IsOpen ? 3f : 2f, !gate.IsOpen);
@@ -869,7 +879,7 @@ namespace Unruled.View
                     continue;
                 int cA = _sim.Sites.Get(lane.SiteA).ClusterId;
                 int cB = _sim.Sites.Get(lane.SiteB).ClusterId;
-                if (cA == cB || cA < 0 || cB < 0 || cA >= count || cB >= count)
+                if (cA == cB || cA < 0 || cB < 0 || cA >= count || cB >= count || !Known(cA) || !Known(cB))
                     continue;
                 var a = SystemAt(cA);
                 var b = SystemAt(cB);
@@ -885,6 +895,8 @@ namespace Unruled.View
 
             for (int c = 0; c < count; c++)
             {
+                if (!Known(c))
+                    continue;
                 var p = SystemAt(c);
                 int owner = ClusterCoreOwner(c);
                 bool contested = IsHub(c);
@@ -1462,7 +1474,7 @@ namespace Unruled.View
                 float pick = ClusterPickPx * _mesh.UnitsPerPixel;
                 for (int c = 0; c < _systemPos.Count; c++)
                 {
-                    if (Vector2.Distance(SystemAt(c), world) > pick)
+                    if (!Known(c) || Vector2.Distance(SystemAt(c), world) > pick)
                         continue;
                     // First click previews the system; a second click on it flies into it.
                     if (c == _previewCluster)

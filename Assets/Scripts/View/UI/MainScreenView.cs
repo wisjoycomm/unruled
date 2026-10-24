@@ -24,6 +24,7 @@ namespace Unruled.View.UI
         private OperationsPanel _ops;
         private MarketTradePanel _trade;
         private FleetOpsPanel _fleetOps;
+        private ChartShopPanel _charts;
         private BulletinFeed _bulletins;
         private BoardPreviewCard _preview;
         private ModalPopup _popup;
@@ -66,6 +67,7 @@ namespace Unruled.View.UI
                 _ops = new OperationsPanel(root, _popup, _art);
                 _trade = new MarketTradePanel(root, _popup, _art);
                 _fleetOps = new FleetOpsPanel(root, _popup, _art);
+                _charts = new ChartShopPanel(root, _popup, _art);
                 _bulletins = new BulletinFeed(root, _popup, _art);
                 Menu = new GameMenu(root, _popup, _art);
             }
@@ -87,6 +89,7 @@ namespace Unruled.View.UI
             _ops.Bind(sim, playerId);
             _trade.Bind(sim, playerId);
             _fleetOps.Bind(sim, playerId);
+            _charts.Bind(sim, playerId);
             _bulletins.Bind(sim, playerId);
             Menu.Bind(sim, playerId);
             _preview.Bind(sim, playerId);
@@ -127,6 +130,7 @@ namespace Unruled.View.UI
             _fleet.SetMoveTarget(siteOrLane);
             _ops.SelectSite(siteOrLane);
             _fleetOps.SelectTarget(siteOrLane);
+            _charts.SelectSite(siteOrLane);
             _top.SetSelection(siteOrLane);
             if (_sim.Sites.Has(siteOrLane))
                 _preview.ShowSite(siteOrLane);
@@ -156,6 +160,7 @@ namespace Unruled.View.UI
             _ops.Refresh();
             _trade.Refresh();
             _fleetOps.Refresh();
+            _charts.Refresh();
             _bulletins.Refresh();
             Menu.Refresh();
         }
