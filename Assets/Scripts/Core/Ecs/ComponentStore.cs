@@ -67,6 +67,21 @@ namespace Unruled.Core.Ecs
             RemoveAtSlot(_sparse[entity.Index] - 1);
         }
 
+        /// <summary>
+        /// Adds or replaces the component, dropping one held by an older generation at the same index: a client's
+        /// mirror of a server world applies what the server sends this way (see <c>Net.PlayerView</c>).
+        /// </summary>
+        internal void Set(EntityId entity, in T value)
+        {
+            if (Has(entity))
+            {
+                _data[_sparse[entity.Index] - 1] = value;
+                return;
+            }
+            ((IComponentStore)this).RemoveIfPresent(entity.Index);
+            Add(entity, value);
+        }
+
         /// <summary>Reference to the component of a live entity. Throws on a missing component or stale id.</summary>
         public ref T Get(EntityId entity)
         {

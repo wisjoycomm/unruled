@@ -48,6 +48,21 @@ namespace Unruled.Core.Simulation
             Version++;
         }
 
+        /// <summary>
+        /// A client's mirror of a server world: jumps to the server's tick and replaces the queue with the player's own
+        /// orders still in flight, without dispatching anything or running a system.
+        /// </summary>
+        internal void Mirror(long tick, DelayedPlayerCommand[] pending, int count)
+        {
+            if (tick < 0) throw new ArgumentOutOfRangeException(nameof(tick));
+            CurrentTick = tick;
+            if (pending == null) return;
+            _queue.Clear();
+            for (int i = 0; i < count; i++)
+                _queue.Add(pending[i]);
+            Version++;
+        }
+
         public void Advance(long ticks)
         {
             if (ticks < 0) throw new ArgumentOutOfRangeException(nameof(ticks));

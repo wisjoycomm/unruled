@@ -25,6 +25,24 @@ namespace Unruled.Core.Persistence
             return bytes;
         }
 
+        /// <summary>The bytes written so far; valid until the next write or <see cref="Reset"/>.</summary>
+        public ReadOnlySpan<byte> WrittenSpan => new ReadOnlySpan<byte>(_buffer, 0, Length);
+
+        /// <summary>Drops everything written after the first <paramref name="length"/> bytes; keeps the buffer.</summary>
+        public void Rewind(int length)
+        {
+            if (length < 0 || length > Length) throw new ArgumentOutOfRangeException(nameof(length));
+            Length = length;
+        }
+
+        /// <summary>Appends bytes that already hold whole MessagePack values.</summary>
+        public void WriteRaw(ReadOnlySpan<byte> encoded)
+        {
+            Ensure(encoded.Length);
+            encoded.CopyTo(new Span<byte>(_buffer, Length, encoded.Length));
+            Length += encoded.Length;
+        }
+
         public void WriteNil() => Byte(0xc0);
 
         public void Write(bool value) => Byte(value ? (byte)0xc3 : (byte)0xc2);
