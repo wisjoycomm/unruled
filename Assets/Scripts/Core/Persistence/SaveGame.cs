@@ -12,10 +12,10 @@ namespace Unruled.Core.Persistence
     public static class SaveGame
     {
         /// <summary>Bump when a saved shape changes, and add a migration test for the older version.</summary>
-        public const int SchemaVersion = 6;
+        public const int SchemaVersion = 7;
 
         private const int TopLevelKeys = 6;
-        private const int StoreCount = 40;
+        private const int StoreCount = 41;
 
         private delegate void Writer<T>(MsgPackWriter w, in T value);
         private delegate T Reader<T>(MsgPackReader r);
@@ -80,6 +80,7 @@ namespace Unruled.Core.Persistence
             if (storeCount > 37) WriteStore(w, sim.Loans, ComponentFormatters.Write);
             if (storeCount > 38) WriteStore(w, sim.StarSystems, ComponentFormatters.Write);
             if (storeCount > 39) WriteStore(w, sim.SystemNames, ComponentFormatters.Write);
+            if (storeCount > 40) WriteStore(w, sim.SystemCharts, ComponentFormatters.Write);
             return w.ToArray();
         }
 
@@ -147,6 +148,7 @@ namespace Unruled.Core.Persistence
                 AddMissingLoans(sim); // schema 1: no loans yet, so every player owes nothing
             if (stores > 38) ReadStore(r, sim.World, sim.StarSystems, ComponentFormatters.ReadStarSystem);
             if (stores > 39) ReadStore(r, sim.World, sim.SystemNames, ComponentFormatters.ReadSystemName);
+            if (stores > 40) ReadStore(r, sim.World, sim.SystemCharts, ComponentFormatters.ReadSystemChart);
             if (stores > StoreCount) r.Skip(stores - StoreCount);
             r.Skip(keys - TopLevelKeys);
             if (!r.End) throw new FormatException("Save has bytes after its end.");
@@ -155,7 +157,48 @@ namespace Unruled.Core.Persistence
                 sim.Stockpiles.Add(sim.WtoFeePool, default); // schema 3 and older: THE SYSTEM held no stock yet
             sim.Graph.Rebuild(sim.Starlanes);
             sim.Galaxy.EnsureSystemsForAllClusters(tick); // schema 5 and older: systems from before the catalog
+            if (stores <= 40)
+                ChartWhatPlayersHold(sim, tick); // schema 6 and older: no charts yet
             return sim;
+        }
+
+        // Before charts every system was known to all; a migrated player keeps the systems it holds a site in, has a
+        // fleet in, or reaches through its jump gate, plus every hub (a Citadel's system).
+        private static void ChartWhatPlayersHold(SimulationWorld sim, long tick)
+        {
+            var galaxy = sim.Galaxy;
+            for (int i = 0; i < sim.Sites.Count; i++)
+            {
+                ref var site = ref sim.Sites.At(i);
+                if (site.OwnerPlayerId > 0)
+                    galaxy.Learn(site.OwnerPlayerId, site.ClusterId, Unruled.Core.Galaxy.ChartSource.Migration, tick);
+            }
+            for (int i = 0; i < sim.Fleets.Count; i++)
+                LearnSite(sim, sim.Fleets.At(i).OwnerPlayerId, Docked(sim, sim.Fleets.EntityAt(i)), tick);
+            for (int i = 0; i < sim.JumpGates.Count; i++)
+            {
+                ref var gate = ref sim.JumpGates.At(i);
+                LearnSite(sim, gate.OwnerPlayerId, gate.HomeSite, tick);
+                LearnSite(sim, gate.OwnerPlayerId, gate.FarSite, tick);
+            }
+            for (int c = 0; c < sim.Citadels.Count; c++)
+                for (int p = 0; p < sim.Players.Count; p++)
+                    LearnSite(sim, sim.Players.At(p).PlayerId, sim.Citadels.EntityAt(c), tick);
+        }
+
+        private static void LearnSite(SimulationWorld sim, int playerId, EntityId site, long tick)
+        {
+            if (sim.Sites.Has(site))
+                sim.Galaxy.Learn(playerId, sim.Sites.Get(site).ClusterId, Unruled.Core.Galaxy.ChartSource.Migration, tick);
+        }
+
+        // Where a fleet is: its site, or the site it left when on a lane.
+        private static EntityId Docked(SimulationWorld sim, EntityId fleet)
+        {
+            if (!sim.FleetMotions.Has(fleet))
+                return default;
+            ref var motion = ref sim.FleetMotions.Get(fleet);
+            return motion.Site.IsNull ? motion.FromSite : motion.Site;
         }
 
         private static void AddMissingLoans(SimulationWorld sim)

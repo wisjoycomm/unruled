@@ -439,7 +439,7 @@ namespace Unruled.Core.Persistence
 
         internal static void Write(MsgPackWriter w, in StarSystem v)
         {
-            w.WriteArrayHeader(7);
+            w.WriteArrayHeader(8);
             w.Write(v.StarId);
             w.Write(v.ClusterId);
             w.Write(v.OwnerPlayerId);
@@ -447,6 +447,7 @@ namespace Unruled.Core.Persistence
             w.Write(v.X);
             w.Write(v.Y);
             w.Write((int)v.Class);
+            w.Write(v.FirstSurveyorPlayerId);
         }
 
         internal static StarSystem ReadStarSystem(MsgPackReader r)
@@ -460,7 +461,30 @@ namespace Unruled.Core.Persistence
             if (n > 4) v.X = r.ReadInt32();
             if (n > 5) v.Y = r.ReadInt32();
             if (n > 6) v.Class = (StarClass)r.ReadByte();
-            SkipNewer(r, n, 7);
+            if (n > 7) v.FirstSurveyorPlayerId = r.ReadInt32();
+            SkipNewer(r, n, 8);
+            return v;
+        }
+
+        // SystemChart: [player, cluster, known tick, source].
+        internal static void Write(MsgPackWriter w, in SystemChart v)
+        {
+            w.WriteArrayHeader(4);
+            w.Write(v.PlayerId);
+            w.Write(v.ClusterId);
+            w.Write(v.KnownTick);
+            w.Write((int)v.Source);
+        }
+
+        internal static SystemChart ReadSystemChart(MsgPackReader r)
+        {
+            int n = r.ReadArrayHeader();
+            var v = new SystemChart();
+            if (n > 0) v.PlayerId = r.ReadInt32();
+            if (n > 1) v.ClusterId = r.ReadInt32();
+            if (n > 2) v.KnownTick = r.ReadInt64();
+            if (n > 3) v.Source = (ChartSource)r.ReadByte();
+            SkipNewer(r, n, 4);
             return v;
         }
 

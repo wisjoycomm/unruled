@@ -11,7 +11,8 @@ namespace Unruled.Core.Military
     /// Move (target: own fleet at a site; <see cref="DelayedPlayerCommand.ParamEntity"/>: a lane from that site, or a
     /// destination site; ParamC 1 = route around STA toll lanes) departs at once. A destination is routed by
     /// <see cref="RoutePlanner"/> once, at the order;
-    /// on each arrival the fleet departs on the next lane of its route the same tick.
+    /// on each arrival the fleet departs on the next lane of its route the same tick, and its owner learns the system
+    /// it arrived in (<see cref="IChartLog"/>).
     /// Every departure pays fuel from the fleet's hold (ships x fuel per 100 units x length x tier fuel multiplier,
     /// rounded up) and whatever the <see cref="ITollGate"/> charges for the lane; if either can't be paid the fleet
     /// stays at the site, nothing is paid, and the rest of its route is dropped. Lanes above the
@@ -33,6 +34,7 @@ namespace Unruled.Core.Military
         private readonly ComponentStore<Stockpile> _stockpiles;
         private readonly RoutePlanner _planner;
         private readonly ITollGate _tolls;
+        private readonly IChartLog _charts;
         private readonly StarlaneBalance _laneBalance;
         private readonly FleetBalance _balance;
 
@@ -40,8 +42,9 @@ namespace Unruled.Core.Military
             ComponentStore<FleetUnit> units, ComponentStore<FleetMotion> motions, ComponentStore<FleetRoute> routes,
             ComponentStore<FleetReadiness> readiness, ComponentStore<FleetCombatState> combat,
             ComponentStore<SiteInfo> sites, ComponentStore<StarlaneEdge> lanes, ComponentStore<Stockpile> stockpiles,
-            RoutePlanner planner, ITollGate tolls, StarlaneBalance laneBalance, FleetBalance balance)
+            RoutePlanner planner, ITollGate tolls, IChartLog charts, StarlaneBalance laneBalance, FleetBalance balance)
         {
+            _charts = charts ?? throw new ArgumentNullException(nameof(charts));
             _units = units ?? throw new ArgumentNullException(nameof(units));
             _motions = motions ?? throw new ArgumentNullException(nameof(motions));
             _routes = routes ?? throw new ArgumentNullException(nameof(routes));
@@ -78,6 +81,7 @@ namespace Unruled.Core.Military
                 motion.FromSite = default;
                 motion.TravelledMilli = 0;
                 motion.IsReversing = false;
+                _charts.FleetArrived(_units.Get(fleet).OwnerPlayerId, motion.Site, tick);
 
                 ref var route = ref _routes.Get(fleet);
                 if (!route.HasNext)

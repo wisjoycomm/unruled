@@ -50,7 +50,7 @@ namespace Unruled.Tests.Core.Galaxy
         [Test]
         public void Survey_ChartsANeighbourFrontier_LinkedToTheHomeSystem_ForFuel()
         {
-            Assert.IsTrue(_sim.Galaxy.TryPickSurvey(HomeCluster, out var star), "home has an uncharted frontier neighbour");
+            Assert.IsTrue(_sim.Galaxy.TryPickSurvey(1, HomeCluster, out var star), "home has an uncharted frontier neighbour");
             int clusters = _sim.Galaxy.NextClusterId();
             int lanes = _sim.Starlanes.Count;
             int fuel = _sim.Stockpiles.Get(_game.Fleet).Get(ItemId.ItemFuel);
@@ -75,7 +75,7 @@ namespace Unruled.Tests.Core.Galaxy
         [Test]
         public void Survey_OfAFarStar_OrWithoutFuel_OrSomeoneElsesFleet_ChangesNothing()
         {
-            Assert.IsTrue(_sim.Galaxy.TryPickSurvey(HomeCluster, out var near));
+            Assert.IsTrue(_sim.Galaxy.TryPickSurvey(1, HomeCluster, out var near));
             var stars = new List<StarRecord>();
             _sim.Galaxy.Catalog.GetSector(0, 0, stars);
             int clusters = _sim.Galaxy.NextClusterId();
@@ -94,7 +94,7 @@ namespace Unruled.Tests.Core.Galaxy
         [Test]
         public void Survey_IsDeterministic_SameSeedSameNewSystem()
         {
-            Assert.IsTrue(_sim.Galaxy.TryPickSurvey(HomeCluster, out var star));
+            Assert.IsTrue(_sim.Galaxy.TryPickSurvey(1, HomeCluster, out var star));
             Survey(star);
             var other = new SimulationWorld(DefaultGameBalance.Create(), worldSeed: 31);
             var game = NewGameSetup.Create(other, 1);
@@ -128,7 +128,7 @@ namespace Unruled.Tests.Core.Galaxy
             ref var hold = ref _sim.Stockpiles.Get(_game.Fleet);
             for (var id = ItemId.ItemOxygen; ItemIds.IsRefined(id); id++)
                 hold.Add(id, 100_000); // a full hold: nothing left to load at home
-            Assert.IsTrue(_sim.Galaxy.TryPickSurvey(HomeCluster, out var expected));
+            Assert.IsTrue(_sim.Galaxy.TryPickSurvey(1, HomeCluster, out var expected));
 
             _sim.Ai.Assign(hq, warlord);
             AiOrder? survey = null;
@@ -168,7 +168,7 @@ namespace Unruled.Tests.Core.Galaxy
                 if (a != b && (a == HomeCluster || b == HomeCluster))
                     homeExits++;
             }
-            Assert.IsTrue(homeExits > 0 || _sim.Galaxy.TryPickSurvey(HomeCluster, out _), "home has a way out besides its gate");
+            Assert.IsTrue(homeExits > 0 || _sim.Galaxy.TryPickSurvey(1, HomeCluster, out _), "home has a way out besides its gate");
         }
 
         private bool DirectLane(int clusterA, int clusterB)

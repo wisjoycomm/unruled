@@ -968,7 +968,7 @@ namespace Unruled.Core.AI
                         out siegeTarget, out developTarget);
                     if (siegeTarget.IsNull && developTarget.IsNull && !IsHomeSettler(preset) &&
                         hold.Get(ItemId.ItemFuel) >= _galaxy.Catalog.Balance.SurveyFuel && CarriesClaimCost(ref hold, 0) &&
-                        _galaxy.TryPickSurvey(_sites.Get(motion.Site).ClusterId, out surveyStar))
+                        _galaxy.TryPickSurvey(player.PlayerId, _sites.Get(motion.Site).ClusterId, out surveyStar))
                         Consider(AiAction.Survey, Score(preset.SiegeConquestWeight, Threshold), ref best, ref bestScore);
                 }
             }

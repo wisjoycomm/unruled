@@ -2,12 +2,15 @@ using System;
 using System.Collections.Generic;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
+using Unruled.Core.Military;
 using Unruled.Core.Simulation;
 
 namespace Unruled.Core.Galaxy
 {
     /// <summary>
-    /// Owns <see cref="StarSystem"/> and <see cref="SystemName"/>: which catalog stars have become simulated systems,
+    /// Owns <see cref="StarSystem"/>, <see cref="SystemName"/> and <see cref="SystemChart"/>: which catalog stars have
+    /// become simulated systems, which players know each one (the world is shared, knowledge is per player; THE SYSTEM's
+    /// agencies know everything), and, as before,
     /// under which cluster id, who holds each, and what it is called. A star is materialised only through
     /// <see cref="SimulationWorld.MaterialiseStar"/>; this system registers it and keeps a cluster index (derived,
     /// rebuilt on load). Every <see cref="OwnerRefreshTicks"/> it recomputes each system's owner as the player
@@ -16,7 +19,7 @@ namespace Unruled.Core.Galaxy
     /// <see cref="SystemName.TryEncode"/>) names a system for its current owner and is published as a bulletin; an
     /// order from anyone else, or a name that doesn't decode to a legal one, changes nothing.
     /// </summary>
-    public sealed class GalaxySystem : ISimSystem, ICommandHandler
+    public sealed class GalaxySystem : ISimSystem, ICommandHandler, IChartLog
     {
         public const int OwnerRefreshTicks = 60;
 
@@ -26,6 +29,8 @@ namespace Unruled.Core.Galaxy
         private readonly World _world;
         private readonly ComponentStore<StarSystem> _systems;
         private readonly ComponentStore<SystemName> _names;
+        private readonly ComponentStore<SystemChart> _charts;
+        private readonly Dictionary<long, EntityId> _chartOf = new Dictionary<long, EntityId>(); // (player, cluster) -> chart
         private readonly ComponentStore<SiteInfo> _sites;
         private readonly GalaxyCatalog _catalog;
         private readonly List<EntityId> _byCluster = new List<EntityId>();
@@ -41,8 +46,9 @@ namespace Unruled.Core.Galaxy
         private readonly ISystemRenameLog _renames;
 
         public GalaxySystem(World world, ComponentStore<StarSystem> systems, ComponentStore<SystemName> names,
-            ComponentStore<SiteInfo> sites, GalaxyCatalog catalog, ISystemRenameLog renames)
+            ComponentStore<SystemChart> charts, ComponentStore<SiteInfo> sites, GalaxyCatalog catalog, ISystemRenameLog renames)
         {
+            _charts = charts ?? throw new ArgumentNullException(nameof(charts));
             _renames = renames ?? throw new ArgumentNullException(nameof(renames));
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _systems = systems ?? throw new ArgumentNullException(nameof(systems));
@@ -72,14 +78,13 @@ namespace Unruled.Core.Galaxy
         }
 
         /// <summary>
-        /// Whether a fleet in <paramref name="fromCluster"/> may chart <paramref name="target"/>: a frontier-class
-        /// catalog star, not yet materialised, that is a hyperlane neighbour of the cluster's star. Home and hub stars
-        /// are kept for spawning.
+        /// Whether a fleet of <paramref name="playerId"/> in <paramref name="fromCluster"/> may chart
+        /// <paramref name="target"/>, a hyperlane neighbour of the cluster's star: an uncharted frontier-class star
+        /// (home and hub stars are kept for spawning), or a system someone else charted that this player doesn't know.
         /// </summary>
-        public bool CanSurvey(int fromCluster, StarId target)
+        public bool CanSurvey(int playerId, int fromCluster, StarId target)
         {
-            if (!TryGetStar(fromCluster, out var from) || IsMaterialised(target) ||
-                !_catalog.TryGetStar(target, out var record) || record.Class != StarClass.Frontier)
+            if (!TryGetStar(fromCluster, out var from) || !Surveyable(playerId, target))
                 return false;
             _catalog.Neighbours(from, _neighbours);
             for (int i = 0; i < _neighbours.Count; i++)
@@ -88,8 +93,8 @@ namespace Unruled.Core.Galaxy
             return false;
         }
 
-        /// <summary>The first star (by packed id) a fleet in <paramref name="fromCluster"/> may chart, if any.</summary>
-        public bool TryPickSurvey(int fromCluster, out StarId target)
+        /// <summary>The first star (by packed id) a fleet of the player in <paramref name="fromCluster"/> may chart, if any.</summary>
+        public bool TryPickSurvey(int playerId, int fromCluster, out StarId target)
         {
             target = default;
             if (!TryGetStar(fromCluster, out var from))
@@ -97,15 +102,55 @@ namespace Unruled.Core.Galaxy
             _catalog.Neighbours(from, _neighbours);
             for (int i = 0; i < _neighbours.Count; i++)
             {
-                var candidate = _neighbours[i];
-                if (IsMaterialised(candidate) || !_catalog.TryGetStar(candidate, out var record) ||
-                    record.Class != StarClass.Frontier)
+                if (!Surveyable(playerId, _neighbours[i]))
                     continue;
-                target = candidate;
+                target = _neighbours[i];
                 return true;
             }
             return false;
         }
+
+        private bool Surveyable(int playerId, StarId star)
+        {
+            if (TryGetCluster(star, out int cluster))
+                return !Knows(playerId, cluster);
+            return _catalog.TryGetStar(star, out var record) && record.Class == StarClass.Frontier;
+        }
+
+        /// <summary>Whether the player knows the system of <paramref name="clusterId"/>; THE SYSTEM (id 0 or less) knows all.</summary>
+        public bool Knows(int playerId, int clusterId) =>
+            playerId <= 0 || _chartOf.ContainsKey(ChartKey(playerId, clusterId));
+
+        /// <summary>
+        /// The one door into a player's charts: the player now knows the system (no-op if it already did or the cluster
+        /// has no system). True when this added it.
+        /// </summary>
+        internal bool Learn(int playerId, int clusterId, ChartSource source, long tick)
+        {
+            if (playerId <= 0 || SystemOf(clusterId).IsNull || Knows(playerId, clusterId))
+                return false;
+            var chart = _world.Create();
+            _charts.Add(chart, new SystemChart { PlayerId = playerId, ClusterId = clusterId, KnownTick = tick, Source = source });
+            _chartOf[ChartKey(playerId, clusterId)] = chart;
+            return true;
+        }
+
+        /// <summary>A fleet arrived at a site: its owner learns that system.</summary>
+        public void FleetArrived(int playerId, EntityId site, long tick)
+        {
+            if (_sites.Has(site))
+                Learn(playerId, _sites.Get(site).ClusterId, ChartSource.Arrival, tick);
+        }
+
+        /// <summary>Records the player whose survey materialised the cluster's system.</summary>
+        internal void SetFirstSurveyor(int clusterId, int playerId)
+        {
+            var system = SystemOf(clusterId);
+            if (!system.IsNull && _systems.Has(system))
+                _systems.Get(system).FirstSurveyorPlayerId = playerId;
+        }
+
+        private static long ChartKey(int playerId, int clusterId) => (long)playerId << 32 | (uint)clusterId;
 
         /// <summary>
         /// Materialised hyperlane neighbours of a star, as cluster ids appended to <paramref name="clusters"/>
@@ -213,6 +258,9 @@ namespace Unruled.Core.Galaxy
                 ref var s = ref _systems.At(i);
                 Index(_systems.EntityAt(i), s.ClusterId, s.StarId);
             }
+            _chartOf.Clear();
+            for (int i = 0; i < _charts.Count; i++)
+                _chartOf[ChartKey(_charts.At(i).PlayerId, _charts.At(i).ClusterId)] = _charts.EntityAt(i);
         }
 
         public void Handle(in DelayedPlayerCommand command, long tick)

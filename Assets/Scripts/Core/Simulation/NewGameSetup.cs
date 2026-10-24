@@ -61,6 +61,7 @@ namespace Unruled.Core.Simulation
             SetUpContestedCluster(sim, picks[participants], playerId, participants);
             SetUpUninhabitedClusters(sim, picks, participants);
             LinkHyperlanes(sim);
+            ChartSpawnGroup(sim, playerId, participants);
             sim.Graph.Rebuild(sim.Starlanes);
             return player;
         }
@@ -216,6 +217,23 @@ namespace Unruled.Core.Simulation
         }
 
         private static EntityId Outer(EntityId[] orbits) => orbits[orbits.Length - 1];
+
+        // Each participant starts knowing its home, the hub and the uninhabited systems wired to its gate's far side;
+        // everything else in the group is hidden until surveyed, reached, shared or bought.
+        private static void ChartSpawnGroup(SimulationWorld sim, int firstPlayerId, int participants)
+        {
+            int perParticipant = sim.Balance.NewGame.UninhabitedClustersPerParticipant;
+            int firstFrontier = FirstUninhabitedClusterId(participants);
+            long tick = sim.Clock.CurrentTick;
+            for (int p = 0; p < participants; p++)
+            {
+                int player = firstPlayerId + p;
+                sim.Galaxy.Learn(player, p, ChartSource.Spawn, tick);
+                sim.Galaxy.Learn(player, ContestedClusterId(participants), ChartSource.Spawn, tick);
+                for (int k = 0; k < perParticipant; k++)
+                    sim.Galaxy.Learn(player, firstFrontier + p * perParticipant + k, ChartSource.Spawn, tick);
+            }
+        }
 
         /// <summary>
         /// Every catalog hyperlane between two materialised systems becomes an STA highway (lower cluster's outermost

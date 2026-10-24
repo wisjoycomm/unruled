@@ -48,6 +48,7 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<Loan> Loans;
         public readonly ComponentStore<StarSystem> StarSystems;
         public readonly ComponentStore<SystemName> SystemNames;
+        public readonly ComponentStore<SystemChart> SystemCharts;
         public readonly GalaxySystem Galaxy;
         public readonly ComponentStore<WtoOrder> WtoOrders;
         public readonly ComponentStore<ItemMarket> ItemMarkets;
@@ -141,6 +142,7 @@ namespace Unruled.Core.Simulation
             Loans = World.CreateStore<Loan>();
             StarSystems = World.CreateStore<StarSystem>();
             SystemNames = World.CreateStore<SystemName>();
+            SystemCharts = World.CreateStore<SystemChart>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -209,9 +211,12 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.Activate, upkeep);
 
             Tolls = new StaTollGate(Ledger, Standings, StaTollPool, balance.Starlanes, balance.Leaderboard, balance.Sta);
+            // Built before movement, which reports arrivals to it; it ticks last, after the watchers.
+            Galaxy = new GalaxySystem(World, StarSystems, SystemNames, SystemCharts, Sites,
+                new GalaxyCatalog(balance.Galaxy, worldSeed), Authority);
             Movement = new FleetMovementSystem(
                 Fleets, FleetMotions, FleetRoutes, FleetReadiness, FleetCombat, Sites, Starlanes, Stockpiles, Routes,
-                Tolls, balance.Starlanes, balance.Fleets);
+                Tolls, Galaxy, balance.Starlanes, balance.Fleets);
             Clock.Register(Movement);
             Commands.Register(CommandType.Move, Movement);
             Commands.Register(CommandType.Hold, Movement);
@@ -287,8 +292,6 @@ namespace Unruled.Core.Simulation
             Victory = new VictoryEvaluator(Citadels, CitadelAssaults, VictoryRecords, DirectorateSeats, Players, balance.Citadel);
             Clock.Register(Victory);
 
-            Galaxy = new GalaxySystem(World, StarSystems, SystemNames, Sites, new GalaxyCatalog(balance.Galaxy, worldSeed),
-                Authority);
             Ai = new UtilityAiEngine(
                 AiControllers, Players, Fleets, FleetMotions, FleetCombat, FleetReadiness, Stockpiles, Sites, Weather, Deposits,
                 Starlanes, RadarScans, TechProgress, JumpGates, ConvoyRoutes, ShipOrders, Refineries, Standings, Citadels, WtoOrders,

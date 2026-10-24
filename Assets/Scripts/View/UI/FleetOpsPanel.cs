@@ -112,9 +112,9 @@ namespace Unruled.View.UI
             int scanIndex = FindScan(_lane);
             long scanLeft = scanIndex >= 0 ? ScanLeft(scanIndex, tick) : -1;
             int cluster = FleetCluster();
-            if (!_sim.Galaxy.CanSurvey(cluster, _star))
+            if (!_sim.Galaxy.CanSurvey(_playerId, cluster, _star))
                 _star = NextSurvey(cluster, default);
-            bool canSurvey = _sim.Galaxy.CanSurvey(cluster, _star);
+            bool canSurvey = _sim.Galaxy.CanSurvey(_playerId, cluster, _star);
             bool fuelled = has && _sim.Stockpiles.Get(_fleet).Has(ItemId.ItemFuel, _sim.Balance.Galaxy.SurveyFuel);
 
             long key = focus ^ (mothballed ? 1L << 4 : 0) ^ (warmup << 5) ^ (docked ? 1L << 40 : 0) ^ (rwr ? 1L << 41 : 0) ^
@@ -156,7 +156,7 @@ namespace Unruled.View.UI
 
         private void ConfirmSurvey()
         {
-            if (_sim == null || !_sim.Fleets.Has(_fleet) || !_sim.Galaxy.CanSurvey(FleetCluster(), _star))
+            if (_sim == null || !_sim.Fleets.Has(_fleet) || !_sim.Galaxy.CanSurvey(_playerId, FleetCluster(), _star))
                 return;
             var star = _star;
             _popup.Confirm("SURVEY · " + UiFormat.CatalogCode(star),
@@ -187,11 +187,11 @@ namespace Unruled.View.UI
             _sim.Galaxy.Catalog.Neighbours(from, _neighbours);
             StarId first = default, next = default;
             bool hasFirst = false, hasNext = false;
-            bool passed = !_sim.Galaxy.CanSurvey(cluster, after);
+            bool passed = !_sim.Galaxy.CanSurvey(_playerId, cluster, after);
             for (int i = 0; i < _neighbours.Count; i++)
             {
                 var id = _neighbours[i];
-                if (_sim.Galaxy.CanSurvey(cluster, id))
+                if (_sim.Galaxy.CanSurvey(_playerId, cluster, id))
                 {
                     if (!hasFirst)
                     {

@@ -13,6 +13,7 @@ namespace Unruled.Core.Galaxy
         public int X; // galaxy position, copied from the catalog (or laid out for pre-catalog systems)
         public int Y;
         public StarClass Class;
+        public int FirstSurveyorPlayerId; // the player whose survey materialised it; 0 = setup or before charts
     }
 
     /// <summary>

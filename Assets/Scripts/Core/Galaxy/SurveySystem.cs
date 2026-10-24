@@ -9,10 +9,12 @@ namespace Unruled.Core.Galaxy
     /// <summary>
     /// Handles <see cref="CommandType.Survey"/> (Target: an own fleet docked at a site; ParamA/ParamB: the packed
     /// <see cref="StarId"/> split by <see cref="StarId.Split"/>): the fleet burns <see cref="GalaxyBalance.SurveyFuel"/>
-    /// to chart a frontier star that neighbours its system on the catalog's hyperlanes. The star is materialised as an
-    /// uninhabited system with every raw item, and STA highways of <see cref="GalaxyBalance.SurveyLaneLength"/> join
-    /// each materialised neighbour's outermost orbit to its orbit 0. This is how the galaxy grows past the spawn
-    /// group. Invalid, already-charted or unaffordable orders change nothing.
+    /// to chart a star that neighbours its system on the catalog's hyperlanes. An uncharted frontier star is
+    /// materialised as an uninhabited system with every raw item (the player is recorded as its first surveyor), and
+    /// STA highways of <see cref="GalaxyBalance.SurveyLaneLength"/> join each materialised neighbour's outermost orbit
+    /// to its orbit 0. This is how the galaxy grows past the spawn group. A system someone else already charted is
+    /// only added to the player's charts. Either way the player now knows it. Invalid, already-known or unaffordable
+    /// orders change nothing.
     /// </summary>
     public sealed class SurveySystem : ICommandHandler
     {
@@ -40,16 +42,23 @@ namespace Unruled.Core.Galaxy
             if (!StarId.TryFromPacked(StarId.Join(command.ParamA, command.ParamB), out var star))
                 return;
             var galaxy = _sim.Galaxy;
-            if (!galaxy.CanSurvey(_sim.Sites.Get(motion.Site).ClusterId, star))
+            if (!galaxy.CanSurvey(command.PlayerId, _sim.Sites.Get(motion.Site).ClusterId, star))
                 return;
             ref var hold = ref _sim.Stockpiles.Get(fleet);
             if (!hold.Has(ItemId.ItemFuel, _balance.SurveyFuel))
                 return;
             hold.Add(ItemId.ItemFuel, -_balance.SurveyFuel);
+            if (galaxy.TryGetCluster(star, out int known))
+            {
+                galaxy.Learn(command.PlayerId, known, ChartSource.Survey, tick);
+                return;
+            }
 
             galaxy.Catalog.TryGetStar(star, out var record);
-            _sim.MaterialiseStar(star, rebuildGraph: false, out var orbits);
+            int cluster = _sim.MaterialiseStar(star, rebuildGraph: false, out var orbits);
             NewGameSetup.StockFrontier(_sim, record.SystemSeed, orbits);
+            galaxy.SetFirstSurveyor(cluster, command.PlayerId);
+            galaxy.Learn(command.PlayerId, cluster, ChartSource.Survey, tick);
 
             var entry = orbits[0];
             galaxy.MaterialisedNeighbours(star, _neighbourClusters);
