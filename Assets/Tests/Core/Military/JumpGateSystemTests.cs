@@ -49,7 +49,7 @@ namespace Unruled.Tests.Core.Military
         }
 
         [Test]
-        public void NewGame_EveryParticipantHasADormantGate_AndHomesAreSealed()
+        public void NewGame_EveryParticipantHasADormantGate_WithNoLaneYet()
         {
             int participants = 1 + _sim.Balance.NewGame.RivalCount;
             Assert.AreEqual(participants, _sim.JumpGates.Count);
@@ -60,8 +60,13 @@ namespace Unruled.Tests.Core.Military
                 Assert.IsFalse(gate.IsOpen);
                 Assert.AreEqual(contested, _sim.Sites.Get(gate.FarSite).ClusterId);
                 Assert.AreEqual(0, _sim.Sites.Get(gate.FarSite).OwnerPlayerId);
+                for (int l = 0; l < _sim.Starlanes.Count; l++)
+                {
+                    ref var lane = ref _sim.Starlanes.At(l);
+                    Assert.IsFalse((lane.SiteA == gate.HomeSite && lane.SiteB == gate.FarSite) ||
+                                   (lane.SiteA == gate.FarSite && lane.SiteB == gate.HomeSite), "a dormant gate has no lane");
+                }
             }
-            Assert.IsFalse(CanRoute(_game.CoreBase, Gate.FarSite));
         }
 
         [Test]

@@ -149,6 +149,41 @@ namespace Unruled.Tests.Core.Galaxy
         }
 
         [Test]
+        public void NewGame_LinksEveryChartedHyperlane_SoNoSystemIsSealed()
+        {
+            var neighbours = new List<int>();
+            int clusters = _sim.Galaxy.NextClusterId();
+            for (int c = 0; c < clusters; c++)
+            {
+                Assert.IsTrue(_sim.Galaxy.TryGetStar(c, out var star));
+                _sim.Galaxy.MaterialisedNeighbours(star, neighbours);
+                for (int i = 0; i < neighbours.Count; i++)
+                    Assert.IsTrue(DirectLane(c, neighbours[i]), $"hyperlane {c}-{neighbours[i]} is a lane");
+            }
+            int homeExits = 0;
+            for (int i = 0; i < _sim.Starlanes.Count; i++)
+            {
+                ref var lane = ref _sim.Starlanes.At(i);
+                int a = _sim.Sites.Get(lane.SiteA).ClusterId, b = _sim.Sites.Get(lane.SiteB).ClusterId;
+                if (a != b && (a == HomeCluster || b == HomeCluster))
+                    homeExits++;
+            }
+            Assert.IsTrue(homeExits > 0 || _sim.Galaxy.TryPickSurvey(HomeCluster, out _), "home has a way out besides its gate");
+        }
+
+        private bool DirectLane(int clusterA, int clusterB)
+        {
+            for (int i = 0; i < _sim.Starlanes.Count; i++)
+            {
+                ref var lane = ref _sim.Starlanes.At(i);
+                int a = _sim.Sites.Get(lane.SiteA).ClusterId, b = _sim.Sites.Get(lane.SiteB).ClusterId;
+                if ((a == clusterA && b == clusterB) || (a == clusterB && b == clusterA))
+                    return true;
+            }
+            return false;
+        }
+
+        [Test]
         public void SiteIndex_FindsOrbitsOfEveryCluster()
         {
             for (int c = 0; c < _sim.Galaxy.NextClusterId(); c++)

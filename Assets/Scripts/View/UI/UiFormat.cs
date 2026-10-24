@@ -1,5 +1,6 @@
 using System.Globalization;
 using Unruled.Core.Board;
+using Unruled.Core.Galaxy;
 using Unruled.Core.Simulation;
 using UnityEngine.UIElements;
 
@@ -112,6 +113,10 @@ namespace Unruled.View.UI
             string name = StarNames[clusterId % StarNames.Length];
             return wrap == 0 ? name : name + " " + Number(wrap + 1);
         }
+
+        /// <summary>A catalog star's code: UNR-(sector x).(sector y)-(index), e.g. UNR-41.-7-3.</summary>
+        public static string CatalogCode(StarId star) =>
+            "UNR-" + Number(star.SectorX) + "." + Number(star.SectorY) + "-" + Number(star.Index);
 
         /// <summary>Fleets read as FLEET A, B, ... in creation order among the owner's fleets.</summary>
         public static string FleetName(int ordinal) => "FLEET " + FleetLetter(ordinal);

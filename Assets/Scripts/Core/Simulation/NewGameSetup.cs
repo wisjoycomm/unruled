@@ -60,6 +60,7 @@ namespace Unruled.Core.Simulation
             }
             SetUpContestedCluster(sim, picks[participants], playerId, participants);
             SetUpUninhabitedClusters(sim, picks, participants);
+            LinkHyperlanes(sim);
             sim.Graph.Rebuild(sim.Starlanes);
             return player;
         }
@@ -215,6 +216,36 @@ namespace Unruled.Core.Simulation
         }
 
         private static EntityId Outer(EntityId[] orbits) => orbits[orbits.Length - 1];
+
+        /// <summary>
+        /// Every catalog hyperlane between two materialised systems becomes an STA highway (lower cluster's outermost
+        /// orbit to the higher one's orbit 0, the way a survey links), so no system is sealed: homes keep their
+        /// dormant gate to the hub but also reach their catalog neighbours. Hyperlanes to uncharted stars stay exits a
+        /// fleet can survey.
+        /// </summary>
+        private static void LinkHyperlanes(SimulationWorld sim)
+        {
+            var galaxy = sim.Galaxy;
+            var neighbours = new List<int>();
+            int length = sim.Balance.Galaxy.SurveyLaneLength;
+            int firstInterLane = sim.Starlanes.Count;
+            int clusters = galaxy.NextClusterId();
+            for (int c = 0; c < clusters; c++)
+            {
+                if (!galaxy.TryGetStar(c, out var star))
+                    continue;
+                galaxy.MaterialisedNeighbours(star, neighbours);
+                for (int i = 0; i < neighbours.Count; i++)
+                {
+                    int n = neighbours[i];
+                    if (n == c)
+                        continue;
+                    int low = Math.Min(c, n), high = Math.Max(c, n);
+                    AddInterSystemLane(sim, galaxy.OuterOrbit(low), galaxy.SiteAtOrbit(high, 0), StarlaneTier.StaHighway,
+                        length, firstInterLane);
+                }
+            }
+        }
 
         /// <summary>
         /// Gives a just-generated uninhabited system (its sites in orbit order) stockpiles and deposits: the raws its

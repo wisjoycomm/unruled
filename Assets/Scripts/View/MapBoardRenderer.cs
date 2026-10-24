@@ -460,6 +460,11 @@ namespace Unruled.View
                 dir = ((Vector2)(_systemPos[far] - _systemPos[_systemCluster])).normalized;
             else
                 dir = from.sqrMagnitude > 1f ? from.normalized : Vector2.up;
+            DrawExitArrow(from, dir, colour);
+        }
+
+        private void DrawExitArrow(Vector2 from, Vector2 dir, Color colour)
+        {
             float u = _mesh.UnitsPerPixel;
             var start = from + dir * (26f * u);
             var end = from + dir * (_extent * 0.55f);
@@ -679,6 +684,33 @@ namespace Unruled.View
                 int stack = _portalStack.TryGetValue(here.Index, out int k) ? k : 0;
                 _portalStack[here.Index] = stack + 1;
                 PlaceLabel(p + new Vector2(0f, (34f + 16f * stack) * _mesh.UnitsPerPixel), "WARP → " + star, col, true, false);
+            }
+            DrawUnchartedExits();
+        }
+
+        // Catalog hyperlanes to stars no one has charted yet: a faint exit from the outermost orbit towards each, which
+        // a docked fleet can survey from the FLEET tab.
+        private void DrawUnchartedExits()
+        {
+            var galaxy = _sim.Galaxy;
+            if (!galaxy.TryGetStar(_clusterId, out var star) || _clusterId >= _systemPos.Count)
+                return;
+            var outer = galaxy.OuterOrbit(_clusterId);
+            if (outer.IsNull)
+                return;
+            var p = Pos(outer);
+            var col = UnruledPalette.InkSoft;
+            galaxy.Catalog.Neighbours(star, _neighbours);
+            for (int i = 0; i < _neighbours.Count; i++)
+            {
+                if (galaxy.IsMaterialised(_neighbours[i]) || !galaxy.Catalog.TryGetStar(_neighbours[i], out var other))
+                    continue;
+                var dir = new Vector2(other.X - _systemPos[_clusterId].x, other.Y - _systemPos[_clusterId].y);
+                if (dir.sqrMagnitude < 1f)
+                    continue;
+                dir.Normalize();
+                DrawExitArrow(p, dir, col);
+                PlaceLabel(p + dir * (_extent * 0.6f), "UNCHARTED · " + UiFormat.CatalogCode(_neighbours[i]), col, true, false);
             }
         }
 

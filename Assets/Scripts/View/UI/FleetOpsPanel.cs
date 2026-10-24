@@ -1,4 +1,7 @@
+using System.Collections.Generic;
 using Unruled.Core.Board;
+using Unruled.Core.Economy;
+using Unruled.Core.Galaxy;
 using Unruled.Core.Military;
 using Unruled.Core.Simulation;
 using UnityEngine.UIElements;
@@ -9,7 +12,8 @@ namespace Unruled.View.UI
     /// <summary>
     /// The FLEET tab: the selected fleet's focus-fire class, mothball / activate, and the focused radar: a belt scan of
     /// an outer-rim lane (the lane picked on the board, else the first outer-rim lane by the fleet; "Next lane" steps
-    /// through them), its cancel, and ECM jamming once the fleet's RWR has fired. Buttons only forward commands through
+    /// through them), its cancel, ECM jamming once the fleet's RWR has fired, and the survey of an uncharted catalog
+    /// star next to the fleet's system ("Next star" steps through them). Buttons only forward commands through
     /// <see cref="CommandIssuer"/>; the radar and upkeep systems decide what lands.
     /// </summary>
     public sealed class FleetOpsPanel
@@ -18,8 +22,9 @@ namespace Unruled.View.UI
         private static readonly string[] FocusNames = { "LINE", "EW", "SUPPLY", "CARGO" };
 
         private readonly Button[] _focus = new Button[4];
-        private readonly Label _focusStatus, _readiness, _radar, _radarTarget, _ecmStatus, _feedback;
-        private readonly Button _mothball, _scan, _cancelScan, _nextLane, _ecm;
+        private readonly Label _focusStatus, _readiness, _radar, _radarTarget, _ecmStatus, _feedback, _surveyStatus, _surveyTarget;
+        private readonly Button _mothball, _scan, _cancelScan, _nextLane, _ecm, _survey, _nextStar;
+        private readonly List<StarId> _neighbours = new List<StarId>();
         private readonly VisualElement _readinessEmblem;
         private readonly ModalPopup _popup;
         private readonly UiArt _art;
@@ -28,6 +33,7 @@ namespace Unruled.View.UI
         private int _playerId;
         private EntityId _fleet;
         private EntityId _lane;
+        private StarId _star;
         private long _shownKey = long.MinValue;
 
         public FleetOpsPanel(VisualElement root, ModalPopup popup, UiArt art)
@@ -52,11 +58,17 @@ namespace Unruled.View.UI
             _cancelScan = TopTelemetryHud.Require<Button>(root, "do-cancel-scan");
             _nextLane = TopTelemetryHud.Require<Button>(root, "do-next-lane");
             _ecm = TopTelemetryHud.Require<Button>(root, "do-ecm");
+            _surveyStatus = TopTelemetryHud.Require<Label>(root, "survey-status");
+            _surveyTarget = TopTelemetryHud.Require<Label>(root, "survey-target");
+            _survey = TopTelemetryHud.Require<Button>(root, "do-survey");
+            _nextStar = TopTelemetryHud.Require<Button>(root, "do-next-star");
             _mothball.clicked += ToggleMothball;
             _scan.clicked += ConfirmScan;
             _cancelScan.clicked += () => Send(CommandType.CancelScan, _lane, 0);
             _nextLane.clicked += NextLane;
             _ecm.clicked += ConfirmEcm;
+            _survey.clicked += ConfirmSurvey;
+            _nextStar.clicked += NextStar;
         }
 
         public void Bind(SimulationWorld sim, int playerId)
@@ -99,9 +111,15 @@ namespace Unruled.View.UI
             int ew = has ? _sim.Fleets.Get(_fleet).EwShips : 0;
             int scanIndex = FindScan(_lane);
             long scanLeft = scanIndex >= 0 ? ScanLeft(scanIndex, tick) : -1;
+            int cluster = FleetCluster();
+            if (!_sim.Galaxy.CanSurvey(cluster, _star))
+                _star = NextSurvey(cluster, default);
+            bool canSurvey = _sim.Galaxy.CanSurvey(cluster, _star);
+            bool fuelled = has && _sim.Stockpiles.Get(_fleet).Has(ItemId.ItemFuel, _sim.Balance.Galaxy.SurveyFuel);
 
             long key = focus ^ (mothballed ? 1L << 4 : 0) ^ (warmup << 5) ^ (docked ? 1L << 40 : 0) ^ (rwr ? 1L << 41 : 0) ^
-                       ((long)_lane.Index << 42) ^ (scanLeft << 20) ^ ((long)_fleet.Index << 52) ^ ((long)ew << 30);
+                       ((long)_lane.Index << 42) ^ (scanLeft << 20) ^ ((long)_fleet.Index << 52) ^ ((long)ew << 30) ^
+                       (_star.Packed * 31) ^ (fuelled ? 1L << 62 : 0) ^ ((long)cluster << 12);
             if (key == _shownKey)
                 return;
             _shownKey = key;
@@ -128,6 +146,68 @@ namespace Unruled.View.UI
 
             UiFormat.Set(_ecmStatus, !has ? "NO FLEET" : rwr ? "RWR ALARM · HOSTILE SCAN" : "RWR QUIET");
             _ecm.SetEnabled(rwr && onLane && ew > 0);
+
+            UiFormat.Set(_surveyStatus, !has ? "NO FLEET" : !docked ? "IN TRANSIT" :
+                !fuelled ? "NEEDS " + UiFormat.Number(_sim.Balance.Galaxy.SurveyFuel) + " FUEL" : "READY");
+            UiFormat.Set(_surveyTarget, canSurvey ? "UNCHARTED · " + UiFormat.CatalogCode(_star) : "NO UNCHARTED EXIT IN REACH");
+            _survey.SetEnabled(canSurvey && docked && fuelled && !mothballed);
+            _nextStar.SetEnabled(canSurvey && NextSurvey(cluster, _star) != _star);
+        }
+
+        private void ConfirmSurvey()
+        {
+            if (_sim == null || !_sim.Fleets.Has(_fleet) || !_sim.Galaxy.CanSurvey(FleetCluster(), _star))
+                return;
+            var star = _star;
+            _popup.Confirm("SURVEY · " + UiFormat.CatalogCode(star),
+                "Burns " + UiFormat.Number(_sim.Balance.Galaxy.SurveyFuel) + " fuel from the fleet's hold to chart the " +
+                "uncharted star.\n\nIts system joins the map, uninhabited, with STA highways to every charted neighbour.",
+                _art.JumpGate, "Survey", () => SendSurvey(star), ModalPopup.Tone.Normal);
+        }
+
+        private void SendSurvey(StarId star)
+        {
+            StarId.Split(star.Packed, out int low, out int high);
+            Send(CommandType.Survey, _fleet, low, high);
+        }
+
+        private void NextStar()
+        {
+            _star = NextSurvey(FleetCluster(), _star);
+            _shownKey = long.MinValue;
+            Refresh();
+        }
+
+        // The next star (in catalog neighbour order) after `after` the fleet's system may chart, else the first; a
+        // star the system can't chart (e.g. the default id) starts from the top.
+        private StarId NextSurvey(int cluster, StarId after)
+        {
+            if (!_sim.Galaxy.TryGetStar(cluster, out var from))
+                return default;
+            _sim.Galaxy.Catalog.Neighbours(from, _neighbours);
+            StarId first = default, next = default;
+            bool hasFirst = false, hasNext = false;
+            bool passed = !_sim.Galaxy.CanSurvey(cluster, after);
+            for (int i = 0; i < _neighbours.Count; i++)
+            {
+                var id = _neighbours[i];
+                if (_sim.Galaxy.CanSurvey(cluster, id))
+                {
+                    if (!hasFirst)
+                    {
+                        first = id;
+                        hasFirst = true;
+                    }
+                    if (passed && !hasNext)
+                    {
+                        next = id;
+                        hasNext = true;
+                    }
+                }
+                if (id == after)
+                    passed = true;
+            }
+            return hasNext ? next : first;
         }
 
         private void ToggleMothball()
@@ -237,11 +317,14 @@ namespace Unruled.View.UI
             return UiFormat.SiteName(in _sim.Sites.Get(lane.SiteA)) + " ↔ " + UiFormat.SiteName(in _sim.Sites.Get(lane.SiteB));
         }
 
-        private void Send(CommandType type, EntityId target, int paramA)
+        private void Send(CommandType type, EntityId target, int paramA, int paramB = 0)
         {
             if (_sim == null || target.IsNull)
                 return;
-            var command = new DelayedPlayerCommand { PlayerId = _playerId, CommandType = type, Target = target, ParamA = paramA };
+            var command = new DelayedPlayerCommand
+            {
+                PlayerId = _playerId, CommandType = type, Target = target, ParamA = paramA, ParamB = paramB
+            };
             string name = InFlightStrip.CommandName(type).ToUpperInvariant();
             var result = _sim.Issuer.Issue(command, out long executeAt);
             _feedback.text = result == IssueResult.Issued

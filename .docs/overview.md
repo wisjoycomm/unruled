@@ -121,7 +121,7 @@ methods, in this order (rule 4).
     toll-free, a supply run leaves only with half a batch to deliver, a goods run only when what it would load is worth
     more than the round trip's fuel (base WTO prices), and a convoy docked off its route heads back to the hub.
   - `JumpGateSystem`: owns `JumpGate` (Board) and the lanes it opens; at the jump-gate tech tier it charges the core
-    base, adds the gate lane into the contested cluster and rebuilds `StarlaneGraph`. Dormant gates keep homes sealed.
+    base, adds the gate lane into the contested cluster and rebuilds `StarlaneGraph`. A dormant gate keeps the hub out of reach, but homes are not sealed: `NewGameSetup` turns every catalog hyperlane between two charted systems into an STA highway, and hyperlanes to uncharted stars are exits a fleet can survey (FLEET tab).
   - Fleet components (`FleetComponents.cs`), one owner each: `FleetUnit` (ship counts by class; combat),
     `FleetMotion` (site or lane progress; movement), `FleetReadiness` (mothball, warm-up, unsupplied; upkeep),
     `FleetCombatState` (ROF, focus, temperature, damage carry; combat), `FleetSensors` (reveal, RWR; radar). A

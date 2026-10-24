@@ -557,6 +557,20 @@
                     <ui:VisualElement class="ops__group">
                         <ui:VisualElement class="ops__head">
                             <ui:VisualElement class="ops__title-row">
+                                <ui:VisualElement class="ops__emblem ops__emblem--gate" />
+                                <ui:Label class="gauge__label" text="SURVEY" />
+                            </ui:VisualElement>
+                            <ui:Label name="survey-status" class="section-meta" text="NO FLEET" />
+                        </ui:VisualElement>
+                        <ui:Label name="survey-target" class="section-meta ops__feedback" text="NO UNCHARTED EXIT IN REACH" />
+                        <ui:VisualElement class="orders">
+                            <ui:Button name="do-survey" class="u-btn" text="Survey" />
+                            <ui:Button name="do-next-star" class="u-btn u-btn--secondary" text="Next star" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ops__group">
+                        <ui:VisualElement class="ops__head">
+                            <ui:VisualElement class="ops__title-row">
                                 <ui:VisualElement class="ops__emblem ops__emblem--ecm" />
                                 <ui:Label class="gauge__label" text="ECM" />
                             </ui:VisualElement>
