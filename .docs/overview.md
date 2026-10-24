@@ -41,6 +41,9 @@ a hub-class star on the spawn ring becomes the group's hub (with THE SYSTEM's Ci
 the participants' homes and the nearest frontier stars uninhabited systems; each gets stockpiles, ESI-window deposits
 (by NASA planet class), and the homes the core base's rigs, refineries and stock, a starting fleet and AI rivals.
 Catalog hyperlanes between charted systems become STA highways; uncharted neighbours are survey targets.
+THE SYSTEM opens with a treasury and a stock of basics (`NewGameBalance`), so trading with it works on day 1.
+`NewGameSetup.Join(sim, archetype)` adds one player (or bot) to a running game the same way: a free home star near the
+quietest hub, a dormant gate to a free hub orbit, its own frontiers, hyperlanes and charts (no save shape change).
 
 ## Tick order
 
@@ -53,9 +56,11 @@ Catalog hyperlanes between charted systems become STA highways; uncharted neighb
    paid at once from the WTO fee and STA toll pools, into its stock (a stockpile on the fee pool); `BuyFromSystem`:
    its ask (130%) for that stock, paid into the fee pool.
 6. `WhoQuarantineSystem`: export lock when water or oxygen runs out.
-7. `FleetUpkeepSystem`: hourly per-ship upkeep from the cargo hold; `Mothball` / `Activate` and warm-up.
+7. `FleetUpkeepSystem`: hourly per-ship upkeep from the cargo hold (a fleet docked at its owner's site first tops up
+   the shortfall from the site stock above the supply reserve); `Mothball` / `Activate` and warm-up.
 8. `FleetMovementSystem`: routed travel with fuel and STA tolls paid at each departure (`Move` ParamC 1 routes around
-   toll lanes); `Move`, `Hold`, `Reverse`.
+   toll lanes); `Move`, `Hold`, `Reverse`. `CheckMove` says why a move would be refused (readiness, charts, route,
+   tier, fuel, toll) with the fuel and toll due, for the FLEET card and Sim Lab.
 9. `ConvoyRouteSystem`: standing supply runs between a hub and an outpost (fuel, coolant, oxygen and rations out,
    goods home; the fleet keeps its own trip fuel and upkeep, the hub keeps a supply reserve); `SetConvoyRoute`.
 10. `SalvoCombatEngine`: a salvo every 5 ticks between hostile fleets at one site or lane; WTO contract
