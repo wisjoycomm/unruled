@@ -17,6 +17,8 @@ namespace Unruled.SimLab
     {
         public static int Main(string[] args)
         {
+            if (args.Length > 0 && args[0] == "play")
+                return Play.Run(args);
             if (args.Length > 0 && args[0] == "batch")
                 return Batch.Run(args);
             return Serve(args);
