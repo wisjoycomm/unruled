@@ -9,7 +9,9 @@ namespace Unruled.View.UI
     /// and new game. Also the end screen: once THE SYSTEM's Citadel falls and The Directorate forms
     /// (<see cref="Unruled.Core.SystemFactions.VictoryEvaluator"/>), a seated player sees the victory screen and anyone
     /// else the defeat screen, once; play may continue after it. Session actions are callbacks into
-    /// <see cref="GameSession"/>, which owns the clock and the save file.
+    /// <see cref="GameSession"/>, which owns the clock and the save file. Join server asks for the server's address and
+    /// a login token (issued from the server's admin page); online, the menu doesn't pause (the server's clock runs on)
+    /// and offers Play offline instead of save and load.
     /// </summary>
     public sealed class GameMenu
     {
@@ -23,6 +25,11 @@ namespace Unruled.View.UI
         private Func<string> _save;
         private Func<string> _load;
         private Action _newGame;
+        private Func<bool> _isOnline;
+        private Func<string> _linkStatus;
+        private string _address;
+        private Func<string, string, string> _join;
+        private Action _leave;
 
         public GameMenu(VisualElement root, ModalPopup popup, UiArt art)
         {
@@ -39,6 +46,20 @@ namespace Unruled.View.UI
             _load = load;
             _newGame = newGame;
         }
+
+        /// <summary>Online callbacks: whether the session is online, its link's state, join (address, token) and leave.</summary>
+        public void BindOnline(Func<bool> isOnline, Func<string> linkStatus, string lastAddress,
+            Func<string, string, string> join, Action leave)
+        {
+            _isOnline = isOnline;
+            _linkStatus = linkStatus;
+            _address = lastAddress;
+            _join = join;
+            _leave = leave;
+        }
+
+        /// <summary>A line from the session (joined, refused, connection lost), shown in the menu.</summary>
+        public void ShowStatus(string status) => OpenWith(status);
 
         public void Bind(SimulationWorld sim, int playerId)
         {
@@ -62,14 +83,50 @@ namespace Unruled.View.UI
         {
             if (_sim == null)
                 return;
+            if (_isOnline != null && _isOnline())
+            {
+                _popup.Menu("GAME MENU · ONLINE", (_linkStatus?.Invoke() ?? "") + " · " + UiFormat.Clock(_sim.Clock.CurrentTick) +
+                    "\n\nThe server keeps this world and its clock runs on while this menu is open. Leaving logs you out: " +
+                    "your shield rises after a while and your standing orders keep running." + (status != null ? "\n\n" + status : ""),
+                    _art.Pause, ModalPopup.Tone.Normal, _art.MenuScreen,
+                    "Play offline", () => { _leave?.Invoke(); Resume(); },
+                    null, null,
+                    "Resume", Resume);
+                return;
+            }
             _setPaused?.Invoke(true);
             string body = "PAUSED · " + UiFormat.Clock(_sim.Clock.CurrentTick) +
                           "\n\nThe simulation is stopped while this menu is open. The game also saves itself every hour of " +
                           "game time and when you quit." + (status != null ? "\n\n" + status : "");
             _popup.Menu("GAME MENU", body, _art.Pause, ModalPopup.Tone.Normal, _art.MenuScreen,
                 "Save", () => OpenWith(_save?.Invoke()),
-                "Load saved", () => ConfirmLoad(),
+                "Load or join", LoadOrJoin,
                 "Resume", Resume);
+        }
+
+        private void LoadOrJoin()
+        {
+            _popup.Menu("LOAD OR JOIN", "Load the saved game or start a new one on this device, or join a server's world.",
+                _art.Pause, ModalPopup.Tone.Normal, _art.MenuScreen,
+                "Back", () => OpenWith(null),
+                "Load saved", ConfirmLoad,
+                "Join server", _join != null ? AskAddress : (Action)(() => OpenWith("NO SERVER LINK IN THIS BUILD")));
+        }
+
+        // Join server, step 1 of 2: the address (host:port).
+        private void AskAddress()
+        {
+            _popup.Prompt("JOIN SERVER", "The server's address, as host:port.", _art.Pause, _address, 60,
+                text => text.Length >= 3 && text.IndexOf(' ') < 0, "Next", address => { _address = address; AskToken(); });
+        }
+
+        // Step 2: the login token the server's admin page issued for this player.
+        private void AskToken()
+        {
+            _popup.Prompt("JOIN SERVER · " + _address.ToUpperInvariant(),
+                "Your login token from the server's admin page. The offline game is saved first and stays on this device.",
+                _art.Pause, string.Empty, 64, text => text.Length >= 16 && text.IndexOf(' ') < 0, "Join",
+                token => OpenWith(_join(_address, token)));
         }
 
         private void ConfirmLoad()

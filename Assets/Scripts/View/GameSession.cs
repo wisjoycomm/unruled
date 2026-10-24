@@ -9,16 +9,17 @@ using EntityId = Unruled.Core.Ecs.EntityId;
 namespace Unruled.View
 {
     /// <summary>
-    /// Hosts a local game: continues the saved game if there is one, else builds the world from a seed with
-    /// <see cref="NewGameSetup"/>; binds the HUD and the board, then advances the clock one tick per real second
-    /// (scaled by <see cref="_ticksPerSecond"/>) and lets the AI rivals think after each tick. Saves every
-    /// <see cref="_autosaveTicks"/> and when the app pauses or quits. The game menu pauses the clock and saves, loads or
-    /// starts a new game through it. Runs in-process until Server 2 hosts it.
+    /// Hosts the game through an <see cref="IGameLink"/>. Offline (<see cref="LocalLink"/>): continues the saved game
+    /// if there is one, else builds the world from a seed with <see cref="NewGameSetup"/>, advances the clock one tick
+    /// per real second (scaled by <see cref="_ticksPerSecond"/>), lets the AI rivals think after each tick and saves
+    /// every <see cref="_autosaveTicks"/> and when the app pauses or quits. Online (<see cref="ServerLink"/>, from the
+    /// game menu's Join server): the server's world for this player, mirrored; nothing is saved or paused here. Either
+    /// way the HUD and the board are bound to the link's world and read it the same way.
     /// </summary>
     public sealed class GameSession : MonoBehaviour
     {
-        private const int MaxTicksPerFrame = 120;
         private const string SaveFileName = "unruled.save";
+        private const string AddressKey = "unruled.server.address";
 
         [SerializeField] private MainScreenView _screen;
         [SerializeField] private MapBoardRenderer _board;
@@ -27,15 +28,15 @@ namespace Unruled.View
         [SerializeField, Range(0f, 60f)] private float _ticksPerSecond = 1f;
         [SerializeField] private bool _continueSavedGame = true;
         [SerializeField, Min(60)] private int _autosaveTicks = 3_600;
+        [SerializeField] private string _defaultServer = "localhost:5090";
 
-        private SimulationWorld _sim;
-        private float _pending;
+        private IGameLink _link;
+        private ServerLink _joining; // a server link waiting for its first snapshot
         private long _savedTick;
-        private bool _paused;
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, SaveFileName);
 
-        public SimulationWorld Simulation => _sim;
+        public SimulationWorld Simulation => _link?.World;
 
         private void Start()
         {
@@ -43,40 +44,72 @@ namespace Unruled.View
                 throw new MissingReferenceException("GameSession needs its MainScreenView.");
             if (_board == null)
                 throw new MissingReferenceException("GameSession needs its MapBoardRenderer.");
+            PlayOffline();
+            _screen.Menu.BindSession(SetPaused, SaveFromMenu, LoadFromMenu, StartNewGame);
+            _screen.Menu.BindOnline(() => _link != null && _link.IsOnline, LinkStatus,
+                PlayerPrefs.GetString(AddressKey, _defaultServer), JoinServer, PlayOffline);
+        }
+
+        private void PlayOffline()
+        {
+            CloseLinks();
             var balance = DefaultGameBalance.Create();
             if (_continueSavedGame && File.Exists(SavePath) && TryLoad(balance, out var saved))
-                Host(saved, FirstFleet(saved, _playerId));
+                Host(new LocalLink(saved, _playerId, _ticksPerSecond));
             else
                 StartNewGame();
-            _screen.Menu.BindSession(SetPaused, SaveFromMenu, LoadFromMenu, StartNewGame);
         }
 
         private void StartNewGame()
         {
+            CloseLinks();
             var sim = new SimulationWorld(DefaultGameBalance.Create(), unchecked((ulong)_worldSeed));
-            Host(sim, NewGameSetup.Create(sim, _playerId).Fleet);
+            NewGameSetup.Create(sim, _playerId);
+            Host(new LocalLink(sim, _playerId, _ticksPerSecond));
         }
 
-        private void Host(SimulationWorld sim, EntityId fleet)
+        // The offline game keeps running until the server's first snapshot arrives; a refusal leaves it in place.
+        private string JoinServer(string address, string token)
         {
-            _sim = sim;
-            _pending = 0f;
-            _savedTick = _sim.Clock.CurrentTick;
-            _screen.Bind(_sim, _playerId);
-            _screen.SelectFleet(fleet);
-            _board.Bind(_sim, _playerId, _screen);
+            if (_link is LocalLink)
+                Save();
+            _joining?.Close();
+            PlayerPrefs.SetString(AddressKey, address);
+            _joining = new ServerLink(address, token);
+            return "JOINING " + address.ToUpperInvariant();
+        }
+
+        private string LinkStatus() => _joining != null ? _joining.Status : _link != null ? _link.Status : string.Empty;
+
+        private void Host(IGameLink link)
+        {
+            _link = link;
+            _savedTick = link.World.Clock.CurrentTick;
+            _screen.Bind(link.World, link.PlayerId);
+            _screen.SelectFleet(FirstFleet(link.World, link.PlayerId));
+            _board.Bind(link.World, link.PlayerId, _screen);
+        }
+
+        private void CloseLinks()
+        {
+            _joining?.Close();
+            _joining = null;
+            _link?.Close();
+            _link = null;
         }
 
         private void SetPaused(bool paused)
         {
-            _paused = paused;
-            _pending = 0f;
+            if (_link is LocalLink local)
+                local.Paused = paused;
         }
 
         private string SaveFromMenu()
         {
+            if (_link == null || _link.IsOnline)
+                return "THE SERVER KEEPS THIS WORLD";
             Save();
-            return "SAVED · " + UiFormat.Clock(_sim.Clock.CurrentTick);
+            return "SAVED · " + UiFormat.Clock(_link.World.Clock.CurrentTick);
         }
 
         private string LoadFromMenu()
@@ -85,9 +118,9 @@ namespace Unruled.View
                 return "NO SAVED GAME YET";
             if (!TryLoad(DefaultGameBalance.Create(), out var loaded))
                 return "THE SAVED GAME COULD NOT BE READ · KEPT ASIDE";
-            Host(loaded, FirstFleet(loaded, _playerId));
-            _paused = true;
-            return "LOADED · " + UiFormat.Clock(_sim.Clock.CurrentTick);
+            CloseLinks();
+            Host(new LocalLink(loaded, _playerId, _ticksPerSecond) { Paused = true });
+            return "LOADED · " + UiFormat.Clock(loaded.Clock.CurrentTick);
         }
 
         private void OnApplicationPause(bool paused)
@@ -96,7 +129,13 @@ namespace Unruled.View
                 Save();
         }
 
-        private void OnApplicationQuit() => Save();
+        private void OnApplicationQuit()
+        {
+            Save();
+            CloseLinks();
+        }
+
+        private void OnDestroy() => CloseLinks();
 
         // A save this build cannot read is moved aside (not deleted) and reported, and a new game starts.
         private static bool TryLoad(GameBalanceConfig balance, out SimulationWorld sim)
@@ -116,17 +155,17 @@ namespace Unruled.View
             }
         }
 
-        // Writes beside the save, then swaps it in, so a crash while writing keeps the previous save intact.
+        // Offline only. Writes beside the save, then swaps it in, so a crash while writing keeps the previous save intact.
         private void Save()
         {
-            if (_sim == null)
+            if (!(_link is LocalLink local))
                 return;
             string temp = SavePath + ".tmp";
-            File.WriteAllBytes(temp, SaveGame.Write(_sim));
+            File.WriteAllBytes(temp, SaveGame.Write(local.World));
             if (File.Exists(SavePath))
                 File.Delete(SavePath);
             File.Move(temp, SavePath);
-            _savedTick = _sim.Clock.CurrentTick;
+            _savedTick = local.World.Clock.CurrentTick;
         }
 
         private static EntityId FirstFleet(SimulationWorld sim, int playerId)
@@ -139,20 +178,34 @@ namespace Unruled.View
 
         private void Update()
         {
-            if (_sim == null || _paused)
-                return;
-            _pending += Time.deltaTime * _ticksPerSecond;
-            int steps = 0;
-            while (_pending >= 1f && steps < MaxTicksPerFrame)
+            if (_joining != null)
             {
-                _pending -= 1f;
-                steps++;
-                _sim.Clock.Advance(1);
-                _sim.Ai.Think(_sim.Clock.CurrentTick);
+                _joining.Update(Time.deltaTime);
+                if (_joining.World != null)
+                {
+                    var online = _joining;
+                    _joining = null;
+                    _link?.Close();
+                    Host(online);
+                    _screen.Menu.ShowStatus(online.Status);
+                }
+                else if (_joining.Failed)
+                {
+                    _screen.Menu.ShowStatus(_joining.Status);
+                    _joining = null;
+                }
             }
-            if (_pending >= 1f)
-                _pending = 0f; // the frame budget ran out: drop the backlog instead of spiralling
-            if (_sim.Clock.CurrentTick - _savedTick >= _autosaveTicks)
+            if (_link == null)
+                return;
+            _link.Update(Time.deltaTime);
+            if (_link is ServerLink server && server.Failed)
+            {
+                string status = server.Status;
+                PlayOffline();
+                _screen.Menu.ShowStatus(status + " · BACK TO THE OFFLINE GAME");
+                return;
+            }
+            if (_link is LocalLink && _link.World.Clock.CurrentTick - _savedTick >= _autosaveTicks)
                 Save();
         }
     }

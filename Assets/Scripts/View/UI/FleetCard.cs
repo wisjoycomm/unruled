@@ -366,6 +366,7 @@ namespace Unruled.View.UI
                 case IssueResult.UnknownTarget: return "UNKNOWN TARGET";
                 case IssueResult.Paralysed: return "COMMAND PARALYSED";
                 case IssueResult.Uncharted: return "UNCHARTED SYSTEM";
+                case IssueResult.NotAllowed: return "NOT ALLOWED";
                 default: return "ERROR";
             }
         }

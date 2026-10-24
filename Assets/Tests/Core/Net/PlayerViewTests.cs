@@ -1,6 +1,8 @@
 using System;
 using NUnit.Framework;
+using System.Collections.Generic;
 using Unruled.Core.Ecs;
+using Unruled.Core.Military;
 using Unruled.Core.Net;
 using Unruled.Core.Simulation;
 
@@ -139,6 +141,37 @@ namespace Unruled.Tests.Core.Net
             _serverView.Write(full: false);
             Assert.AreEqual(0, _serverView.LastUpserts);
             Assert.AreEqual(0, _serverView.LastRemovals);
+        }
+
+        private sealed class Outbox : ICommandSink
+        {
+            public readonly List<DelayedPlayerCommand> Sent = new List<DelayedPlayerCommand>();
+            public void Send(in DelayedPlayerCommand command) => Sent.Add(command);
+        }
+
+        [Test]
+        public void MirrorOrders_GoToTheServer_AndComeBackInFlightThroughTheView()
+        {
+            Send(full: true);
+            var outbox = new Outbox();
+            _client.Issuer.SendTo(outbox);
+            var order = new DelayedPlayerCommand
+            {
+                PlayerId = Me, CommandType = CommandType.SetRof, Target = _game.Fleet, ParamA = (int)RofStance.Conservation50
+            };
+            Assert.AreEqual(IssueResult.Issued, _client.Issuer.Issue(order, out _));
+            Assert.AreEqual(1, outbox.Sent.Count);
+            Assert.AreEqual(0, _client.Clock.PendingCommandCount, "the mirror's clock never queues an order itself");
+
+            Assert.AreEqual(IssueResult.Issued, _server.Issuer.Issue(outbox.Sent[0], out long lands));
+            Send(full: false);
+            Assert.AreEqual(1, _client.Clock.PendingCommandCount);
+            Assert.AreEqual(lands, _client.Clock.PendingAt(0).ExecuteAtTick);
+
+            Play(lands - _server.Clock.CurrentTick);
+            Send(full: false);
+            Assert.AreEqual(0, _client.Clock.PendingCommandCount);
+            Assert.AreEqual(RofStance.Conservation50, _client.FleetCombat.Get(_game.Fleet).Rof);
         }
     }
 }

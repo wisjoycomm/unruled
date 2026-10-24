@@ -14,7 +14,14 @@ namespace Unruled.Core.Military
         Blackout = 3,
         UnknownTarget = 4,
         Paralysed = 5,
-        Uncharted = 6 // the target (or a Move's destination) is in a system the player doesn't know
+        Uncharted = 6, // the target (or a Move's destination) is in a system the player doesn't know
+        NotAllowed = 7 // an order only the host may give (a remote client sent a login or logout)
+    }
+
+    /// <summary>Where a client mirror's orders go instead of its own clock: the server, which issues them again.</summary>
+    public interface ICommandSink
+    {
+        void Send(in DelayedPlayerCommand command);
     }
 
     /// <summary>
@@ -23,6 +30,8 @@ namespace Unruled.Core.Military
     /// it on the clock.
     /// Refuses every order while the player's command network is paralysed (capital convoy destroyed), and orders aimed
     /// into a system the player has no chart of (<see cref="IStarCharts"/>).
+    /// On a client's mirror of a server world (<see cref="SendTo"/>) an order that passes the same checks goes to the
+    /// server instead of the clock; the server checks it again and its view brings the order back in flight.
     /// </summary>
     public sealed class CommandIssuer
     {
@@ -52,6 +61,11 @@ namespace Unruled.Core.Military
             _players = players ?? throw new ArgumentNullException(nameof(players));
             _relocations = relocations ?? throw new ArgumentNullException(nameof(relocations));
         }
+
+        private ICommandSink _remote;
+
+        /// <summary>Makes this a client mirror's issuer: orders go to <paramref name="remote"/>, never to the clock.</summary>
+        public void SendTo(ICommandSink remote) => _remote = remote ?? throw new ArgumentNullException(nameof(remote));
 
         public IssueResult Issue(DelayedPlayerCommand command, out long executeAtTick)
         {
@@ -106,6 +120,12 @@ namespace Unruled.Core.Military
 
             command.IssuedAtTick = _clock.CurrentTick;
             command.ExecuteAtTick = _clock.CurrentTick + latency;
+            if (_remote != null)
+            {
+                _remote.Send(in command);
+                executeAtTick = command.ExecuteAtTick;
+                return IssueResult.Issued;
+            }
             bool wasSynced = _syncedVersion == _clock.Version;
             _clock.Enqueue(command);
             if (wasSynced)
