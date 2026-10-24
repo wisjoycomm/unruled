@@ -126,7 +126,7 @@ namespace Unruled.Tests.Core.Simulation
                 if (IsAnyCoreBase(sim, deposit.Site) && IsCoreBaseDeposit(rules, deposit.RawItem))
                     continue;
                 generated++;
-                seen.Add((long)deposit.SurfaceReserve << 32 ^ deposit.DeepCrustReserve);
+                seen.Add((long)deposit.SurfaceReserve << 40 ^ (long)deposit.DeepCrustReserve << 20 ^ deposit.CoreFractureReserve);
             }
             Assert.Greater(generated, 20);
             Assert.Greater(seen.Count, generated * 9 / 10, "almost every deposit holds its own amounts");

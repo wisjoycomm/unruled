@@ -142,6 +142,10 @@ namespace Unruled.Core.Simulation
         /// <summary>How rich deposits of this raw are, in percent of the base reserves (rare ores run thin).</summary>
         public int RichnessPercent(ItemId raw) => _richnessPercentByRaw[ItemIds.ToSlot(raw)];
 
+        /// <summary>The most one layer of a generated deposit can start with: its base x class% x ore% x the top roll.</summary>
+        public long FullReserve(int baseReserve, PlanetClass planet, ItemId raw) =>
+            (long)baseReserve * RichnessPercent(planet) * RichnessPercent(raw) * ReserveRollMaxPercent / 1_000_000L;
+
         public int FleetStockCount => _fleetStock.Length;
         public ItemStack FleetStock(int index) => _fleetStock[index];
 

@@ -159,8 +159,10 @@ namespace Unruled.View.UI
         private void RefreshSite()
         {
             ref var site = ref _sim.Sites.Get(_site);
-            long surface = 0, crust = 0, core = 0;
+            long surface = 0, crust = 0, core = 0, surfaceFull = 0, crustFull = 0, coreFull = 0;
             int rigs = 0, deposits = 0;
+            var rules = _sim.Balance.NewGame;
+            var planet = PlanetClasses.Of(in site, _sim.Balance.Universe);
             for (int d = 0; d < _sim.Deposits.Count; d++)
             {
                 ref var deposit = ref _sim.Deposits.At(d);
@@ -170,6 +172,10 @@ namespace Unruled.View.UI
                 surface += deposit.SurfaceReserve;
                 crust += deposit.DeepCrustReserve;
                 core += deposit.CoreFractureReserve;
+                // A layer's bar is full at the most a fresh deposit can hold (or more, e.g. a capital's life support).
+                surfaceFull += System.Math.Max(deposit.SurfaceReserve, rules.FullReserve(rules.SurfaceReserve, planet, deposit.RawItem));
+                crustFull += System.Math.Max(deposit.DeepCrustReserve, rules.FullReserve(rules.DeepCrustReserve, planet, deposit.RawItem));
+                coreFull += System.Math.Max(deposit.CoreFractureReserve, rules.FullReserve(rules.CoreFractureReserve, planet, deposit.RawItem));
                 rigs += deposit.RigCount;
             }
             int refineries = 0;
@@ -193,10 +199,9 @@ namespace Unruled.View.UI
             _meta.text = UiFormat.PlanetClassName(PlanetClasses.Of(in site, _sim.Balance.Universe)) + " · " +
                          OwnerText(site.OwnerPlayerId) + " · " + LifecycleText(site.LifecycleState);
 
-            long max = System.Math.Max(1L, System.Math.Max(surface, System.Math.Max(crust, core)));
-            SetLayer(0, surface, max);
-            SetLayer(1, crust, max);
-            SetLayer(2, core, max);
+            SetLayer(0, surface, surfaceFull);
+            SetLayer(1, crust, crustFull);
+            SetLayer(2, core, coreFull);
             _ores.text = OreList();
             _line1.text = "ESI " + Esi(site.CurrentEsiMilli) + " · " + UiFormat.Number(deposits) + " DEPOSITS";
             _line2.text = UiFormat.Number(rigs) + " RIGS · " + UiFormat.Number(refineries) + " REFINERIES";
@@ -302,7 +307,7 @@ namespace Unruled.View.UI
 
         private void SetLayer(int index, long reserve, long max)
         {
-            _layerFills[index].style.width = Length.Percent(reserve * 100f / max);
+            _layerFills[index].style.width = Length.Percent(max > 0 ? reserve * 100f / max : 0f);
             _layerValues[index].text = UiFormat.Thousands(reserve);
         }
 

@@ -166,10 +166,9 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// GDD §1 and §2.1 A: own home system with no tungsten or uranium, deposits by preferred ESI window and planet class.
-        /// 4 AI rivals (archetypes 1..4), 2 deposits per site of base 60,000 / 120,000 / 30,000 ore; each generated
-        /// deposit scales that by its planet class (Terrestrial 100%, Super-Earth 150%, Neptune-like 130%, Gas Giant 200%)
-        /// and its ore (volatiles and iron rich, titanium/tungsten/uranium thin), and each layer rolls 35..175% of it, so
-        /// no two deposits are alike (PROVISIONAL). The core base's life-support deposits stay fixed at 5x. A core base that mines its own life support (water 4 rigs, nitrogen 3, methane 2, biomass 2: the coolant
+        /// 4 AI rivals (archetypes 1..4), 2 deposits per site of base 60,000 / 120,000 / 30,000 ore; planet class and
+        /// ore richness stay at 100% for now, and each layer of a generated deposit rolls 90..110% of its base, so
+        /// deposits start close but never identical (PROVISIONAL). The core base's life-support deposits stay fixed at 5x. A core base that mines its own life support (water 4 rigs, nitrogen 3, methane 2, biomass 2: the coolant
         /// and fuel refineries, which run first, outrun the drills' burn at both depths, and rations cover fleet upkeep),
         /// the core-base refineries and stock below, and a Tier-1 fleet of 10 line, 2 EW, 2 supply.
         /// </summary>
@@ -210,11 +209,11 @@ namespace Unruled.Core.Simulation
                 new ItemStack(ItemId.ItemRations, 40)
             },
             uninhabitedClustersPerParticipant: 1,
-            richnessPercentByPlanetClass: new[] { 100, 150, 130, 200 },
+            richnessPercentByPlanetClass: new[] { 100, 100, 100, 100 },
             // water, nitrogen, methane, biomass, iron, copper, silicon, titanium, tungsten, uranium
-            richnessPercentByRaw: new[] { 130, 120, 140, 80, 120, 90, 100, 70, 45, 35 },
-            reserveRollMinPercent: 35,
-            reserveRollMaxPercent: 175);
+            richnessPercentByRaw: new[] { 100, 100, 100, 100, 100, 100, 100, 100, 100, 100 },
+            reserveRollMinPercent: 90,
+            reserveRollMaxPercent: 110);
 
         /// <summary>
         /// Data sheet tab 02: surface 100% speed / 1x fuel+coolant, deep crust 50% / 2x and -0.05 ESI,
