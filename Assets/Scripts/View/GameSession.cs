@@ -192,6 +192,7 @@ namespace Unruled.View
                 else if (_joining.Failed)
                 {
                     _screen.Menu.ShowStatus(_joining.Status);
+                    _joining.Close();
                     _joining = null;
                 }
             }

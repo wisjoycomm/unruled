@@ -85,7 +85,10 @@ namespace Unruled.View.UI
                 return;
             if (_isOnline != null && _isOnline())
             {
-                _popup.Menu("GAME MENU · ONLINE", (_linkStatus?.Invoke() ?? "") + " · " + UiFormat.Clock(_sim.Clock.CurrentTick) +
+                string link = _linkStatus?.Invoke() ?? string.Empty;
+                if (status == link)
+                    status = null;
+                _popup.Menu("GAME MENU · ONLINE", link + " · " + UiFormat.Clock(_sim.Clock.CurrentTick) +
                     "\n\nThe server keeps this world and its clock runs on while this menu is open. Leaving logs you out: " +
                     "your shield rises after a while and your standing orders keep running." + (status != null ? "\n\n" + status : ""),
                     _art.Pause, ModalPopup.Tone.Normal, _art.MenuScreen,

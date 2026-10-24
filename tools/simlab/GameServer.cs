@@ -719,6 +719,8 @@ namespace Unruled.SimLab
                 _frame.Rewind(0);
                 WireCodec.Write(_frame, new CommandResultFrame { Sequence = frame.Sequence, Result = result, ExecuteAtTick = executeAt });
                 session.Push(_frame.ToArray());
+                if (result == IssueResult.Issued)
+                    session.PushView(_sim.Clock.CurrentTick); // the order shows in flight now, even while the world is paused
             }
         }
 
