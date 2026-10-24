@@ -36,8 +36,11 @@ scans, stress-tests, opens its jump gate and trades on the WTO, keeping back the
 Citadel assault tier its shipyard refits, merges and builds one battle fleet that only waits at home (mothballed once full) or
 assaults the Citadel with the whole siege load aboard (its standard ammo plus what bombarding the shield down takes) (every trip takes the toll-free route when the wallet can't cover the tolls), while lower-tier fleets settle and raid; only the Raider preset (Stealth_Raid over Siege_Conquest) sets its escorts to raid WTO contract convoys, standing down while one more offence would bring THE SYSTEM's defence fleet. An order still in signal
 latency is not sent again (`CommandIssuer.IsInFlight`). `NoaaForecast` (`Forecast`) is a read-only query for the views.
-`NewGameSetup.Create(sim, playerId)` lays out a new game from `NewGameBalance`: a home system per participant,
-stockpiles, ESI-window deposits, the core base's rigs, refineries and stock, a starting fleet and AI rivals.
+`NewGameSetup.Create(sim, playerId)` lays out a new game from `NewGameBalance` on stars of the seeded `GalaxyCatalog`:
+a hub-class star on the spawn ring becomes the group's hub (with THE SYSTEM's Citadel), the nearest home-class stars
+the participants' homes and the nearest frontier stars uninhabited systems; each gets stockpiles, ESI-window deposits
+(by NASA planet class), and the homes the core base's rigs, refineries and stock, a starting fleet and AI rivals.
+Catalog hyperlanes between charted systems become STA highways; uncharted neighbours are survey targets.
 
 ## Tick order
 
@@ -91,10 +94,20 @@ methods, in this order (rule 4).
   iterated in ascending entity order).
 - **Board/**:
   - `SiteInfo` (position, ESI in milli-units, lifecycle, `IrradiatedUntilTick`).
-  - `SystemSeedGenerator` (site layout) and `PlanetLifecycleSystem` + `LifecycleBalance`.
+  - `SystemSeedGenerator` (site layout; 5–12 planets per star seed, homes and hubs at least 8), `PlanetClass`
+    (NASA type from orbit vs habitable zone / ice line and terrain seed) and `PlanetLifecycleSystem` + `LifecycleBalance`.
   - `StarlaneEdge` (3 tiers), `StarlaneBalance` (tab 04 rules), `StarlaneGenerator` (orbit-chain highways plus
     seeded bypasses and shortcuts) and `StarlaneGraph` (CSR adjacency).
   - `StormFront`, `SiteWeather`, `LaneWeather`, `NoaaWeatherEngine` + `NoaaBalance`.
+- **Galaxy/**:
+  - `GalaxyCatalog` + `GalaxyBalance`: the whole galaxy as a pure function of the world seed (sectors, spiral
+    density, star classes Home / Hub / Frontier, system seeds, hyperlane neighbours); nothing is stored. `StarId`
+    packs sector and index into a `long` (split into two command params).
+  - `GalaxySystem`: owns `StarSystem` (a catalog star materialised as a simulated cluster, its owner = the player
+    holding most of its planets) and `SystemName` (the owner's name for it); handles `RenameSystem` and reports
+    renames to THE SYSTEM's bulletins. `SimulationWorld.MaterialiseStar` is the one door from catalog to simulation.
+  - `SurveySystem`: the `Survey` command; a docked fleet burns fuel to chart an uncharted frontier neighbour, which
+    is materialised and linked to every charted neighbour. Conquering AIs survey when nothing is left to take.
 - **Economy/**:
   - `ItemId`, `Stockpile`, `RecipeDatabase` (`MiningChancePermille` per raw item and `CraftChancePermille` per recipe, both scaling with `Industry` tier up to 99%), `MiningSystem` + `MineralDeposit` (stateless `SplitMix64` yield roll after fuel/coolant burn; drill retract: rigs freed 180
     ticks after `RetractDrills` and their build cost returned to the site; paused drills neither mine nor burn),
