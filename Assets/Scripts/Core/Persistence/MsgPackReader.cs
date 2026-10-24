@@ -61,6 +61,21 @@ namespace Unruled.Core.Persistence
             }
         }
 
+        /// <summary>Reads a MessagePack bin into a new array.</summary>
+        public byte[] ReadBytes()
+        {
+            byte code = Next();
+            int length;
+            if (code == 0xc4) length = (int)BigEndian(1);
+            else if (code == 0xc5) length = (int)BigEndian(2);
+            else if (code == 0xc6) length = checked((int)BigEndian(4));
+            else throw Unexpected(code, "bin");
+            if (_position + length > _data.Length) throw new FormatException("Save data ends early.");
+            byte[] bytes = _data.Slice(_position, length).ToArray();
+            _position += length;
+            return bytes;
+        }
+
         public ulong ReadUInt64()
         {
             byte code = Peek();

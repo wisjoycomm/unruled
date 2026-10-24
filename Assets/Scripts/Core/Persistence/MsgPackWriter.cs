@@ -3,8 +3,8 @@ using System;
 namespace Unruled.Core.Persistence
 {
     /// <summary>
-    /// Writes the subset of the MessagePack format the save game uses: nil, bool, integers (smallest encoding) and
-    /// arrays. Objects are arrays indexed by their <c>[Key(n)]</c>, so the bytes stay readable by MessagePack-CSharp.
+    /// Writes the subset of the MessagePack format the save game and the wire use: nil, bool, integers (smallest
+    /// encoding), bin and arrays. Objects are arrays indexed by their <c>[Key(n)]</c>, so the bytes stay readable by MessagePack-CSharp.
     /// </summary>
     public sealed class MsgPackWriter
     {
@@ -103,6 +103,29 @@ namespace Unruled.Core.Persistence
                 Byte(0xcf);
                 BigEndian(value, 8);
             }
+        }
+
+        /// <summary>Writes a MessagePack bin (raw bytes).</summary>
+        public void Write(ReadOnlySpan<byte> bytes)
+        {
+            if (bytes.Length <= byte.MaxValue)
+            {
+                Byte(0xc4);
+                BigEndian((ulong)bytes.Length, 1);
+            }
+            else if (bytes.Length <= ushort.MaxValue)
+            {
+                Byte(0xc5);
+                BigEndian((ulong)bytes.Length, 2);
+            }
+            else
+            {
+                Byte(0xc6);
+                BigEndian((ulong)bytes.Length, 4);
+            }
+            Ensure(bytes.Length);
+            bytes.CopyTo(new Span<byte>(_buffer, Length, bytes.Length));
+            Length += bytes.Length;
         }
 
         private void Byte(byte value)
