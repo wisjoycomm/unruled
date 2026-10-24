@@ -43,7 +43,15 @@ the participants' homes and the nearest frontier stars uninhabited systems; each
 Catalog hyperlanes between charted systems become STA highways; uncharted neighbours are survey targets.
 THE SYSTEM opens with a treasury and a stock of basics (`NewGameBalance`), so trading with it works on day 1.
 `NewGameSetup.Join(sim, archetype)` adds one player (or bot) to a running game the same way: a free home star near the
-quietest hub, a dormant gate to a free hub orbit, its own frontiers, hyperlanes and charts (no save shape change).
+quietest hub, a dormant gate to a free hub orbit, its own frontiers, hyperlanes and charts (no save shape change). Once
+every hub holds `GalaxyBalance.PlayersPerHub` gates, it opens a new hub with its own Citadel further round the spawn
+ring, so each group of players gets a neighbourhood of its own.
+`PresenceSystem` (`Presence`) owns `PlayerPresence` on each HQ: the host sends `LogIn` / `LogOut` (46/47, no latency);
+10 minutes after logout an offline shield covers the player's own sites (at most 8 h per logout, 48 h per game week;
+a fight before it rises pushes it back); newcomers are protected everywhere until the tutorial ends (`EndProtection`,
+48). Combat, claims and nuclear strikes ask it through `IProtection`; a hostile act ends the actor's own protection.
+`SetStandingOrders` with ParamB 1 hands an offline empire to a governor: the same AI, thinking every 10 minutes, that
+only manages what the empire has (never builds, borrows, claims, raids or researches).
 
 ## Tick order
 
@@ -203,3 +211,7 @@ and run under plain .NET (`.docs/dev-setup.md` §3).
 - KitWright MCP is embedded at `Packages/com.kitwright.unity.mcp` with one patched `#if` for Unity 6000.5
   (see roadmap Exceptions). Its MCP config files carry an access token and are gitignored.
 - Agent rule files are generated from `.agents/templates/` + `project.config` via `python .agents/sync-rules.py`.
+- Sim Lab (`tools/simlab`, .NET 10, links Core's `.cs` files) runs Core headless: a dev lab page, `batch` soaks,
+  `play` turn-by-turn games, `profile` (cost per tick as the world grows) and `server`: one persistent world on server
+  time with autosave, logins through `PresenceSystem`, a bot manager (half the players online, 5..100, random spawns)
+  and the admin dashboard `wwwroot/server.html`. Localhost only; the Unity client doesn't connect to it yet.

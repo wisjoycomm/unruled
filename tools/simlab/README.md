@@ -28,6 +28,24 @@ dotnet run -c Release -- --port 5090
 
 Seat 1 starts human by default, so it idles unless you play it or hand it to a preset.
 
+## Server: a persistent world with an admin dashboard
+
+```powershell
+dotnet run -c Release -- server                    # then open http://localhost:5090
+dotnet run -c Release -- server --port 5091 --seed 7 --save ..\..\.temp\server\other.sav
+```
+
+One world on server time (1 tick = 1 real second, speed up to x3600 for testing). It loads `--save` on start, autosaves
+every 5 minutes and on stop (`POST /api/server/stop`, or Ctrl+C); a roster file next to the save remembers which
+empires are bots, which are held, and the bot rules. Logins and logouts go through Core's `PresenceSystem` (offline
+shield, newcomer protection). The bot manager keeps bots at half the players online (at least 5, at most 100), plus
+optional random spawns; it wakes a held bot before adding a new one, and holds extras under a governor.
+
+The dashboard (`wwwroot/server.html`) shows the server clock, players online, bots on duty, tick cost and last save,
+the bot rules, and three bays of flight strips (bots on duty, bots held, players): click a strip for its controls
+(preset, hold, log in or out, end newcomer protection), its core stock, shield time and recent orders. Admin routes
+live under `/api/server/*` and `/api/bots/*`. Localhost only: there is no login yet.
+
 ## Batch: survival report over many seeds
 
 ```powershell
