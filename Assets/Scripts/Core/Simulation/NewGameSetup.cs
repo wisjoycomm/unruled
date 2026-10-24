@@ -62,6 +62,7 @@ namespace Unruled.Core.Simulation
             SetUpUninhabitedClusters(sim, picks, participants);
             LinkHyperlanes(sim);
             ChartSpawnGroup(sim, playerId, participants);
+            OpenSystemMarket(sim);
             sim.Graph.Rebuild(sim.Starlanes);
             return player;
         }
@@ -430,6 +431,16 @@ namespace Unruled.Core.Simulation
             sim.LaneWeather.Add(lane, default);
         }
 
+
+        // THE SYSTEM's opening treasury and stock: what it pays sellers with and sells to buyers before trade fills them.
+        private static void OpenSystemMarket(SimulationWorld sim)
+        {
+            var rules = sim.Balance.NewGame;
+            sim.Ledger.Grant(sim.WtoFeePool, rules.SystemTreasuryCents);
+            ref var stock = ref sim.Stockpiles.Get(sim.WtoFeePool);
+            for (int i = 0; i < rules.SystemStockCount; i++)
+                stock.Add(rules.SystemStock(i).Item, rules.SystemStock(i).Quantity);
+        }
 
         private static NewGame SetUpParticipant(SimulationWorld sim, in StarRecord star, int playerId, int clusterId)
         {

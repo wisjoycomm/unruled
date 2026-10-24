@@ -45,6 +45,10 @@ namespace Unruled.Core.Simulation
         private readonly ItemStack[] _fleetStock;
         private readonly int[] _richnessPercentByPlanetClass;
         private readonly int[] _richnessPercentByRaw;
+        private readonly ItemStack[] _systemStock;
+
+        /// <summary>THE SYSTEM's opening treasury (the WTO fee pool), so it can buy from players from day 1.</summary>
+        public readonly long SystemTreasuryCents;
 
         /// <summary>Each layer of a generated deposit rolls its own share of the base reserve, in percent.</summary>
         public readonly int ReserveRollMinPercent;
@@ -57,8 +61,12 @@ namespace Unruled.Core.Simulation
             int fleetCargoConvoys, ItemId[] homeExcludedRaws, ItemId[][] rawsByPlanetClass, ItemId[] startingRefineries,
             ItemStack[] coreBaseStock,
             ItemStack[] fleetStock, int uninhabitedClustersPerParticipant = 1, int[] richnessPercentByPlanetClass = null,
-            int[] richnessPercentByRaw = null, int reserveRollMinPercent = 100, int reserveRollMaxPercent = 100)
+            int[] richnessPercentByRaw = null, int reserveRollMinPercent = 100, int reserveRollMaxPercent = 100,
+            long systemTreasuryCents = 0, ItemStack[] systemStock = null)
         {
+            if (systemTreasuryCents < 0) throw new ArgumentOutOfRangeException(nameof(systemTreasuryCents));
+            SystemTreasuryCents = systemTreasuryCents;
+            _systemStock = systemStock == null ? Array.Empty<ItemStack>() : (ItemStack[])systemStock.Clone();
             if (rivalCount < 0) throw new ArgumentOutOfRangeException(nameof(rivalCount));
             if (uninhabitedClustersPerParticipant < 0)
                 throw new ArgumentOutOfRangeException(nameof(uninhabitedClustersPerParticipant));
@@ -145,6 +153,10 @@ namespace Unruled.Core.Simulation
         /// <summary>The most one layer of a generated deposit can start with: its base x class% x ore% x the top roll.</summary>
         public long FullReserve(int baseReserve, PlanetClass planet, ItemId raw) =>
             (long)baseReserve * RichnessPercent(planet) * RichnessPercent(raw) * ReserveRollMaxPercent / 1_000_000L;
+
+        /// <summary>THE SYSTEM's opening stock (on the WTO fee pool), so players can buy from it from day 1.</summary>
+        public int SystemStockCount => _systemStock.Length;
+        public ItemStack SystemStock(int index) => _systemStock[index];
 
         public int FleetStockCount => _fleetStock.Length;
         public ItemStack FleetStock(int index) => _fleetStock[index];

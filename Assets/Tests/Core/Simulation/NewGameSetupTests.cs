@@ -67,6 +67,35 @@ namespace Unruled.Tests.Core.Simulation
         }
 
         [Test]
+        public void Create_TheSystemOpensWithATreasuryAndStock_SoTradingWithItWorksOnDayOne()
+        {
+            var sim = NewWorld();
+            var rules = sim.Balance.NewGame;
+            var game = NewGameSetup.Create(sim, 1);
+            Assert.AreEqual(rules.SystemTreasuryCents, sim.Ledger.Balance(sim.WtoFeePool));
+            Assert.Greater(rules.SystemStockCount, 0);
+            for (int i = 0; i < rules.SystemStockCount; i++)
+                Assert.AreEqual(rules.SystemStock(i).Quantity, sim.Market.SystemStock(rules.SystemStock(i).Item));
+
+            var core = game.CoreBase;
+            int steel = sim.Stockpiles.Get(core).Get(ItemId.ItemSteel);
+            int oxygen = sim.Stockpiles.Get(core).Get(ItemId.ItemOxygen);
+            sim.Clock.Enqueue(new DelayedPlayerCommand
+            {
+                ExecuteAtTick = 1, PlayerId = 1, CommandType = CommandType.SellToSystem, Target = core,
+                ParamA = (int)ItemId.ItemSteel, ParamB = 10
+            });
+            sim.Clock.Enqueue(new DelayedPlayerCommand
+            {
+                ExecuteAtTick = 1, PlayerId = 1, CommandType = CommandType.BuyFromSystem, Target = core,
+                ParamA = (int)ItemId.ItemOxygen, ParamB = 5
+            });
+            sim.Clock.Advance(1);
+            Assert.AreEqual(steel - 10, sim.Stockpiles.Get(core).Get(ItemId.ItemSteel), "THE SYSTEM can pay for it");
+            Assert.AreEqual(oxygen + 5, sim.Stockpiles.Get(core).Get(ItemId.ItemOxygen), "THE SYSTEM has some to sell");
+        }
+
+        [Test]
         public void Create_CoreBaseIsTheHighestEsiHomeSiteAndOwned()
         {
             var sim = NewWorld();

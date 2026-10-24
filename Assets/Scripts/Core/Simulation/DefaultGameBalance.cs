@@ -212,6 +212,14 @@ namespace Unruled.Core.Simulation
             richnessPercentByPlanetClass: new[] { 100, 100, 100, 100 },
             // water, nitrogen, methane, biomass, iron, copper, silicon, titanium, tungsten, uranium
             richnessPercentByRaw: new[] { 100, 100, 100, 100, 100, 100, 100, 100, 100, 100 },
+            // PROVISIONAL: THE SYSTEM opens with 20,000 cr and a stock of the basics, so trading with it works on day 1.
+            systemTreasuryCents: 20_000 * Wallet.CentsPerCredit,
+            systemStock: new[]
+            {
+                new ItemStack(ItemId.ItemOxygen, 300), new ItemStack(ItemId.ItemRations, 300),
+                new ItemStack(ItemId.ItemFuel, 1_000), new ItemStack(ItemId.ItemCoolant, 200),
+                new ItemStack(ItemId.ItemSteel, 300), new ItemStack(ItemId.ItemBattery, 200)
+            },
             reserveRollMinPercent: 90,
             reserveRollMaxPercent: 110);
 
