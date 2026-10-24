@@ -2,11 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using Unruled.Core.AI;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
 using Unruled.Core.Military;
+using Unruled.Core.Net;
 using Unruled.Core.Persistence;
 using Unruled.Core.Research;
 using Unruled.Core.Simulation;
@@ -25,6 +28,10 @@ namespace Unruled.SimLab
     /// empire; Core has no "player leaves" rule). Random spawns
     /// can add a bot at random times (on average every few game hours) on top, up to the cap. Every touch of the world
     /// happens under one lock.
+    /// Game clients connect through <see cref="WorldSocket"/>: a hello with a player's login token (issued here, kept
+    /// only as a SHA-256 hash in a tokens file next to the save) logs the player in; their orders go through Core's
+    /// <see cref="CommandIssuer"/>; after the ticks of each loop pass every connected player gets the change in their
+    /// <see cref="PlayerView"/>.
     /// </summary>
     public sealed class GameServer
     {
@@ -46,6 +53,9 @@ namespace Unruled.SimLab
         private long _nextSpawnTick;
         private int _extra; // random spawns and admin adds/resumes (+1), admin holds (-1), on top of the target
         private readonly HashSet<int> _pinned = new HashSet<int>(); // held by the admin: auto-scale never wakes these
+        private readonly Dictionary<int, ClientSession> _sessions = new Dictionary<int, ClientSession>();
+        private readonly Dictionary<string, int> _tokenOwners = new Dictionary<string, int>(); // token hash -> player
+        private readonly MsgPackWriter _frame = new MsgPackWriter(256);
 
         public readonly BotSettings Bots = new BotSettings();
         public int AutosaveMinutes = 5;
@@ -62,6 +72,7 @@ namespace Unruled.SimLab
             else
                 NewWorld(seed);
             AdoptExistingBots();
+            LoadTokens();
             LogOutStaleSessions();
             _spawnRng = new SplitMix64(_sim.WorldSeed ^ 0x5EEDB075UL);
         }
@@ -85,8 +96,14 @@ namespace Unruled.SimLab
             _sim.Ai.Assign(first.PlayerHq, 2);
             _online.Clear();
             _held.Clear();
+            foreach (var session in new List<ClientSession>(_sessions.Values))
+                session.Close("new world");
+            _sessions.Clear();
+            _tokenOwners.Clear();
             if (File.Exists(RosterPath))
                 File.Delete(RosterPath);
+            if (File.Exists(TokensPath))
+                File.Delete(TokensPath);
             Log(0, $"new world, seed {seed}");
         }
 
@@ -164,6 +181,9 @@ namespace Unruled.SimLab
                     }
                     else
                         owed = 0;
+                    if (ran > 0)
+                        foreach (var session in _sessions.Values)
+                            session.PushView(_sim.Clock.CurrentTick);
                     if ((DateTime.UtcNow - _lastSave).TotalMinutes >= AutosaveMinutes)
                         SaveLocked("autosave");
                 }
@@ -346,6 +366,8 @@ namespace Unruled.SimLab
                 var hq = Hq(playerId);
                 if (hq.IsNull || !_online.Remove(playerId))
                     return new { ok = false, error = $"Player {playerId} is not online." };
+                if (_sessions.Remove(playerId, out var session))
+                    session.Close("logged out by the admin");
                 Queue(CommandType.LogOut, playerId);
                 if (governor)
                     _sim.Ai.Assign(hq, 1, governor: true);
@@ -464,6 +486,8 @@ namespace Unruled.SimLab
                     budgetPercent = Math.Round(_tickCostMs * _speed / 10.0, 2),
                     empires = _sim.Players.Count,
                     online = _online.Count,
+                    connected = _sessions.Count,
+                    clientBytesPerSecond = ClientBytesPerSecond(),
                     bots = _bots.Count - _held.Count,
                     heldBots = _held.Count,
                     shielded,
@@ -554,6 +578,9 @@ namespace Unruled.SimLab
                         shieldEndsIn = _sim.Presence.IsShieldUp(hq, tick) ? presence.ShieldUntilTick - tick : 0,
                         newcomer = presence.IsNewcomer,
                         weekShieldHours = Math.Round(presence.WeekShieldTicks / (double)SimTick.TicksPerHour, 1),
+                        connected = _sessions.ContainsKey(id),
+                        hasToken = _tokenOwners.ContainsValue(id),
+                        bytesPerSecond = _sessions.TryGetValue(id, out var link) ? Math.Round(link.BytesPerSecond) : 0,
                         flags
                     });
                 }
@@ -579,7 +606,177 @@ namespace Unruled.SimLab
         public void Stop()
         {
             lock (_gate)
+            {
+                foreach (var session in _sessions.Values)
+                    session.Close("server stopping");
                 SaveLocked("saved on stop");
+            }
+        }
+
+        /// <summary>
+        /// Issues a new login token for a player (a new one with newcomer protection when <paramref name="join"/> and
+        /// <paramref name="playerId"/> is 0). The token is shown once; only its hash is kept, and it replaces the player's
+        /// older token.
+        /// </summary>
+        public object IssueToken(int playerId, bool join)
+        {
+            lock (_gate)
+            {
+                if (join && playerId == 0)
+                {
+                    var joined = NewGameSetup.Join(_sim);
+                    playerId = _sim.Players.Get(joined.PlayerHq).PlayerId;
+                    _sim.Presence.GrantNewcomerProtection(joined.PlayerHq);
+                    Log(playerId, "new player joined (protected until the tutorial ends)");
+                }
+                if (Hq(playerId).IsNull)
+                    return new { ok = false, error = $"No player {playerId}." };
+                if (_bots.Contains(playerId))
+                    return new { ok = false, error = $"Player {playerId} is a bot." };
+                string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+                var stale = new List<string>();
+                foreach (var pair in _tokenOwners)
+                    if (pair.Value == playerId)
+                        stale.Add(pair.Key);
+                foreach (var hash in stale)
+                    _tokenOwners.Remove(hash);
+                _tokenOwners[HashToken(Encoding.ASCII.GetBytes(token))] = playerId;
+                SaveTokens();
+                Log(playerId, "login token issued");
+                return new { ok = true, playerId, token };
+            }
+        }
+
+        /// <summary>A game client's hello: the session, or null and why it is refused.</summary>
+        public ClientSession Connect(in HelloFrame hello, out RefuseReason refusal)
+        {
+            refusal = WireCodec.CheckVersion(hello);
+            if (refusal != RefuseReason.None)
+                return null;
+            lock (_gate)
+            {
+                if (hello.Token == null || hello.Token.Length == 0 ||
+                    !_tokenOwners.TryGetValue(HashToken(hello.Token), out int playerId) ||
+                    _bots.Contains(playerId) || Hq(playerId).IsNull)
+                {
+                    refusal = RefuseReason.BadToken;
+                    Log(0, "game client refused: bad token");
+                    return null;
+                }
+                if (_sessions.Remove(playerId, out var old))
+                    old.Close("logged in elsewhere");
+                var hq = Hq(playerId);
+                if (_sim.AiControllers.Has(hq))
+                    _sim.Ai.Release(hq);
+                if (_online.Add(playerId))
+                    Queue(CommandType.LogIn, playerId);
+                var session = new ClientSession(playerId, new PlayerView(_sim, playerId));
+                _sessions[playerId] = session;
+                _frame.Rewind(0);
+                WireCodec.Write(_frame, new WelcomeFrame
+                {
+                    ProtocolVersion = WireCodec.ProtocolVersion, PlayerId = playerId, Tick = _sim.Clock.CurrentTick,
+                    WorldSeed = _sim.WorldSeed
+                });
+                session.Push(_frame.ToArray());
+                session.PushView(_sim.Clock.CurrentTick);
+                Log(playerId, "game client connected, logged in");
+                return session;
+            }
+        }
+
+        /// <summary>The client's connection ended: the player logs out (standing orders keep running; no governor).</summary>
+        public void Disconnect(ClientSession session, string reason)
+        {
+            lock (_gate)
+            {
+                session.Close(reason);
+                if (!_sessions.TryGetValue(session.PlayerId, out var current) || current != session)
+                    return;
+                _sessions.Remove(session.PlayerId);
+                if (_online.Remove(session.PlayerId))
+                    Queue(CommandType.LogOut, session.PlayerId);
+                Log(session.PlayerId, $"game client left ({reason}), {session.BytesPerSecond / 1024.0:0.0} KB/s over " +
+                                      $"{(DateTime.UtcNow - session.Since).TotalMinutes:0} min");
+            }
+        }
+
+        /// <summary>An order from a game client, for its own player only, through the same door the AI uses.</summary>
+        public void Command(ClientSession session, CommandFrame frame)
+        {
+            lock (_gate)
+            {
+                if (session.CloseReason != null)
+                    return;
+                var command = frame.Command;
+                command.PlayerId = session.PlayerId;
+                IssueResult result;
+                long executeAt = 0;
+                if (command.CommandType == CommandType.LogIn || command.CommandType == CommandType.LogOut)
+                    result = IssueResult.NotAllowed;
+                else
+                    result = _sim.Issuer.Issue(command, out executeAt);
+                _frame.Rewind(0);
+                WireCodec.Write(_frame, new CommandResultFrame { Sequence = frame.Sequence, Result = result, ExecuteAtTick = executeAt });
+                session.Push(_frame.ToArray());
+            }
+        }
+
+        /// <summary>The full view of a player as the server holds it, hashed: a client mirror in sync hashes the same.</summary>
+        public object ViewHash(int playerId)
+        {
+            lock (_gate)
+            {
+                if (Hq(playerId).IsNull)
+                    return new { ok = false, error = $"No player {playerId}." };
+                var body = new PlayerView(_sim, playerId).Write(full: true);
+                return new { ok = true, tick = _sim.Clock.CurrentTick, hash = Fnv(body), bytes = body.Length };
+            }
+        }
+
+        public static string Fnv(ReadOnlySpan<byte> bytes)
+        {
+            ulong hash = 14695981039346656037UL;
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                hash ^= bytes[i];
+                hash *= 1099511628211UL;
+            }
+            return hash.ToString("x16");
+        }
+
+        private double ClientBytesPerSecond()
+        {
+            double total = 0;
+            foreach (var session in _sessions.Values)
+                total += session.BytesPerSecond;
+            return Math.Round(_sessions.Count == 0 ? 0 : total / _sessions.Count);
+        }
+
+        private static string HashToken(byte[] token) => Convert.ToHexString(SHA256.HashData(token));
+
+        private string TokensPath => _savePath + ".tokens";
+
+        // One line per token: "<player id> <sha-256 of the token>". The tokens themselves are never stored.
+        private void LoadTokens()
+        {
+            _tokenOwners.Clear();
+            if (!File.Exists(TokensPath))
+                return;
+            foreach (var line in File.ReadAllLines(TokensPath))
+            {
+                var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2)
+                    _tokenOwners[parts[1]] = int.Parse(parts[0]);
+            }
+        }
+
+        private void SaveTokens()
+        {
+            var lines = new List<string>();
+            foreach (var pair in _tokenOwners)
+                lines.Add(pair.Value + " " + pair.Key);
+            File.WriteAllLines(TokensPath, lines);
         }
 
         // The last few orders each AI-run empire tried, for the dashboard.
