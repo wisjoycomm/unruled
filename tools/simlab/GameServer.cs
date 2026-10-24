@@ -16,7 +16,8 @@ namespace Unruled.SimLab
     /// <summary>
     /// One persistent world on server time (1 tick = 1 real second at speed 1, day 1, day 2, ...): loads its save on
     /// start, autosaves on an interval and on stop. Which empires are this server's bots, and which of them are held, is
-    /// host state the world save doesn't hold: it lives in a roster file next to the save (one line: bots, then held).
+    /// host state the world save doesn't hold: it lives in a roster file next to the save (one line: bots | held | bot
+    /// rules).
     /// Players log in and out through <see cref="PresenceSystem"/>; a
     /// bot manager keeps the bots at half the players online (at least <see cref="BotSettings.Min"/>, at most
     /// <see cref="BotSettings.Max"/>), plus the random spawns: it first wakes a held bot, else adds one with
@@ -43,7 +44,8 @@ namespace Unruled.SimLab
         private readonly LinkedList<LogLine> _log = new LinkedList<LogLine>();
         private SplitMix64 _spawnRng;
         private long _nextSpawnTick;
-        private int _spawned; // random spawns: kept on top of what the players online call for
+        private int _extra; // random spawns and admin adds/resumes (+1), admin holds (-1), on top of the target
+        private readonly HashSet<int> _pinned = new HashSet<int>(); // held by the admin: auto-scale never wakes these
 
         public readonly BotSettings Bots = new BotSettings();
         public int AutosaveMinutes = 5;
@@ -100,6 +102,14 @@ namespace Unruled.SimLab
                 Fill(_bots, parts[0]);
                 if (parts.Length > 1)
                     Fill(_held, parts[1]);
+                if (parts.Length > 2)
+                {
+                    var rules = parts[2].Split(',');
+                    Bots.Min = int.Parse(rules[0]);
+                    Bots.Max = int.Parse(rules[1]);
+                    Bots.AutoScale = rules[2] == "1";
+                    Bots.RandomSpawnHours = int.Parse(rules[3]);
+                }
                 return;
             }
             for (int i = 0; i < _sim.AiControllers.Count; i++)
@@ -141,7 +151,9 @@ namespace Unruled.SimLab
                             tickWatch.Restart();
                             _sim.Clock.Advance(1);
                             aiWatch.Restart();
-                            _sim.Ai.Think(_sim.Clock.CurrentTick);
+                            int tried = _sim.Ai.Think(_sim.Clock.CurrentTick);
+                            for (int o = 0; o < tried; o++)
+                                Remember(_sim.Ai.OrderAt(o));
                             aiWatch.Stop();
                             tickWatch.Stop();
                             _tickCostMs = _tickCostMs * 0.99 + tickWatch.Elapsed.TotalMilliseconds * 0.01;
@@ -181,19 +193,19 @@ namespace Unruled.SimLab
                 if (active < Bots.Max)
                 {
                     AddBotLocked((byte)_spawnRng.NextInt(1, _sim.Balance.Ai.Count), "random spawn");
-                    _spawned++;
+                    _extra++;
                     return;
                 }
             }
             if (!Bots.AutoScale)
                 return;
-            int want = Math.Clamp((_online.Count + 1) / 2 + _spawned, Bots.Min, Bots.Max);
+            int want = Math.Clamp(Math.Max(Bots.Min, (_online.Count + 1) / 2) + _extra, 0, Bots.Max);
             if (active < want)
             {
                 if (!WakeHeldLocked("scale up"))
                     AddBotLocked((byte)(_bots.Count % _sim.Balance.Ai.Count + 1), "scale up");
             }
-            else if (active > want && active > Bots.Min)
+            else if (active > want)
                 for (int i = _sim.AiControllers.Count - 1; i >= 0; i--)
                 {
                     int id = _sim.Players.Get(_sim.AiControllers.EntityAt(i)).PlayerId;
@@ -209,7 +221,8 @@ namespace Unruled.SimLab
         {
             int best = int.MaxValue;
             foreach (int id in _held)
-                best = Math.Min(best, id);
+                if (!_pinned.Contains(id))
+                    best = Math.Min(best, id);
             if (best == int.MaxValue)
                 return false;
             var hq = Hq(best);
@@ -244,7 +257,8 @@ namespace Unruled.SimLab
                 string temp = _savePath + ".tmp";
                 File.WriteAllBytes(temp, SaveGame.Write(_sim));
                 File.Move(temp, _savePath, overwrite: true);
-                File.WriteAllText(RosterPath, string.Join(",", _bots) + "|" + string.Join(",", _held));
+                File.WriteAllText(RosterPath, string.Join(",", _bots) + "|" + string.Join(",", _held) + "|" +
+                                              $"{Bots.Min},{Bots.Max},{(Bots.AutoScale ? 1 : 0)},{Bots.RandomSpawnHours}");
                 _lastSave = DateTime.UtcNow;
                 _lastSaveError = null;
                 Log(0, why + $": day {Day(_sim.Clock.CurrentTick)}");
@@ -294,7 +308,7 @@ namespace Unruled.SimLab
                 AdoptExistingBots();
                 _spawnRng = new SplitMix64(_sim.WorldSeed ^ 0x5EEDB075UL);
                 _nextSpawnTick = 0;
-                _spawned = 0;
+                _extra = 0;
                 SaveLocked("new world saved");
                 return new { ok = true };
             }
@@ -360,6 +374,7 @@ namespace Unruled.SimLab
                     return new { ok = false, error = $"Already {Bots.Max} active bots (the cap)." };
                 if (!_sim.Balance.Ai.IsValid(preset))
                     return new { ok = false, error = "Unknown preset." };
+                _extra++;
                 return new { ok = true, playerId = AddBotLocked(preset, "added by admin") };
             }
         }
@@ -379,11 +394,17 @@ namespace Unruled.SimLab
                     Log(playerId, "preset set to " + _sim.Balance.Ai.Preset(preset.Value).Code);
                 }
                 if (hold == true && !_held.Contains(playerId))
+                {
                     HoldLocked(playerId, "held by admin");
+                    _pinned.Add(playerId);
+                    _extra--;
+                }
                 else if (hold == false && _held.Remove(playerId))
                 {
+                    _pinned.Remove(playerId);
+                    _extra++;
                     _sim.Ai.Assign(hq, _sim.AiControllers.Get(hq).Archetype);
-                    Log(playerId, "bot resumed");
+                    Log(playerId, "bot resumed by admin");
                 }
                 return new { ok = true };
             }
@@ -397,8 +418,8 @@ namespace Unruled.SimLab
                 Bots.Max = Math.Clamp(rules.Max, Bots.Min, 100);
                 Bots.AutoScale = rules.AutoScale;
                 Bots.RandomSpawnHours = Math.Clamp(rules.RandomSpawnHours, 0, 24 * 7);
-                if (Bots.RandomSpawnHours == 0)
-                    _spawned = 0;
+                if (Bots.RandomSpawnHours == 0 && _extra > 0)
+                    _extra = 0;
                 Log(0, $"bot rules: {Bots.Min}..{Bots.Max}, auto {(Bots.AutoScale ? "on" : "off")}, random spawn " +
                        (Bots.RandomSpawnHours > 0 ? $"every {Bots.RandomSpawnHours} h" : "off"));
                 return Bots;
@@ -454,7 +475,8 @@ namespace Unruled.SimLab
                     autosaveAgeSeconds = _lastSave == DateTime.MinValue ? -1 : (long)(DateTime.UtcNow - _lastSave).TotalSeconds,
                     autosaveMinutes = AutosaveMinutes,
                     lastSaveError = _lastSaveError,
-                    rules = Bots
+                    rules = Bots,
+                    presets = Presets()
                 };
             }
         }
@@ -513,10 +535,11 @@ namespace Unruled.SimLab
                         id,
                         kind,
                         preset = preset == 0 ? null : _sim.Balance.Ai.Preset(preset).Code,
-                        home = _sim.Sites.Has(core) ? _sim.Sites.Get(core).ClusterId : -1,
+                        home = _sim.Sites.Has(core) ? Code(_sim.Sites.Get(core).ClusterId) : "-",
+                        recent = _recent.TryGetValue(id, out var recent) ? new List<string>(recent) : new List<string>(),
                         cash,
                         debt,
-                        tech = new[]
+                        tech = new int[]
                         {
                             tech.Tier(ResearchBranch.Military), tech.Tier(ResearchBranch.Industry),
                             tech.Tier(ResearchBranch.Logistics), tech.Tier(ResearchBranch.Signals)
@@ -557,6 +580,36 @@ namespace Unruled.SimLab
         {
             lock (_gate)
                 SaveLocked("saved on stop");
+        }
+
+        // The last few orders each AI-run empire tried, for the dashboard.
+        private readonly Dictionary<int, LinkedList<string>> _recent = new Dictionary<int, LinkedList<string>>();
+
+        private void Remember(in AiOrder order)
+        {
+            if (order.Action == AiAction.VentCoolant || order.Action == AiAction.Resupply)
+                return;
+            if (!_recent.TryGetValue(order.PlayerId, out var lines))
+                _recent[order.PlayerId] = lines = new LinkedList<string>();
+            lines.AddFirst($"{Day(_sim.Clock.CurrentTick)}d {Clock(_sim.Clock.CurrentTick)} {order.Action}" +
+                           (order.Result == IssueResult.Issued ? "" : $" ({order.Result})"));
+            while (lines.Count > 8)
+                lines.RemoveLast();
+        }
+
+        private string Code(int clusterId)
+        {
+            if (!_sim.Galaxy.TryGetStar(clusterId, out var star))
+                return "C" + clusterId;
+            return $"UNR-{star.SectorX}.{star.SectorY}-{star.Index}";
+        }
+
+        private List<object> Presets()
+        {
+            var list = new List<object>();
+            for (byte i = 1; i <= _sim.Balance.Ai.Count; i++)
+                list.Add(new { id = i, code = _sim.Balance.Ai.Preset(i).Code });
+            return list;
         }
 
         private EntityId Hq(int playerId)
