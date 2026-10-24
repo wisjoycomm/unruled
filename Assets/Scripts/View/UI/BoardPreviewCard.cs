@@ -51,6 +51,7 @@ namespace Unruled.View.UI
             titles.AddToClassList("preview__titles");
             _title = NewLabel("preview__title");
             _meta = NewLabel("section-meta");
+            _meta.AddToClassList("preview__meta");
             titles.Add(_title);
             titles.Add(_meta);
             head.Add(titles);
@@ -180,7 +181,7 @@ namespace Unruled.View.UI
             _card.style.display = DisplayStyle.Flex;
             SetSiteMode(true);
             bool capital = IsCore(_site);
-            var portrait = capital ? _art.CapitalPlanet : _art.Planet(site.LifecycleState);
+            var portrait = capital ? _art.CapitalPlanet : PlanetArt(in site);
             if (portrait != null)
                 _portrait.style.backgroundImage = new StyleBackground(portrait);
             _title.text = UiFormat.SiteName(in site) + (capital ? " · CAPITAL" : "");
@@ -195,6 +196,10 @@ namespace Unruled.View.UI
             _line2.text = UiFormat.Number(rigs) + " RIGS · " + UiFormat.Number(refineries) + " REFINERIES";
         }
 
+        // The planet's own painted sprite, its lifecycle drawn into it.
+        private Texture2D PlanetArt(in SiteInfo site) =>
+            _art.Planets.Get(PlanetClasses.Of(in site, _sim.Balance.Universe), site.TerrainSeed, site.LifecycleState);
+
         private void RefreshCluster()
         {
             int planets = 0, own = 0, rival = 0, neutral = 0, fleets = 0;
@@ -206,7 +211,7 @@ namespace Unruled.View.UI
                 if (planets < MaxThumbs)
                 {
                     var entity = _sim.Sites.EntityAt(i);
-                    var tex = IsCore(entity) ? _art.CapitalPlanet : _art.Planet(site.LifecycleState);
+                    var tex = IsCore(entity) ? _art.CapitalPlanet : PlanetArt(in site);
                     _thumbs[planets].style.display = DisplayStyle.Flex;
                     if (tex != null)
                         _thumbs[planets].style.backgroundImage = new StyleBackground(tex);

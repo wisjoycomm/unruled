@@ -12,7 +12,8 @@ namespace Unruled.View.UI
     {
         private readonly Texture2D[] _agencies = new Texture2D[6];
         private readonly Texture2D[] _planets = new Texture2D[6];
-        private readonly Texture2D[] _planetClasses = new Texture2D[PlanetClasses.Count];
+        /// <summary>Paints each planet's own sprite from its NASA type and terrain seed.</summary>
+        public readonly PlanetPainter Planets = new PlanetPainter();
 
         /// <summary>Tech tiers drawn per ship class (T1..T5): size and the class's key feature count grow with tier.</summary>
         public const int Tiers = 5;
@@ -55,10 +56,7 @@ namespace Unruled.View.UI
             _planets[(int)PlanetLifecycleState.IrradiatedDeadWorld] = Load("node_irradiated");
             _planets[(int)PlanetLifecycleState.TerraformedRecovery] = Load("node_terraformed");
             CapitalPlanet = Load("node_core_base");
-            _planetClasses[(int)PlanetClass.Terrestrial] = Load("planet_terrestrial");
-            _planetClasses[(int)PlanetClass.SuperEarth] = Load("planet_super_earth");
-            _planetClasses[(int)PlanetClass.NeptuneLike] = Load("planet_neptune_like");
-            _planetClasses[(int)PlanetClass.GasGiant] = Load("planet_gas_giant");
+
             for (int c = 0; c < ShipClasses; c++)
             {
                 var fallback = Load("ship_class_" + ShipNames[c]);
@@ -84,8 +82,6 @@ namespace Unruled.View.UI
 
         private static int TierIndex(int tier) => tier < 1 ? 0 : tier > Tiers ? Tiers - 1 : tier - 1;
 
-        /// <summary>A pristine planet's art by NASA type; null until that image is imported.</summary>
-        public Texture2D PlanetOfClass(PlanetClass planet) => _planetClasses[(int)planet];
 
         public Texture2D Planet(PlanetLifecycleState state) =>
             (int)state < _planets.Length ? _planets[(int)state] : null;

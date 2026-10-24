@@ -989,6 +989,10 @@
     flex-shrink: 1;
 }
 
+.preview__meta {
+    white-space: normal;
+}
+
 .preview__title {
     -unity-font-definition: url("Theme/Fonts/ChakraPetch-SemiBold.asset");
     font-size: 15px;

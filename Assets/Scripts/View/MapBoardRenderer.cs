@@ -57,7 +57,6 @@ namespace Unruled.View
         private BoardMesh _mesh; // created in Bind: Unity objects can't be made in a MonoBehaviour's field initialisers
         private readonly List<Label> _labels = new List<Label>();
         private readonly List<VisualElement> _glyphs = new List<VisualElement>();
-        private readonly Texture2D[] _lifecycleGlyphs = new Texture2D[6];
         private Texture2D _coreGlyph;
         private Texture2D _citadelGlyph;
         private Texture2D _starHome, _starContested, _starFrontier, _beacon, _hazard;
@@ -142,11 +141,6 @@ namespace Unruled.View
                 _beacon = Resources.Load<Texture2D>("UI/beacon_toll");
                 _hazard = Resources.Load<Texture2D>("UI/marker_hazard");
                 _art = new UiArt();
-                _lifecycleGlyphs[(int)PlanetLifecycleState.PristineWorld] = Resources.Load<Texture2D>("UI/node_pristine");
-                _lifecycleGlyphs[(int)PlanetLifecycleState.DeepCoreStripping] = Resources.Load<Texture2D>("UI/node_deep_core");
-                _lifecycleGlyphs[(int)PlanetLifecycleState.DepletedBarrenHusk] = Resources.Load<Texture2D>("UI/node_barren_husk");
-                _lifecycleGlyphs[(int)PlanetLifecycleState.IrradiatedDeadWorld] = Resources.Load<Texture2D>("UI/node_irradiated");
-                _lifecycleGlyphs[(int)PlanetLifecycleState.TerraformedRecovery] = Resources.Load<Texture2D>("UI/node_terraformed");
             }
             EnsureTelemetryOverlays();
             screen.SystemTab.clicked -= OnSystemTab;
@@ -1046,18 +1040,17 @@ namespace Unruled.View
                     stroke = fill;
                 }
                 bool citadel = _sim.Citadels.Has(entity) && _sim.Citadels.Get(entity).FallenTick == 0;
-                var glyph = irradiated ? _lifecycleGlyphs[(int)PlanetLifecycleState.IrradiatedDeadWorld]
-                    : citadel ? _citadelGlyph
+                var planet = PlanetClasses.Of(in site, _sim.Balance.Universe);
+                var glyph = citadel ? _citadelGlyph
                     : coreOwner != 0 ? _coreGlyph
-                    : _lifecycleGlyphs[(int)site.LifecycleState];
+                    : _art.Planets.Get(planet, site.TerrainSeed,
+                        irradiated ? PlanetLifecycleState.IrradiatedDeadWorld : site.LifecycleState);
                 if (glyph != null)
                 {
-                    // Full-colour planet plate sized by NASA type; the owner reads from the ring around it, the lanes
-                    // stop at the dark disc.
+                    // The planet's own painted sprite, sized by NASA type; the owner reads from the ring around it, the
+                    // lanes stop at the dark disc.
                     _mesh.Disc(p, 16f, UnruledPalette.Board);
-                    float size = citadel || coreOwner != 0 ? 54f : PlanetSizePx(PlanetClasses.Of(in site, _sim.Balance.Universe));
-                    if (glyph == _lifecycleGlyphs[(int)PlanetLifecycleState.PristineWorld] && !citadel && coreOwner == 0)
-                        glyph = PlanetClassGlyph(PlanetClasses.Of(in site, _sim.Balance.Universe), glyph);
+                    float size = citadel || coreOwner != 0 ? 54f : PlanetSizePx(planet);
                     if (!citadel)
                         _mesh.Ring(p, size * 0.5f + 4f, 2f, stroke);
                     PlaceGlyph(p, size, glyph, Husked(Color.white, site.LifecycleState));
@@ -1079,16 +1072,9 @@ namespace Unruled.View
             }
         }
 
+        // Sprite box per NASA type: painted sprites leave padding (and room for a giant's ring), so boxes run large.
         private static float PlanetSizePx(PlanetClass planet) =>
-            planet == PlanetClass.GasGiant ? 56f : planet == PlanetClass.NeptuneLike ? 48f : planet == PlanetClass.SuperEarth ? 44f : 36f;
-
-        // A pristine world drawn by its NASA type (gas and ice giants have their own art); the fallback keeps the
-        // lifecycle sprite until the art for a type exists.
-        private Texture2D PlanetClassGlyph(PlanetClass planet, Texture2D fallback)
-        {
-            var art = _art.PlanetOfClass(planet);
-            return art != null ? art : fallback;
-        }
+            planet == PlanetClass.GasGiant ? 64f : planet == PlanetClass.NeptuneLike ? 54f : planet == PlanetClass.SuperEarth ? 52f : 46f;
 
         // Own site works under the glyph: one tick per rig (dim when paused or retracting), one square per refinery.
         private void DrawSiteWorks(EntityId site, Vector2 p)
@@ -1606,6 +1592,7 @@ namespace Unruled.View
             }
             if (_mesh != null)
                 Destroy(_mesh.Mesh);
+            _art?.Planets.Clear();
         }
     }
 }
