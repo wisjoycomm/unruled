@@ -2,6 +2,7 @@ using System;
 using Unruled.Core.Board;
 using Unruled.Core.Ecs;
 using Unruled.Core.Economy;
+using Unruled.Core.Galaxy;
 using Unruled.Core.Military;
 using Unruled.Core.Research;
 using Unruled.Core.Simulation;
@@ -65,10 +66,11 @@ namespace Unruled.Core.SystemFactions
     /// bars the offender from placing orders for a while. Layer two: a WTO defence fleet forms at the offender's core
     /// base for a while and fights whoever is there; a Call-to-Arms bulletin names the offender.</item>
     /// <item>IAEA: every newly irradiated site gets a nuclear strike bulletin until its irradiation ends.</item>
+    /// <item>STA: a system renamed by its owner is announced for a bulletin's time.</item>
     /// </list>
     /// Defence fleets are THE SYSTEM's: nothing can be looted from them.
     /// </summary>
-    public sealed class SystemAuthorityManager : ISimSystem, IOffenceLog, IMarketAccess, IResearchIncidentLog
+    public sealed class SystemAuthorityManager : ISimSystem, IOffenceLog, IMarketAccess, IResearchIncidentLog, ISystemRenameLog
     {
         private readonly World _world;
         private readonly ComponentStore<SystemSanction> _sanctions;
@@ -122,6 +124,14 @@ namespace Unruled.Core.SystemFactions
             _bulletins.Add(_world.Create(), new SystemBulletin
             {
                 Agency = SystemAgency.Noaa, Kind = BulletinKind.PrototypeBlast, PlayerId = playerId, Site = site,
+                Tick = tick, ExpiresTick = tick + _balance.BulletinTicks
+            });
+
+        /// <summary>The STA announces a system's new name.</summary>
+        public void ReportRename(int playerId, EntityId system, long tick) =>
+            _bulletins.Add(_world.Create(), new SystemBulletin
+            {
+                Agency = SystemAgency.Sta, Kind = BulletinKind.SystemRenamed, PlayerId = playerId, Site = system,
                 Tick = tick, ExpiresTick = tick + _balance.BulletinTicks
             });
 

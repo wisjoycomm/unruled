@@ -287,7 +287,8 @@ namespace Unruled.Core.Simulation
             Victory = new VictoryEvaluator(Citadels, CitadelAssaults, VictoryRecords, DirectorateSeats, Players, balance.Citadel);
             Clock.Register(Victory);
 
-            Galaxy = new GalaxySystem(World, StarSystems, SystemNames, Sites, new GalaxyCatalog(balance.Galaxy, worldSeed));
+            Galaxy = new GalaxySystem(World, StarSystems, SystemNames, Sites, new GalaxyCatalog(balance.Galaxy, worldSeed),
+                Authority);
             Ai = new UtilityAiEngine(
                 AiControllers, Players, Fleets, FleetMotions, FleetCombat, FleetReadiness, Stockpiles, Sites, Weather, Deposits,
                 Starlanes, RadarScans, TechProgress, JumpGates, ConvoyRoutes, ShipOrders, Refineries, Standings, Citadels, WtoOrders,
@@ -296,6 +297,7 @@ namespace Unruled.Core.Simulation
             Commands.Register(CommandType.SetStandingOrders, Ai);
 
             Clock.Register(Galaxy);
+            Commands.Register(CommandType.RenameSystem, Galaxy);
             Commands.Register(CommandType.Survey, new SurveySystem(this, balance.Galaxy));
         }
 

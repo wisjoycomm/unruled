@@ -108,7 +108,7 @@ namespace Unruled.Tests.Core.Galaxy
             Assert.IsTrue(loaded.Galaxy.IsMaterialised(star.Id));
             Assert.AreEqual(system, loaded.Galaxy.SystemOf(cluster));
             var name = loaded.SystemNames.Get(system);
-            var chars = new char[SystemName.MaxLength];
+            var chars = new char[SystemName.Capacity];
             Assert.AreEqual("NEW EDEN", new string(chars, 0, name.CopyTo(chars)));
             Assert.AreEqual(4, name.RenamedByPlayerId);
             CollectionAssert.AreEqual(SaveGame.Write(sim), SaveGame.Write(loaded));

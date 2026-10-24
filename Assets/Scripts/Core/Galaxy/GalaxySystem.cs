@@ -12,8 +12,11 @@ namespace Unruled.Core.Galaxy
     /// <see cref="SimulationWorld.MaterialiseStar"/>; this system registers it and keeps a cluster index (derived,
     /// rebuilt on load). Every <see cref="OwnerRefreshTicks"/> it recomputes each system's owner as the player
     /// holding the most of its planets (a tie keeps the current owner).
+    /// <see cref="CommandType.RenameSystem"/> (Target: any site of the system, so the order travels with that site's signal latency; ParamA–C: the name packed by
+    /// <see cref="SystemName.TryEncode"/>) names a system for its current owner and is published as a bulletin; an
+    /// order from anyone else, or a name that doesn't decode to a legal one, changes nothing.
     /// </summary>
-    public sealed class GalaxySystem : ISimSystem
+    public sealed class GalaxySystem : ISimSystem, ICommandHandler
     {
         public const int OwnerRefreshTicks = 60;
 
@@ -35,10 +38,12 @@ namespace Unruled.Core.Galaxy
         private int[] _clusterFirstSite = Array.Empty<int>();
         private int[] _siteNext = Array.Empty<int>();
         private readonly List<StarId> _neighbours = new List<StarId>();
+        private readonly ISystemRenameLog _renames;
 
         public GalaxySystem(World world, ComponentStore<StarSystem> systems, ComponentStore<SystemName> names,
-            ComponentStore<SiteInfo> sites, GalaxyCatalog catalog)
+            ComponentStore<SiteInfo> sites, GalaxyCatalog catalog, ISystemRenameLog renames)
         {
+            _renames = renames ?? throw new ArgumentNullException(nameof(renames));
             _world = world ?? throw new ArgumentNullException(nameof(world));
             _systems = systems ?? throw new ArgumentNullException(nameof(systems));
             _names = names ?? throw new ArgumentNullException(nameof(names));
@@ -208,6 +213,25 @@ namespace Unruled.Core.Galaxy
                 ref var s = ref _systems.At(i);
                 Index(_systems.EntityAt(i), s.ClusterId, s.StarId);
             }
+        }
+
+        public void Handle(in DelayedPlayerCommand command, long tick)
+        {
+            if (command.CommandType != CommandType.RenameSystem)
+                throw new ArgumentException($"Cannot handle {command.CommandType}.", nameof(command));
+            if (!_sites.Has(command.Target))
+                return;
+            var system = SystemOf(_sites.Get(command.Target).ClusterId);
+            if (system.IsNull || !_systems.Has(system) || _systems.Get(system).OwnerPlayerId != command.PlayerId ||
+                command.PlayerId <= 0)
+                return;
+            if (!SystemName.TryDecode(command.ParamA, command.ParamB, command.ParamC, command.PlayerId, tick, out var name))
+                return;
+            if (_names.Has(system))
+                _names.Get(system) = name;
+            else
+                _names.Add(system, name);
+            _renames.ReportRename(command.PlayerId, system, tick);
         }
 
         public void OnTick(long tick)

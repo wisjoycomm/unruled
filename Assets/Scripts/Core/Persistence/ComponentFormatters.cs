@@ -482,7 +482,7 @@ namespace Unruled.Core.Persistence
             if (n > 0)
             {
                 int chars = r.ReadArrayHeader();
-                if (chars > SystemName.MaxLength) throw new System.FormatException("System name too long.");
+                if (chars > SystemName.Capacity) throw new System.FormatException("System name too long.");
                 for (int i = 0; i < chars; i++)
                     v.SetChar(i, (char)r.ReadInt32());
                 v.Length = chars;

@@ -19,7 +19,8 @@ namespace Unruled.Core.SystemFactions
     {
         NuclearStrike = 1,
         CallToArms = 2,
-        PrototypeBlast = 3
+        PrototypeBlast = 3,
+        SystemRenamed = 4
     }
 
     /// <summary>
@@ -31,7 +32,7 @@ namespace Unruled.Core.SystemFactions
         public SystemAgency Agency;
         public BulletinKind Kind;
         public int PlayerId; // the player concerned, 0 if none
-        public Ecs.EntityId Site;
+        public Ecs.EntityId Site; // for SystemRenamed: the StarSystem entity
         public long Tick;
         public long ExpiresTick;
     }

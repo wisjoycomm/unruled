@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Unruled.Core.Board;
+using Unruled.Core.Galaxy;
 using Unruled.Core.Simulation;
 using Unruled.Core.SystemFactions;
 using UnityEngine;
@@ -178,9 +179,24 @@ namespace Unruled.View.UI
                     return "CALL TO ARMS · DEFENCE FLEET AT " + where + " AGAINST " + who;
                 case BulletinKind.PrototypeBlast:
                     return "PROTOTYPE BLAST AT " + where + " · STRESS TEST FAILED (" + who + ")";
+                case BulletinKind.SystemRenamed:
+                    return "STA REGISTRY · " + RenamedText(bulletin.Site) + " (" + who + ")";
                 default:
                     return "BULLETIN AT " + where;
             }
+        }
+
+        private readonly char[] _nameChars = new char[SystemName.Capacity];
+
+        private string RenamedText(EntityId system)
+        {
+            if (!_sim.StarSystems.Has(system))
+                return "A SYSTEM WAS RENAMED";
+            string star = UiFormat.StarName(_sim.StarSystems.Get(system).ClusterId);
+            if (!_sim.SystemNames.Has(system))
+                return star + " RENAMED";
+            int length = _sim.SystemNames.Get(system).CopyTo(_nameChars);
+            return star + " IS NOW " + new string(_nameChars, 0, length);
         }
 
         private static string StormText(in StormFront storm, long tick)
