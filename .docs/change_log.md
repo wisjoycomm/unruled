@@ -180,3 +180,4 @@
 - 2026-10-24 - Claude - fix: a convoy-only fleet's hold takes at most cargo convoys x capacity per item on hand loads (a plain load over it is refused, a fill stops at it)
 - 2026-10-24 - Claude - roadmap: product target recorded (10k+ player MMO + single-player campaign, authoritative server)
 - 2026-10-24 - Claude - O1 offline shield: PresenceSystem (LogIn/LogOut/EndProtection), shield 10 min after logout, max 8 h per logout and 48 h per week, newcomers protected until the tutorial ends; combat, claims and strikes respect it. Save schema 8.
+- 2026-10-24 - Claude - O2 governor: SetStandingOrders ParamB 1 hands an offline empire to a governor that thinks every 10 min and only manages what it has (no building, borrowing, claims, raids, research). Save schema 9. Soak 5x30d with seat 1 governed: governed seats never starve, hold 14 ships and 1 site, end debt-free.

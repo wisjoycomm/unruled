@@ -12,7 +12,7 @@ namespace Unruled.Core.Persistence
     public static class SaveGame
     {
         /// <summary>Bump when a saved shape changes, and add a migration test for the older version.</summary>
-        public const int SchemaVersion = 8;
+        public const int SchemaVersion = 9;
 
         private const int TopLevelKeys = 6;
         private const int StoreCount = 43;

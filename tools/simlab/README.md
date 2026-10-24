@@ -43,6 +43,7 @@ dotnet run -c Release -- batch --seeds 10 --days 60 --first 1000 --human 4 --csv
 | `--human` | 2 | preset for seat 1 (0 = idle human) |
 | `--parallel` | CPU count | games played at once (lower it when memory is short) |
 | `--credit` | balance (10,000) | loan limit in credits; `0` = no borrowing at all |
+| `--governor` | off | seat 1 runs as an offline player's governor (manages, never grows) |
 | `--csv` | none | hourly samples per seed and player |
 
 Each player gets a verdict: `ok`, or flags `NO-FLEET`, `BROKE` (no cash and in debt), `STALLED-T1`

@@ -736,10 +736,12 @@ namespace Unruled.Core.Persistence
             return v;
         }
 
+        // AiController: [archetype, governor].
         internal static void Write(MsgPackWriter w, in AiController v)
         {
-            w.WriteArrayHeader(1);
+            w.WriteArrayHeader(2);
             w.Write((int)v.Archetype);
+            w.Write(v.IsGovernor);
         }
 
         internal static AiController ReadAiController(MsgPackReader r)
@@ -747,7 +749,8 @@ namespace Unruled.Core.Persistence
             int n = r.ReadArrayHeader();
             var v = new AiController();
             if (n > 0) v.Archetype = r.ReadByte();
-            SkipNewer(r, n, 1);
+            if (n > 1) v.IsGovernor = r.ReadBool();
+            SkipNewer(r, n, 2);
             return v;
         }
 

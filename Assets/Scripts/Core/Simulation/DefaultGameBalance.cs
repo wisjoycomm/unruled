@@ -402,7 +402,9 @@ namespace Unruled.Core.Simulation
                 new AiPreset(3, "Raider_Ambush", 600, 1_400, 1_200, 1_000, 1_900, 500, 85_000, 750, 40, 4),
                 new AiPreset(4, "Warlord_Conqueror", 1_000, 700, 1_100, 1_500, 1_100, 1_800, 88_000, 350, 35, 5),
                 new AiPreset(5, "Technocrat_Explorer", 1_200, 1_200, 1_800, 1_300, 800, 1_000, 80_000, 500, 25, 4),
-            });
+            },
+            // PROVISIONAL (user decision 2026-10-24): an offline player's governor thinks every 10 minutes, ~1/60 of a bot.
+            governorThinkIntervalTicks: 600);
 
         public static SystemAuthorityBalance CreateSystemAuthorityBalance() => new SystemAuthorityBalance(
             offenceWindowTicks: 86_400, layerOneOffences: 1, wtoBarTicks: 3_600, layerTwoOffences: 3, defenceTier: 1,

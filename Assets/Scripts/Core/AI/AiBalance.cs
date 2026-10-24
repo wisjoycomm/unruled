@@ -53,6 +53,7 @@ namespace Unruled.Core.AI
     public sealed class AiBalance
     {
         public readonly int ThinkIntervalTicks;
+        public readonly int GovernorThinkIntervalTicks; // an offline player's governor thinks this rarely (a multiple of the above)
         public readonly int FullBatteryScans; // core-base batteries for this many scan startups read as 100%
         public readonly int ResupplyAmmoPerLineShip; // below this much ammo per line ship a fleet goes home
         public readonly int LoadAmmoPerLineShip; // at the core base a fleet loads ammo up to this per line ship
@@ -89,8 +90,13 @@ namespace Unruled.Core.AI
             int rawStockCap, int loadUpkeepIntervals, byte citadelAssaultTier, int sellAbove, int fillAbove, int sellBatch,
             int tradePricePercent, int tradeOrderTicks, int bidBudgetPercent, int homeSettleWeight,
             int battleLineShips, int loadBatteryPerEwShip, long cashReserveCredits, long travelCashCredits, int scanBatteryReserve, int scanWindowTicks,
-            int coreOreLowReserve, int flankMinLineShips, int chartPriceCredits, AiPreset[] presets)
+            int coreOreLowReserve, int flankMinLineShips, int chartPriceCredits, AiPreset[] presets,
+            int governorThinkIntervalTicks = 0)
         {
+            if (governorThinkIntervalTicks == 0) governorThinkIntervalTicks = thinkIntervalTicks;
+            if (governorThinkIntervalTicks < thinkIntervalTicks || governorThinkIntervalTicks % thinkIntervalTicks != 0)
+                throw new ArgumentOutOfRangeException(nameof(governorThinkIntervalTicks), "Needs a multiple of the think interval.");
+            GovernorThinkIntervalTicks = governorThinkIntervalTicks;
             if (chartPriceCredits < 1) throw new ArgumentOutOfRangeException(nameof(chartPriceCredits));
             if (thinkIntervalTicks < 1) throw new ArgumentOutOfRangeException(nameof(thinkIntervalTicks));
             if (fullBatteryScans < 1) throw new ArgumentOutOfRangeException(nameof(fullBatteryScans));

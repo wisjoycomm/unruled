@@ -28,13 +28,13 @@ namespace Unruled.SimLab
 
         /// <param name="creditLimit">Credits a player may borrow from THE SYSTEM; null = the default balance's limit.</param>
         /// <param name="rivalCount">Number of AI rivals in addition to seat 1; null = the default balance's rivalCount (4).</param>
-        public LabGame(ulong seed, byte humanPreset, long? creditLimit = null, int? rivalCount = null)
+        public LabGame(ulong seed, byte humanPreset, long? creditLimit = null, int? rivalCount = null, bool governor = false)
         {
             Seed = seed;
             Sim = new SimulationWorld(Balance(creditLimit, rivalCount), seed);
             NewGameSetup.Create(Sim, HumanPlayerId);
             if (humanPreset != 0)
-                Sim.Ai.Assign(Hq(HumanPlayerId), humanPreset);
+                Sim.Ai.Assign(Hq(HumanPlayerId), humanPreset, governor);
             TakeSample();
         }
 

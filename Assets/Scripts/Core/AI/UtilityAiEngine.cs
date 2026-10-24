@@ -14,6 +14,7 @@ namespace Unruled.Core.AI
     public struct AiController
     {
         public byte Archetype; // tab-06 Archetype_ID
+        public bool IsGovernor; // an offline player's governor: manages what the empire has, never grows or attacks
     }
 
     public enum AiAction : byte
@@ -75,7 +76,10 @@ namespace Unruled.Core.AI
     /// (GDD §2.5). It is not on the sim clock: the host calls <see cref="Think"/> (Server 2), and it changes the
     /// world only through <see cref="CommandIssuer"/>, with the same latency as a player. A player hands its empire to
     /// standing orders (Auto-SOP) and takes it back with <see cref="CommandType.SetStandingOrders"/> (ParamA = tab-06
-    /// archetype, 0 = back in the player's hands), which reaches it through the clock like any order.
+    /// archetype, 0 = back in the player's hands; ParamB 1 = as a governor), which reaches it through the clock like any
+    /// order. A governor thinks only every <see cref="AiBalance.GovernorThinkIntervalTicks"/> and only manages what the
+    /// empire already has: supplies, cargo, convoy routes, drills, venting, retreat, trade and repaying loans. It never builds
+    /// (ships, rigs, refineries, convoys), borrows, claims, raids, besieges, strikes, researches or trades charts.
     /// Every think interval each decision maker scores its options with Dave Mark's IAUS,
     /// Score = PresetWeight x (product of m considerations)^(1/m), all in milli-units, and issues its best one:
     /// <list type="bullet">
@@ -299,14 +303,15 @@ namespace Unruled.Core.AI
         }
 
         /// <summary>Host: hands a player HQ to the AI with a tab-06 archetype, or changes its archetype.</summary>
-        public void Assign(EntityId hq, byte archetype)
+        public void Assign(EntityId hq, byte archetype, bool governor = false)
         {
             if (!_players.Has(hq)) throw new ArgumentException("Not a player HQ.", nameof(hq));
             if (!_balance.IsValid(archetype)) throw new ArgumentOutOfRangeException(nameof(archetype));
+            var controller = new AiController { Archetype = archetype, IsGovernor = governor };
             if (_controllers.Has(hq))
-                _controllers.Get(hq).Archetype = archetype;
+                _controllers.Get(hq) = controller;
             else
-                _controllers.Add(hq, new AiController { Archetype = archetype });
+                _controllers.Add(hq, controller);
         }
 
         /// <summary>Host: the player is back in control.</summary>
@@ -325,7 +330,7 @@ namespace Unruled.Core.AI
             if (command.ParamA == 0)
                 Release(hq);
             else if (command.ParamA > 0 && command.ParamA <= byte.MaxValue && _balance.IsValid((byte)command.ParamA))
-                Assign(hq, (byte)command.ParamA);
+                Assign(hq, (byte)command.ParamA, command.ParamB == 1);
         }
 
         private bool TryFindHq(int playerId, out EntityId hq)
@@ -346,9 +351,18 @@ namespace Unruled.Core.AI
             if (tick % _balance.ThinkIntervalTicks != 0)
                 return 0;
             _orderCount = 0;
+            bool governorsDue = tick % _balance.GovernorThinkIntervalTicks == 0;
+            bool anyDue = false;
+            for (int c = 0; c < _controllers.Count && !anyDue; c++)
+                anyDue = governorsDue || !_controllers.At(c).IsGovernor;
+            if (!anyDue)
+                return 0;
             IndexWorld();
             for (int c = 0; c < _controllers.Count; c++)
             {
+                _governing = _controllers.At(c).IsGovernor;
+                if (_governing && !governorsDue)
+                    continue;
                 var preset = _balance.Preset(_controllers.At(c).Archetype);
                 var hq = _controllers.EntityAt(c);
                 ref var player = ref _players.Get(hq);
@@ -359,16 +373,50 @@ namespace Unruled.Core.AI
                 }
                 for (int d = FirstPlayerDeposit(player.PlayerId); d >= 0; d = _playerDepositNext[d])
                     ThinkDeposit(player.PlayerId, player.CoreBase, preset, d);
-                if (tick % SimTick.TicksPerHour < _balance.ScanWindowTicks)
+                if (tick % SimTick.TicksPerHour < _balance.ScanWindowTicks || _governing)
                     ThinkRadar(player, preset, hq);
+                ThinkFinance(player, preset, hq, tick);
+                ThinkTrade(player, preset, hq, tick);
+                if (_governing)
+                    continue;
                 ThinkProgress(player, preset, hq);
                 ThinkEconomy(player, preset, hq);
                 ThinkShipyard(player, preset, hq);
-                ThinkFinance(player, preset, hq, tick);
-                ThinkTrade(player, preset, hq, tick);
                 ThinkCharts(player, preset, hq, tick);
             }
+            _governing = false;
             return _orderCount;
+        }
+
+        // The controller thinking now is a governor (see the class summary): only these actions are open to it.
+        private bool _governing;
+
+        private static bool GovernorMay(AiAction action)
+        {
+            switch (action)
+            {
+                case AiAction.VentCoolant:
+                case AiAction.Retreat:
+                case AiAction.Resupply:
+                case AiAction.RetractDrills:
+                case AiAction.RadarScan:
+                case AiAction.LoadCargo:
+                case AiAction.ReturnHome:
+                case AiAction.UnloadCargo:
+                case AiAction.SetConvoyRoute:
+                case AiAction.PauseDrills:
+                case AiAction.SellSurplus:
+                case AiAction.CancelOrder:
+                case AiAction.Mothball:
+                case AiAction.Activate:
+                case AiAction.Repay:
+                case AiAction.SellToSystem:
+                case AiAction.BuyFeedstock:
+                case AiAction.BuyFromSystem:
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private int _thinkStamp;
@@ -2997,8 +3045,10 @@ namespace Unruled.Core.AI
             return Threshold + (int)(Math.Min(Math.Max(over, 0), range) * (Full - Threshold) / range);
         }
 
-        private static void Consider(AiAction action, int score, ref AiAction best, ref int bestScore)
+        private void Consider(AiAction action, int score, ref AiAction best, ref int bestScore)
         {
+            if (_governing && !GovernorMay(action))
+                return;
             if (score > bestScore)
             {
                 best = action;
@@ -3038,7 +3088,7 @@ namespace Unruled.Core.AI
 
         private void Issue(DelayedPlayerCommand command, AiAction action, int score, EntityId subject)
         {
-            if (_issuer.IsInFlight(command.PlayerId, command.CommandType, command.Target))
+            if ((_governing && !GovernorMay(action)) || _issuer.IsInFlight(command.PlayerId, command.CommandType, command.Target))
                 return;
             var result = _issuer.Issue(command, out _);
             if (_orderCount == _orders.Length)

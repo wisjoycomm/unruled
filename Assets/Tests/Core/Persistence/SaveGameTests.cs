@@ -57,6 +57,18 @@ namespace Unruled.Tests.Core.Persistence
             Assert.Throws<FormatException>(() => SaveGame.Load(balance, new ReadOnlyMemory<byte>(saved, 0, saved.Length - 3)));
         }
 
+        // Migration: schema 8 saved an AiController as [archetype]; it loads as a full AI, not a governor.
+        [Test]
+        public void Schema8AiController_LoadsAsAFullAi()
+        {
+            var w = new MsgPackWriter();
+            w.WriteArrayHeader(1);
+            w.Write(3);
+            var controller = ComponentFormatters.ReadAiController(new MsgPackReader(w.ToArray()));
+            Assert.AreEqual(3, controller.Archetype);
+            Assert.IsFalse(controller.IsGovernor);
+        }
+
         // Migration rule: a component saved before keys were appended reads them as defaults.
         [Test]
         public void OlderComponentShape_MissingTrailingKeys_ReadsThemAsDefaults()
