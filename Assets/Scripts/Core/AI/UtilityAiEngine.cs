@@ -55,7 +55,9 @@ namespace Unruled.Core.AI
         RaidConvoys = 35,
         FlankSplit = 36,
         FlankMove = 37,
-        Survey = 38
+        Survey = 38,
+        ListChart = 39,
+        BuyChart = 40
     }
 
     /// <summary>An order the AI tried to issue, and what <see cref="CommandIssuer"/> answered.</summary>
@@ -153,6 +155,9 @@ namespace Unruled.Core.AI
         private readonly ComponentStore<ItemMarket> _markets;
         private readonly ComponentStore<Loan> _loans;
         private readonly ComponentStore<SystemSanction> _sanctions;
+        private readonly ComponentStore<SystemChart> _charts;
+        private readonly ComponentStore<ChartListing> _chartListings;
+        private readonly System.Collections.Generic.List<int> _chartNeighbours = new System.Collections.Generic.List<int>();
         private readonly Ledger _ledger;
         private readonly EntityId _systemStock;
         private readonly ITollGate _tolls;
@@ -196,7 +201,8 @@ namespace Unruled.Core.AI
             ComponentStore<ConvoyRoute> convoyRoutes, ComponentStore<ShipBuildOrder> shipOrders,
             ComponentStore<Refinery> refineries, ComponentStore<PlayerStanding> standings, ComponentStore<SystemCitadel> citadels,
             ComponentStore<WtoOrder> wtoOrders, ComponentStore<ItemMarket> markets, ComponentStore<Loan> loans,
-            ComponentStore<SystemSanction> sanctions, ComponentStore<FleetRoute> fleetRoutes, Ledger ledger,
+            ComponentStore<SystemSanction> sanctions, ComponentStore<FleetRoute> fleetRoutes,
+            ComponentStore<SystemChart> charts, ComponentStore<ChartListing> chartListings, Ledger ledger,
             EntityId systemStock, IMarketRates rates,
             CommandIssuer issuer,
             RoutePlanner routes, ITollGate tolls, ITechGates tech, GalaxySystem galaxy, GameBalanceConfig config)
@@ -225,6 +231,8 @@ namespace Unruled.Core.AI
             _markets = markets ?? throw new ArgumentNullException(nameof(markets));
             _loans = loans ?? throw new ArgumentNullException(nameof(loans));
             _sanctions = sanctions ?? throw new ArgumentNullException(nameof(sanctions));
+            _charts = charts ?? throw new ArgumentNullException(nameof(charts));
+            _chartListings = chartListings ?? throw new ArgumentNullException(nameof(chartListings));
             _fleetRoutes = fleetRoutes ?? throw new ArgumentNullException(nameof(fleetRoutes));
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             if (systemStock.IsNull) throw new ArgumentException("THE SYSTEM's stock required.", nameof(systemStock));
@@ -358,6 +366,7 @@ namespace Unruled.Core.AI
                 ThinkShipyard(player, preset, hq);
                 ThinkFinance(player, preset, hq, tick);
                 ThinkTrade(player, preset, hq, tick);
+                ThinkCharts(player, preset, hq, tick);
             }
             return _orderCount;
         }
@@ -1811,6 +1820,90 @@ namespace Unruled.Core.AI
         // Shipyard (Defense_Hold or Siege_Conquest), from the Citadel assault tier on (earlier, ships would eat the steel
         // the economy grows on): refits a battle fleet docked at the core base to the research tier, else builds line
         // ships of that tier up to the battle line. One shipyard order in flight at a time.
+        // Star charts, one order in the first think of each hour: a system it charted first goes on THE SYSTEM's world shop (fee paid from cash
+        // above the travel cash); any other chart it holds, but its home, goes on its own shop; debt-free with idle cash it
+        // buys the cheapest listed chart, at or under its chart price, of a system next to space it knows. It never gives
+        // charts away.
+        private void ThinkCharts(in PlayerHq player, AiPreset preset, EntityId hq, long tick)
+        {
+            if (tick % SimTick.TicksPerHour >= _balance.ThinkIntervalTicks ||
+                !_ledger.TryFindPlayerWallet(player.PlayerId, out var wallet) || !_sites.Has(player.CoreBase))
+                return;
+            int weight = preset.ResupplyLogisticsWeight;
+            long cash = _ledger.Balance(wallet);
+            long travel = _balance.TravelCashCredits * Wallet.CentsPerCredit;
+            int home = _sites.Get(player.CoreBase).ClusterId;
+            // Two passes: its world-shop registrations first (only the first surveyor may make them), then its own shop.
+            for (int pass = 0; pass < 2 * _charts.Count; pass++)
+            {
+                int i = pass % _charts.Count;
+                ref var chart = ref _charts.At(i);
+                bool first = _galaxy.FirstSurveyor(chart.ClusterId) == player.PlayerId;
+                if (chart.PlayerId != player.PlayerId || chart.ClusterId == home || first != pass < _charts.Count)
+                    continue;
+                if (_issuer.IsInFlight(player.PlayerId, CommandType.ListChart, player.CoreBase))
+                    return;
+                var shop = first ? ChartShop.World : ChartShop.Player;
+                if (HasChartListing(player.PlayerId, chart.ClusterId, shop) ||
+                    (shop == ChartShop.World && cash - _galaxy.Catalog.Balance.ChartListingFeeCents < travel))
+                    continue;
+                Issue(new DelayedPlayerCommand
+                {
+                    PlayerId = player.PlayerId, CommandType = CommandType.ListChart, Target = player.CoreBase, ParamA = (int)shop,
+                    ParamB = _balance.ChartPriceCredits, ParamC = chart.ClusterId
+                }, AiAction.ListChart, Score(weight, Threshold));
+                return;
+            }
+
+            long idle = cash - 2 * _balance.CashReserveCredits * Wallet.CentsPerCredit;
+            if (idle <= 0 || (_loans.Has(hq) && _loans.Get(hq).DebtCents > 0) ||
+                _issuer.IsInFlight(player.PlayerId, CommandType.BuyChart, player.CoreBase))
+                return;
+            long maxPrice = Math.Min(idle, _balance.ChartPriceCredits * Wallet.CentsPerCredit);
+            EntityId best = default;
+            long bestPrice = long.MaxValue;
+            for (int i = 0; i < _chartListings.Count; i++)
+            {
+                ref var listing = ref _chartListings.At(i);
+                if (listing.SellerPlayerId == player.PlayerId || listing.PriceCents > maxPrice ||
+                    listing.PriceCents >= bestPrice || _galaxy.Knows(player.PlayerId, listing.ClusterId) ||
+                    !NextToKnownSpace(player.PlayerId, listing.ClusterId))
+                    continue;
+                best = _chartListings.EntityAt(i);
+                bestPrice = listing.PriceCents;
+            }
+            if (best.IsNull)
+                return;
+            Issue(new DelayedPlayerCommand
+            {
+                PlayerId = player.PlayerId, CommandType = CommandType.BuyChart, Target = player.CoreBase, ParamEntity = best
+            }, AiAction.BuyChart, Score(weight, Threshold));
+        }
+
+        private bool HasChartListing(int playerId, int clusterId, ChartShop shop)
+        {
+            for (int i = 0; i < _chartListings.Count; i++)
+            {
+                ref var listing = ref _chartListings.At(i);
+                if (listing.ClusterId == clusterId && listing.Shop == shop &&
+                    (shop == ChartShop.World || listing.SellerPlayerId == playerId))
+                    return true;
+            }
+            return false;
+        }
+
+        // A system whose star is a catalog hyperlane neighbour of a system the player knows.
+        private bool NextToKnownSpace(int playerId, int clusterId)
+        {
+            if (!_galaxy.TryGetStar(clusterId, out var star))
+                return false;
+            _galaxy.MaterialisedNeighbours(star, _chartNeighbours);
+            for (int i = 0; i < _chartNeighbours.Count; i++)
+                if (_galaxy.Knows(playerId, _chartNeighbours[i]))
+                    return true;
+            return false;
+        }
+
         private void ThinkShipyard(in PlayerHq player, AiPreset preset, EntityId hq)
         {
             int weight = Math.Max(preset.DefenseHoldWeight, preset.SiegeConquestWeight);

@@ -81,6 +81,9 @@ namespace Unruled.SimLab
                 $"{all.Count(p => p.Health.LimitHours > 24)}/{all.Count} spent >1 day at the loan limit, " +
                 $"{all.Count(p => p.Last.Fleets > 2 * Math.Max(1, p.Last.Ships / 10))}/{all.Count} fragmented fleets, " +
                 $"median T5-all day {Median(all.Select(p => p.Health.T5Day.Max()).ToList())}.");
+            Console.WriteLine($"Star charts: {results.Sum(r => r.Surveys)} surveys, {results.Sum(r => r.ChartsListed)} listed, " +
+                $"{results.Sum(r => r.ChartsSold)} sold, {results.Sum(r => r.Charts)} charts held; " +
+                $"orders: {results.Sum(r => r.ListOrders)} list, {results.Sum(r => r.BuyOrders)} buy.");
 
             if (csv != null)
                 WriteCsv(csv, results);
@@ -92,6 +95,8 @@ namespace Unruled.SimLab
             public ulong Seed;
             public long CitadelFall, Victory, Orders;
             public List<PlayerResult> Players;
+            public int Charts, ChartsListed, ChartsSold, Surveys;
+            public long ListOrders, BuyOrders;
         }
 
         private sealed class Health
@@ -116,8 +121,19 @@ namespace Unruled.SimLab
             var r = new Result
             {
                 Seed = game.Seed, CitadelFall = game.CitadelFallTick, Victory = game.VictoryTick, Orders = game.Orders,
-                Players = new List<PlayerResult>()
+                Players = new List<PlayerResult>(), Charts = game.Sim.SystemCharts.Count,
+                ChartsListed = game.Sim.ChartListings.Count
             };
+            for (int i = 0; i < game.Sim.ChartListings.Count; i++)
+                r.ChartsSold += game.Sim.ChartListings.At(i).Sales;
+            foreach (var counts in game.ActionCounts.Values)
+            {
+                r.ListOrders += counts[(int)Unruled.Core.AI.AiAction.ListChart];
+                r.BuyOrders += counts[(int)Unruled.Core.AI.AiAction.BuyChart];
+            }
+            for (int i = 0; i < game.Sim.StarSystems.Count; i++)
+                if (game.Sim.StarSystems.At(i).FirstSurveyorPlayerId > 0)
+                    r.Surveys++;
             var last = game.History[game.History.Count - 1];
             for (int idx = 0; idx < last.Players.Count; idx++)
             {

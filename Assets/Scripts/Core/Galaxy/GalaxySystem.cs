@@ -148,6 +148,13 @@ namespace Unruled.Core.Galaxy
                 Learn(playerId, _sites.Get(site).ClusterId, ChartSource.Arrival, tick);
         }
 
+        /// <summary>The player whose survey materialised the cluster's system; 0 for setup systems or none.</summary>
+        public int FirstSurveyor(int clusterId)
+        {
+            var system = SystemOf(clusterId);
+            return !system.IsNull && _systems.Has(system) ? _systems.Get(system).FirstSurveyorPlayerId : 0;
+        }
+
         /// <summary>Records the player whose survey materialised the cluster's system.</summary>
         internal void SetFirstSurveyor(int clusterId, int playerId)
         {

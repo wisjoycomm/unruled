@@ -44,10 +44,18 @@ namespace Unruled.Tests.Core.Galaxy
             return wallet;
         }
 
-        // Runs a command straight through the handler (latency is the issuer's business, tested elsewhere).
-        private void Run(int playerId, CommandType type, EntityId target, int a = 0, int b = 0, EntityId param = default)
+        // Runs a chart order (from the player's own base, about a system) straight through the handler; latency is the
+        // issuer's business, tested elsewhere.
+        private void Run(int playerId, CommandType type, int cluster, int a = 0, int b = 0) =>
+            Run(playerId, type, CoreOf(playerId), a, b, default, cluster);
+
+        private void Run(int playerId, CommandType type, EntityId target, int a = 0, int b = 0, EntityId param = default,
+            int cluster = 0)
         {
-            var command = new DelayedPlayerCommand { PlayerId = playerId, CommandType = type, Target = target, ParamA = a, ParamB = b };
+            var command = new DelayedPlayerCommand
+            {
+                PlayerId = playerId, CommandType = type, Target = target, ParamA = a, ParamB = b, ParamC = cluster
+            };
             if (!param.IsNull)
                 command.ParamEntity = param;
             _sim.Charts.Handle(command, _sim.Clock.CurrentTick);
@@ -57,11 +65,11 @@ namespace Unruled.Tests.Core.Galaxy
         public void Share_GivesTheChartForFree_OnlyFromSomeoneWhoKnowsIt()
         {
             Assert.IsFalse(_sim.Galaxy.Knows(2, _charted));
-            Run(3, CommandType.ShareChart, SiteOf(_charted), a: 2);
+            Run(3, CommandType.ShareChart, _charted, a: 2);
             Assert.IsFalse(_sim.Galaxy.Knows(2, _charted), "player 3 doesn't know it, so can't share it");
 
             long cash = _sim.Ledger.Balance(Wallet(2));
-            Run(1, CommandType.ShareChart, SiteOf(_charted), a: 2);
+            Run(1, CommandType.ShareChart, _charted, a: 2);
             Assert.IsTrue(_sim.Galaxy.Knows(2, _charted));
             Assert.AreEqual(cash, _sim.Ledger.Balance(Wallet(2)));
         }
@@ -69,8 +77,8 @@ namespace Unruled.Tests.Core.Galaxy
         [Test]
         public void PlayerShop_AnyKnowerSells_EachBuyerPaysOnce_AndTheListingStays()
         {
-            Run(1, CommandType.ShareChart, SiteOf(_charted), a: 2);
-            Run(2, CommandType.ListChart, SiteOf(_charted), a: (int)ChartShop.Player, b: 30);
+            Run(1, CommandType.ShareChart, _charted, a: 2);
+            Run(2, CommandType.ListChart, _charted, a: (int)ChartShop.Player, b: 30);
             var listing = _sim.Charts.FindListing(2, _charted, ChartShop.Player);
             Assert.IsFalse(listing.IsNull, "a second-hand knower may sell on its own shop");
 
@@ -91,13 +99,13 @@ namespace Unruled.Tests.Core.Galaxy
         [Test]
         public void WorldShop_OnlyTheFirstSurveyor_PaysTheFee_StaTakesItsCut_AndTheRegistryPosts()
         {
-            Run(1, CommandType.ShareChart, SiteOf(_charted), a: 2);
-            Run(2, CommandType.ListChart, SiteOf(_charted), a: (int)ChartShop.World, b: 100);
+            Run(1, CommandType.ShareChart, _charted, a: 2);
+            Run(2, CommandType.ListChart, _charted, a: (int)ChartShop.World, b: 100);
             Assert.IsTrue(_sim.Charts.FindListing(2, _charted, ChartShop.World).IsNull, "not the first surveyor");
 
             var galaxy = _sim.Balance.Galaxy;
             long seller = _sim.Ledger.Balance(Wallet(1)), sta = _sim.Ledger.Balance(_sim.StaTollPool);
-            Run(1, CommandType.ListChart, SiteOf(_charted), a: (int)ChartShop.World, b: 100);
+            Run(1, CommandType.ListChart, _charted, a: (int)ChartShop.World, b: 100);
             var listing = _sim.Charts.FindListing(1, _charted, ChartShop.World);
             Assert.IsFalse(listing.IsNull);
             Assert.AreEqual(seller - galaxy.ChartListingFeeCents, _sim.Ledger.Balance(Wallet(1)));
@@ -107,7 +115,7 @@ namespace Unruled.Tests.Core.Galaxy
                 posted |= _sim.Bulletins.At(i).Kind == BulletinKind.ChartRegistered && _sim.Bulletins.At(i).PlayerId == 1;
             Assert.IsTrue(posted, "the STA registry publishes the listing");
 
-            Run(1, CommandType.ListChart, SiteOf(_charted), a: (int)ChartShop.World, b: 100);
+            Run(1, CommandType.ListChart, _charted, a: (int)ChartShop.World, b: 100);
             Assert.AreEqual(seller - galaxy.ChartListingFeeCents, _sim.Ledger.Balance(Wallet(1)), "registered once");
 
             seller = _sim.Ledger.Balance(Wallet(1));
@@ -122,33 +130,56 @@ namespace Unruled.Tests.Core.Galaxy
         [Test]
         public void Buy_Refused_WhenBroke_OrFromOwnListing_OrAtSomeoneElsesSite_AndCancelWithdraws()
         {
-            Run(1, CommandType.ListChart, SiteOf(_charted), a: (int)ChartShop.Player, b: 1_000_000);
+            Run(1, CommandType.ListChart, _charted, a: (int)ChartShop.Player, b: 1_000_000);
             var listing = _sim.Charts.FindListing(1, _charted, ChartShop.Player);
             Run(3, CommandType.BuyChart, CoreOf(3), param: listing);
             Assert.IsFalse(_sim.Galaxy.Knows(3, _charted), "can't afford it");
             Run(3, CommandType.BuyChart, CoreOf(1), param: listing);
             Assert.IsFalse(_sim.Galaxy.Knows(3, _charted), "the order must travel to the buyer's own base");
 
-            Run(2, CommandType.CancelChartListing, SiteOf(_charted), a: (int)ChartShop.Player);
+            Run(2, CommandType.CancelChartListing, _charted, a: (int)ChartShop.Player);
             Assert.IsTrue(_sim.ChartListings.Has(listing), "only the seller withdraws it");
-            Run(1, CommandType.CancelChartListing, SiteOf(_charted), a: (int)ChartShop.Player);
+            Run(1, CommandType.CancelChartListing, _charted, a: (int)ChartShop.Player);
             Assert.IsFalse(_sim.ChartListings.Has(listing));
         }
 
         [Test]
-        public void Issuer_RefusesListingAChartThePlayerDoesntKnow()
+        public void ChartOrders_FromSomeoneElsesSite_ChangeNothing()
         {
-            var list = new DelayedPlayerCommand
+            Run(1, CommandType.ListChart, CoreOf(2), a: (int)ChartShop.Player, b: 10, cluster: _charted);
+            Assert.IsTrue(_sim.Charts.FindListing(1, _charted, ChartShop.Player).IsNull);
+            Run(1, CommandType.ShareChart, CoreOf(2), a: 2, cluster: _charted);
+            Assert.IsFalse(_sim.Galaxy.Knows(2, _charted));
+        }
+
+        [Test]
+        public void Ai_ListsAChartItSurveyedFirst_OnTheWorldShop_AndARivalAiBuysIt()
+        {
+            var seller = _sim.Players.EntityAt(0);
+            var buyer = _sim.Players.EntityAt(1);
+            _sim.Ai.Assign(seller, 2);
+            _sim.Ai.Assign(buyer, 2);
+            _sim.Ledger.Grant(Wallet(2), 10_000 * global::Unruled.Core.Economy.Wallet.CentsPerCredit); // idle cash
+            int home2 = _sim.Sites.Get(CoreOf(2)).ClusterId;
+            _sim.Galaxy.Learn(2, _sim.Sites.Get(_game.CoreBase).ClusterId, ChartSource.Share, 0); // knows space next to it
+
+            // Chart trades are thought over once an hour; orders land after their signal latency.
+            for (int hour = 0; hour < 6 && !_sim.Galaxy.Knows(2, _charted); hour++)
             {
-                PlayerId = 2, CommandType = CommandType.ListChart, Target = SiteOf(_charted), ParamA = 0, ParamB = 10
-            };
-            Assert.AreEqual(IssueResult.Uncharted, _sim.Issuer.Issue(list, out _));
+                _sim.Clock.Advance(SimTick.TicksPerHour - _sim.Clock.CurrentTick % SimTick.TicksPerHour);
+                _sim.Ai.Think(_sim.Clock.CurrentTick);
+                _sim.Clock.Advance(_sim.Balance.Ai.ThinkIntervalTicks);
+                _sim.Ai.Think(_sim.Clock.CurrentTick);
+            }
+            Assert.IsFalse(_sim.Charts.FindListing(1, _charted, ChartShop.World).IsNull, "the first surveyor lists it on the world shop");
+            Assert.IsTrue(_sim.Galaxy.Knows(2, _charted), "a rival next to it buys it");
+            Assert.AreNotEqual(home2, _charted);
         }
 
         [Test]
         public void Listings_RoundTripThroughASave()
         {
-            Run(1, CommandType.ListChart, SiteOf(_charted), a: (int)ChartShop.World, b: 40);
+            Run(1, CommandType.ListChart, _charted, a: (int)ChartShop.World, b: 40);
             var loaded = SaveGame.Load(_sim.Balance, SaveGame.Write(_sim));
             Assert.AreEqual(1, loaded.ChartListings.Count);
             Assert.AreEqual(4000, loaded.ChartListings.At(0).PriceCents);

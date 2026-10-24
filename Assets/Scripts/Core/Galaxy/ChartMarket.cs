@@ -10,15 +10,14 @@ namespace Unruled.Core.Galaxy
     /// Owns <see cref="ChartListing"/>: how star charts change hands. Knowledge itself stays with
     /// <see cref="GalaxySystem"/>; a chart sold or shared is learnt through its one door.
     /// <list type="bullet">
-    /// <item>ShareChart (Target: a site of the system; ParamA: the recipient player) gives the chart for free.</item>
-    /// <item>ListChart (Target: a site of the system; ParamA: <see cref="ChartShop"/>; ParamB: price in credits) offers
-    /// it at a fixed price. Anyone who knows the system may list it on their own shop, once. Only the system's first
-    /// surveyor may list it on THE SYSTEM's world shop, once per system, paying the STA listing fee; the STA registry
-    /// publishes it.</item>
-    /// <item>CancelChartListing (Target: a site of the system; ParamA: the shop) withdraws the seller's listing.</item>
-    /// <item>BuyChart (Target: an own site, so the order travels to the buyer's base; ParamEntity: the listing) pays the
-    /// price once and the buyer knows the system for good; on the world shop the STA keeps its cut. The listing stays
-    /// for the next buyer.</item>
+    /// Every chart order targets an own site, so it travels to the player's base, and names the system by its cluster id.
+    /// <item>ShareChart (ParamA: the recipient player; ParamC: cluster) gives the chart for free.</item>
+    /// <item>ListChart (ParamA: <see cref="ChartShop"/>; ParamB: price in credits; ParamC: cluster) offers it at a fixed
+    /// price. Anyone who knows the system may list it on their own shop, once. Only the system's first surveyor may list
+    /// it on THE SYSTEM's world shop, once per system, paying the STA listing fee; the STA registry publishes it.</item>
+    /// <item>CancelChartListing (ParamA: the shop; ParamC: cluster) withdraws the seller's listing.</item>
+    /// <item>BuyChart (ParamEntity: the listing) pays the price once and the buyer knows the system for good; on the
+    /// world shop the STA keeps its cut. The listing stays for the next buyer.</item>
     /// </list>
     /// Players THE SYSTEM bars from trading can't list or buy. Invalid, unaffordable or pointless orders (sharing or
     /// buying what the other side already knows) change nothing.
@@ -57,13 +56,16 @@ namespace Unruled.Core.Galaxy
             switch (command.CommandType)
             {
                 case CommandType.ShareChart:
-                    Share(command.PlayerId, command.Target, command.ParamA, tick);
+                    if (IsOwnSite(command.PlayerId, command.Target))
+                        Share(command.PlayerId, command.ParamC, command.ParamA, tick);
                     break;
                 case CommandType.ListChart:
-                    List(command.PlayerId, command.Target, command.ParamA, command.ParamB, tick);
+                    if (IsOwnSite(command.PlayerId, command.Target))
+                        List(command.PlayerId, command.ParamC, command.ParamA, command.ParamB, tick);
                     break;
                 case CommandType.CancelChartListing:
-                    Cancel(command.PlayerId, command.Target, command.ParamA);
+                    if (IsOwnSite(command.PlayerId, command.Target))
+                        Cancel(command.PlayerId, command.ParamC, command.ParamA);
                     break;
                 case CommandType.BuyChart:
                     Buy(command.PlayerId, command.Target, command.ParamEntity, tick);
@@ -86,18 +88,18 @@ namespace Unruled.Core.Galaxy
             return default;
         }
 
-        private void Share(int playerId, EntityId site, int recipient, long tick)
+        private void Share(int playerId, int cluster, int recipient, long tick)
         {
-            if (!TryKnownCluster(playerId, site, out int cluster) || recipient <= 0 || recipient == playerId ||
+            if (!KnowsSystem(playerId, cluster) || recipient <= 0 || recipient == playerId ||
                 !_ledger.TryFindPlayerWallet(recipient, out _))
                 return;
             _galaxy.Learn(recipient, cluster, ChartSource.Share, tick);
         }
 
-        private void List(int playerId, EntityId site, int shopParam, int priceCredits, long tick)
+        private void List(int playerId, int cluster, int shopParam, int priceCredits, long tick)
         {
             if (shopParam < 0 || shopParam > (int)ChartShop.World || priceCredits <= 0 || !_access.MayTrade(playerId, tick) ||
-                !TryKnownCluster(playerId, site, out int cluster) || !_ledger.TryFindPlayerWallet(playerId, out var wallet))
+                !KnowsSystem(playerId, cluster) || !_ledger.TryFindPlayerWallet(playerId, out var wallet))
                 return;
             var shop = (ChartShop)shopParam;
             if (!FindListing(playerId, cluster, shop).IsNull)
@@ -117,18 +119,18 @@ namespace Unruled.Core.Galaxy
             });
         }
 
-        private void Cancel(int playerId, EntityId site, int shopParam)
+        private void Cancel(int playerId, int cluster, int shopParam)
         {
-            if (shopParam < 0 || shopParam > (int)ChartShop.World || !_sites.Has(site))
+            if (shopParam < 0 || shopParam > (int)ChartShop.World)
                 return;
-            var listing = FindListing(playerId, _sites.Get(site).ClusterId, (ChartShop)shopParam);
+            var listing = FindListing(playerId, cluster, (ChartShop)shopParam);
             if (!listing.IsNull && _listings.Get(listing).SellerPlayerId == playerId)
                 _world.Destroy(listing);
         }
 
         private void Buy(int playerId, EntityId ownSite, EntityId listingId, long tick)
         {
-            if (!_listings.Has(listingId) || !_sites.Has(ownSite) || _sites.Get(ownSite).OwnerPlayerId != playerId ||
+            if (!_listings.Has(listingId) || !IsOwnSite(playerId, ownSite) ||
                 !_access.MayTrade(playerId, tick) || !_ledger.TryFindPlayerWallet(playerId, out var buyer))
                 return;
             ref var listing = ref _listings.Get(listingId);
@@ -143,13 +145,10 @@ namespace Unruled.Core.Galaxy
             _galaxy.Learn(playerId, listing.ClusterId, ChartSource.Purchase, tick);
         }
 
-        private bool TryKnownCluster(int playerId, EntityId site, out int cluster)
-        {
-            cluster = -1;
-            if (playerId <= 0 || !_sites.Has(site))
-                return false;
-            cluster = _sites.Get(site).ClusterId;
-            return !_galaxy.SystemOf(cluster).IsNull && _galaxy.Knows(playerId, cluster);
-        }
+        private bool IsOwnSite(int playerId, EntityId site) =>
+            playerId > 0 && _sites.Has(site) && _sites.Get(site).OwnerPlayerId == playerId;
+
+        private bool KnowsSystem(int playerId, int cluster) =>
+            !_galaxy.SystemOf(cluster).IsNull && _galaxy.Knows(playerId, cluster);
     }
 }

@@ -361,6 +361,8 @@ namespace Unruled.Core.Simulation
         /// hand once it holds under 1,000 (kept for tolls, never locked in WTO orders), repays debt from cash above 4,000,
         /// and repays all it can once the debt falls due. A core-base deposit with under 300,000 ore left no longer counts as a
         /// source, so it settles another before the home one runs dry. A fleet of 8+ line ships splits for a two-lane attack.
+        /// Star charts: it lists the systems it charted first on THE SYSTEM's world shop and its other non-home charts on
+        /// its own shop for 200 credits, and buys charts next to space it knows for up to 200 from idle cash (PROVISIONAL).
         /// </summary>
         public static AiBalance CreateAiBalance() => new AiBalance(
             thinkIntervalTicks: 10, fullBatteryScans: 10, resupplyAmmoPerLineShip: 5, loadAmmoPerLineShip: 20, loadFuel: 1_500,
@@ -369,7 +371,7 @@ namespace Unruled.Core.Simulation
             sellAbove: 3_000, fillAbove: 20, sellBatch: 500, tradePricePercent: 5, tradeOrderTicks: 3_600, bidBudgetPercent: 50,
             homeSettleWeight: 1_000, battleLineShips: 60, loadBatteryPerEwShip: 5, cashReserveCredits: 2_000,
             travelCashCredits: 1_000, scanBatteryReserve: 1_000, scanWindowTicks: 600, coreOreLowReserve: 300_000,
-            flankMinLineShips: 8,
+            flankMinLineShips: 8, chartPriceCredits: 200,
             presets: new[]
             {
                 new AiPreset(1, "Sentinel_Defender", 1_800, 1_700, 1_500, 1_400, 0, 0, 75_000, 650, 30, 3),

@@ -133,7 +133,7 @@ namespace Unruled.SimLab
                 var order = Sim.Ai.OrderAt(i);
                 Orders++;
                 if (!ActionCounts.TryGetValue(order.PlayerId, out var counts))
-                    ActionCounts[order.PlayerId] = counts = new int[32];
+                    ActionCounts[order.PlayerId] = counts = new int[64];
                 int slot = (int)order.Action;
                 if (slot >= 0 && slot < counts.Length)
                     counts[slot]++;

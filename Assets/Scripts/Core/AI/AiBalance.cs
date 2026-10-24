@@ -80,6 +80,7 @@ namespace Unruled.Core.AI
         public readonly int BattleLineShips; // line ships the shipyard builds up to, at the research tier
         public readonly int CoreOreLowReserve; // a core-base deposit with less ore left than this no longer counts as a source: it settles another
         public readonly int FlankMinLineShips; // a fleet splits for a two-lane attack only with at least this many line ships
+        public readonly int ChartPriceCredits; // the price it lists its star charts at, and the most it pays for one
         private readonly AiPreset[] _presets;
 
         public AiBalance(
@@ -88,8 +89,9 @@ namespace Unruled.Core.AI
             int rawStockCap, int loadUpkeepIntervals, byte citadelAssaultTier, int sellAbove, int fillAbove, int sellBatch,
             int tradePricePercent, int tradeOrderTicks, int bidBudgetPercent, int homeSettleWeight,
             int battleLineShips, int loadBatteryPerEwShip, long cashReserveCredits, long travelCashCredits, int scanBatteryReserve, int scanWindowTicks,
-            int coreOreLowReserve, int flankMinLineShips, AiPreset[] presets)
+            int coreOreLowReserve, int flankMinLineShips, int chartPriceCredits, AiPreset[] presets)
         {
+            if (chartPriceCredits < 1) throw new ArgumentOutOfRangeException(nameof(chartPriceCredits));
             if (thinkIntervalTicks < 1) throw new ArgumentOutOfRangeException(nameof(thinkIntervalTicks));
             if (fullBatteryScans < 1) throw new ArgumentOutOfRangeException(nameof(fullBatteryScans));
             if (resupplyAmmoPerLineShip < 1) throw new ArgumentOutOfRangeException(nameof(resupplyAmmoPerLineShip));
@@ -153,6 +155,7 @@ namespace Unruled.Core.AI
             BattleLineShips = battleLineShips;
             CoreOreLowReserve = coreOreLowReserve;
             FlankMinLineShips = flankMinLineShips;
+            ChartPriceCredits = chartPriceCredits;
             _presets = (AiPreset[])presets.Clone();
         }
 
