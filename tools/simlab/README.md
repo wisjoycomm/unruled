@@ -55,6 +55,15 @@ of them at 0, hours at the loan limit, fleets vs ships, AI orders per day, and t
 `refused%` is orders turned down for any reason but a radio storm; `blackout%` is orders that hit a storm over
 their target and are simply retried next think until it clears (no cost, and the right call without LaserComms).
 
+## Profile: cost per tick as the world grows
+
+```powershell
+dotnet run -c Release -- profile --empires 100,400,1000 --hours 1
+```
+
+For each empire count it joins that many bots into one game, runs the given game hours, and prints the cost per tick
+(total and per empire), live memory, hubs, systems and lanes, and each sim system's and the AI's share of the time.
+
 ## How it fits the architecture
 
 - Tooling only: lives in `tools/`, not in the Unity project. It only links Core's `.cs` files, so Core

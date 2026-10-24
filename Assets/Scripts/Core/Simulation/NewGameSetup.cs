@@ -73,8 +73,10 @@ namespace Unruled.Core.Simulation
         /// refineries, stock, fleet), a dormant jump gate from its outermost orbit to a hub orbit that is not the
         /// Citadel's, its own uninhabited frontier systems linked from that orbit, catalog hyperlanes to every
         /// materialised neighbour, and charts of its home, the hub and its frontiers. The hub is the Citadel system with
-        /// the fewest jump gates landing in it. Deterministic for a world seed and join order. Changes nothing that is
-        /// saved in a new shape, so a game saved after a join loads as any other.
+        /// the fewest jump gates landing in it; once every hub holds <see cref="Galaxy.GalaxyBalance.PlayersPerHub"/>
+        /// gates, a new hub (with its own Citadel) opens further round the spawn ring, so each group of players shares a
+        /// hub of its own and the galaxy grows as separate neighbourhoods. Deterministic for a world seed and join order.
+        /// Changes nothing that is saved in a new shape, so a game saved after a join loads as any other.
         /// </summary>
         public static NewGame Join(SimulationWorld sim, byte archetype = 0)
         {
@@ -85,7 +87,9 @@ namespace Unruled.Core.Simulation
             for (int i = 0; i < sim.Players.Count; i++)
                 playerId = Math.Max(playerId, sim.Players.At(i).PlayerId + 1);
 
-            var hubSite = QuietestHub(sim);
+            var hubSite = QuietestHub(sim, out int hubGates);
+            if (hubGates >= sim.Balance.Galaxy.PlayersPerHub)
+                hubSite = OpenHub(sim);
             int hub = sim.Sites.Get(hubSite).ClusterId;
             var galaxy = sim.Galaxy;
             galaxy.TryGetStar(hub, out var hubStar);
@@ -132,10 +136,11 @@ namespace Unruled.Core.Simulation
         }
 
         // The Citadel whose system the fewest jump gates land in (lowest cluster on a tie): late joiners spread over hubs.
-        private static EntityId QuietestHub(SimulationWorld sim)
+        private static EntityId QuietestHub(SimulationWorld sim, out int bestGates)
         {
             EntityId best = default;
-            int bestGates = int.MaxValue, bestCluster = int.MaxValue;
+            bestGates = int.MaxValue;
+            int bestCluster = int.MaxValue;
             for (int c = 0; c < sim.Citadels.Count; c++)
             {
                 var site = sim.Citadels.EntityAt(c);
@@ -155,6 +160,27 @@ namespace Unruled.Core.Simulation
                 }
             }
             return best;
+        }
+
+        // A new hub for the next spawn group: the free hub-class star nearest the next point round the spawn ring, one hub
+        // spacing on from the last (the k-th hub sits k spacings round from the first). Its system gets deposits and a
+        // Citadel like the first hub's; its Citadel site is returned.
+        private static EntityId OpenHub(SimulationWorld sim)
+        {
+            var catalog = sim.Galaxy.Catalog;
+            var b = catalog.Balance;
+            var rng = new SplitMix64(catalog.Seed ^ 0xA5A5A5A5UL);
+            int first = rng.NextInt(0, FixedMath.AngleMask);
+            long ring = Math.Max(1, b.SpawnRingSectors);
+            int step = (int)Math.Max(1, (long)FixedMath.AngleFull * b.HubSpacingSectors * 1000 / (6283L * ring));
+            int angle = (first + sim.Citadels.Count * step) & FixedMath.AngleMask;
+            int x = (int)((ring * FixedMath.Cos(angle)) >> 16);
+            int y = (int)((ring * FixedMath.Sin(angle)) >> 16);
+            var star = Nearest(catalog, x, y, StarClass.Hub, UsedStars(sim), b.RadiusSectors);
+            int cluster = sim.Galaxy.NextClusterId();
+            var sites = SetUpHub(sim, star, cluster);
+            LinkHyperlanesOf(sim, cluster);
+            return sites[sites.Length - 1];
         }
 
         // The hub orbit with the fewest gates landing on it, never the Citadel (lowest orbit on a tie).
@@ -280,13 +306,12 @@ namespace Unruled.Core.Simulation
             return orbits;
         }
 
-        private static void SetUpContestedCluster(SimulationWorld sim, in StarRecord star, int firstPlayerId, int participants)
+        // A hub system: its sites with deposits, and THE SYSTEM's Citadel on the outermost orbit. Returns its orbits.
+        private static EntityId[] SetUpHub(SimulationWorld sim, in StarRecord star, int clusterId)
         {
-            ulong systemSeed = star.SystemSeed;
-            int contested = ContestedClusterId(participants);
-            var sites = Materialise(sim, star, contested);
+            var sites = Materialise(sim, star, clusterId);
             var deposits = new List<EntityId>();
-            var siteRng = new SplitMix64(systemSeed);
+            var siteRng = new SplitMix64(star.SystemSeed);
             for (int i = 0; i < sites.Length; i++)
             {
                 if (!sim.Stockpiles.Has(sites[i]))
@@ -295,7 +320,14 @@ namespace Unruled.Core.Simulation
             }
             var citadel = sites[sites.Length - 1];
             AddMissingRaws(sim, sites, deposits, default, citadel, home: false);
+            sim.Defense.CreateCitadel(citadel);
+            return sites;
+        }
 
+        private static void SetUpContestedCluster(SimulationWorld sim, in StarRecord star, int firstPlayerId, int participants)
+        {
+            var sites = SetUpHub(sim, star, ContestedClusterId(participants));
+            var citadel = sites[sites.Length - 1];
             int orbits = sites.Length;
             for (int p = 0; p < participants; p++)
             {
@@ -306,7 +338,6 @@ namespace Unruled.Core.Simulation
             for (int g = 0; g < sim.JumpGates.Count; g++)
                 if (sim.JumpGates.At(g).FarSite == citadel)
                     throw new InvalidOperationException($"{participants} participants leave no free orbit for the Citadel.");
-            sim.Defense.CreateCitadel(citadel);
         }
 
         private static void SetUpUninhabitedClusters(SimulationWorld sim, StarRecord[] picks, int participants)

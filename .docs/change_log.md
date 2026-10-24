@@ -181,3 +181,4 @@
 - 2026-10-24 - Claude - roadmap: product target recorded (10k+ player MMO + single-player campaign, authoritative server)
 - 2026-10-24 - Claude - O1 offline shield: PresenceSystem (LogIn/LogOut/EndProtection), shield 10 min after logout, max 8 h per logout and 48 h per week, newcomers protected until the tutorial ends; combat, claims and strikes respect it. Save schema 8.
 - 2026-10-24 - Claude - O2 governor: SetStandingOrders ParamB 1 hands an offline empire to a governor that thinks every 10 min and only manages what it has (no building, borrowing, claims, raids, research). Save schema 9. Soak 5x30d with seat 1 governed: governed seats never starve, hold 14 ships and 1 site, end debt-free.
+- 2026-10-24 - Claude - O3 scale: Sim Lab profile verb; route-search cache sized by a memory budget (13.7 GB -> 0.5 GB at 1,000 empires); joiners open a new hub with its own Citadel once a hub is full (cost per empire flat at ~1.75 us/tick)

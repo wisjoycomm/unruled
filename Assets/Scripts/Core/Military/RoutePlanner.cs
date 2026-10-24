@@ -9,10 +9,15 @@ namespace Unruled.Core.Military
     /// by its speed, in whole ticks rounded up; lanes above the fleet's tech tier are skipped. Ties go to the lower
     /// site index, and neighbours are relaxed in ascending lane order, so the same map always gives the same route.
     /// Buffers grow only when the map grows; planning runs when an order is handled, never in a tick loop.
+    /// Searches are cached per start, tier and toll choice; each holds arrays as long as the site index space, so the
+    /// number cached follows a memory budget (fewer as the world grows) rather than a fixed count. The cache only saves
+    /// repeat work: every route is the same with or without it.
     /// </summary>
     public sealed class RoutePlanner
     {
         private const int MaxCachedStates = 4096;
+        private const int MinCachedStates = 64;
+        private const int CacheBudgetSlots = 8 * 1024 * 1024; // site slots across all cached searches (~33 bytes each)
 
         private readonly StarlaneGraph _graph;
         private readonly ComponentStore<StarlaneEdge> _lanes;
@@ -22,6 +27,7 @@ namespace Unruled.Core.Military
         private readonly SearchState _avoided = new SearchState();
         private readonly SearchState[] _states = new SearchState[MaxCachedStates];
         private int _stateCount;
+        private int _stateCap = MaxCachedStates;
         private int _evictCursor;
         private int _cacheVersion = -1;
         private int _cacheLaneCount = -1;
@@ -267,6 +273,9 @@ namespace Unruled.Core.Military
                 _cacheSiteCap = n;
                 _stateCount = 0;
                 _evictCursor = 0;
+                _stateCap = Math.Max(MinCachedStates, Math.Min(MaxCachedStates, CacheBudgetSlots / Math.Max(1, n)));
+                for (int s = _stateCap; s < _states.Length; s++)
+                    _states[s] = null;
                 if (++_cacheGen == int.MaxValue)
                 {
                     Array.Clear(_keyStamp, 0, _keyStamp.Length);
@@ -289,7 +298,7 @@ namespace Unruled.Core.Military
                     return cached;
             }
             int slot;
-            if (_stateCount < MaxCachedStates)
+            if (_stateCount < _stateCap)
             {
                 slot = _stateCount++;
                 if (_states[slot] == null)
@@ -298,7 +307,7 @@ namespace Unruled.Core.Military
             else
             {
                 slot = _evictCursor;
-                _evictCursor = (_evictCursor + 1) % MaxCachedStates;
+                _evictCursor = (_evictCursor + 1) % _stateCap;
                 int oldKey = _states[slot].CacheKey;
                 if (oldKey >= 0 && oldKey < _keyStamp.Length && _keySlot[oldKey] == slot)
                     _keyStamp[oldKey] = 0;

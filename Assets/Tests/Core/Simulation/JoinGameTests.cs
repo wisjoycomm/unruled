@@ -118,5 +118,33 @@ namespace Unruled.Tests.Core.Simulation
             Assert.IsTrue(loaded.Ledger.TryFindPlayerWallet(id, out _));
             loaded.Clock.Advance(10);
         }
+
+        [Test]
+        public void Join_PastAHubsGroupSize_OpensANewHubWithItsOwnCitadel()
+        {
+            int perHub = _sim.Balance.Galaxy.PlayersPerHub;
+            int citadels = _sim.Citadels.Count;
+            int joins = 0;
+            while (_sim.Citadels.Count == citadels)
+            {
+                NewGameSetup.Join(_sim, 1);
+                Assert.LessOrEqual(++joins, perHub + 1, "a full hub hands newcomers to a new one");
+            }
+            var newHub = _sim.Citadels.EntityAt(_sim.Citadels.Count - 1);
+            int newCluster = _sim.Sites.Get(newHub).ClusterId;
+            var last = _sim.Players.At(_sim.Players.Count - 1).PlayerId;
+            bool gated = false;
+            for (int g = 0; g < _sim.JumpGates.Count; g++)
+                if (_sim.JumpGates.At(g).OwnerPlayerId == last)
+                    gated |= _sim.Sites.Get(_sim.JumpGates.At(g).FarSite).ClusterId == newCluster;
+            Assert.IsTrue(gated, "the newcomer gates into the new hub");
+            Assert.IsTrue(_sim.Galaxy.Knows(last, newCluster));
+
+            for (int t = 0; t < SimTick.TicksPerHour; t++)
+            {
+                _sim.Clock.Advance(1);
+                _sim.Ai.Think(_sim.Clock.CurrentTick);
+            }
+        }
     }
 }
