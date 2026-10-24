@@ -33,7 +33,8 @@ namespace Unruled.Core.Simulation
         /// 1.5% of stars are hubs (a Citadel) and 12% can host a home outside the core. New players spawn in groups of
         /// 6 around a hub on a ring 900 sectors out; each group's homes and frontiers are taken within 6 sectors of
         /// its hub, and successive hubs keep 12 sectors apart. Charting a neighbour frontier star costs a fleet 300 fuel
-        /// and opens a 400-long highway (the jump-gate lane length) to it.
+        /// and opens a 400-long highway (the jump-gate lane length) to it. Registering a chart on THE SYSTEM's world shop
+        /// costs a 50-credit STA fee, and the STA keeps 10% of each world-shop sale.
         /// </summary>
         public static GalaxyBalance CreateGalaxyBalance() => new GalaxyBalance(
             sectorSize: 1000,
@@ -54,7 +55,9 @@ namespace Unruled.Core.Simulation
             searchRadiusSectors: 6,
             hubSpacingSectors: 12,
             surveyFuel: 300,
-            surveyLaneLength: 400);
+            surveyLaneLength: 400,
+            chartListingFeeCents: 50 * Wallet.CentsPerCredit,
+            chartSaleCutPermille: 100);
 
         /// <summary>
         /// GDD §1: an alliance that brings down the System Citadel forms The Directorate; Tier-5 nuclear ships are the

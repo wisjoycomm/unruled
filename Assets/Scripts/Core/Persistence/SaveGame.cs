@@ -15,7 +15,7 @@ namespace Unruled.Core.Persistence
         public const int SchemaVersion = 7;
 
         private const int TopLevelKeys = 6;
-        private const int StoreCount = 41;
+        private const int StoreCount = 42;
 
         private delegate void Writer<T>(MsgPackWriter w, in T value);
         private delegate T Reader<T>(MsgPackReader r);
@@ -81,6 +81,7 @@ namespace Unruled.Core.Persistence
             if (storeCount > 38) WriteStore(w, sim.StarSystems, ComponentFormatters.Write);
             if (storeCount > 39) WriteStore(w, sim.SystemNames, ComponentFormatters.Write);
             if (storeCount > 40) WriteStore(w, sim.SystemCharts, ComponentFormatters.Write);
+            if (storeCount > 41) WriteStore(w, sim.ChartListings, ComponentFormatters.Write);
             return w.ToArray();
         }
 
@@ -149,6 +150,7 @@ namespace Unruled.Core.Persistence
             if (stores > 38) ReadStore(r, sim.World, sim.StarSystems, ComponentFormatters.ReadStarSystem);
             if (stores > 39) ReadStore(r, sim.World, sim.SystemNames, ComponentFormatters.ReadSystemName);
             if (stores > 40) ReadStore(r, sim.World, sim.SystemCharts, ComponentFormatters.ReadSystemChart);
+            if (stores > 41) ReadStore(r, sim.World, sim.ChartListings, ComponentFormatters.ReadChartListing);
             if (stores > StoreCount) r.Skip(stores - StoreCount);
             r.Skip(keys - TopLevelKeys);
             if (!r.End) throw new FormatException("Save has bytes after its end.");

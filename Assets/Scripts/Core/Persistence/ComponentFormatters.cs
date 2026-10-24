@@ -466,6 +466,32 @@ namespace Unruled.Core.Persistence
             return v;
         }
 
+        // ChartListing: [seller, cluster, price cents, shop, listed tick, sales].
+        internal static void Write(MsgPackWriter w, in ChartListing v)
+        {
+            w.WriteArrayHeader(6);
+            w.Write(v.SellerPlayerId);
+            w.Write(v.ClusterId);
+            w.Write(v.PriceCents);
+            w.Write((int)v.Shop);
+            w.Write(v.ListedTick);
+            w.Write(v.Sales);
+        }
+
+        internal static ChartListing ReadChartListing(MsgPackReader r)
+        {
+            int n = r.ReadArrayHeader();
+            var v = new ChartListing();
+            if (n > 0) v.SellerPlayerId = r.ReadInt32();
+            if (n > 1) v.ClusterId = r.ReadInt32();
+            if (n > 2) v.PriceCents = r.ReadInt64();
+            if (n > 3) v.Shop = (ChartShop)r.ReadByte();
+            if (n > 4) v.ListedTick = r.ReadInt64();
+            if (n > 5) v.Sales = r.ReadInt32();
+            SkipNewer(r, n, 6);
+            return v;
+        }
+
         // SystemChart: [player, cluster, known tick, source].
         internal static void Write(MsgPackWriter w, in SystemChart v)
         {

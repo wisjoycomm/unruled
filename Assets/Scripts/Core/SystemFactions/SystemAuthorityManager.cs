@@ -70,7 +70,8 @@ namespace Unruled.Core.SystemFactions
     /// </list>
     /// Defence fleets are THE SYSTEM's: nothing can be looted from them.
     /// </summary>
-    public sealed class SystemAuthorityManager : ISimSystem, IOffenceLog, IMarketAccess, IResearchIncidentLog, ISystemRenameLog
+    public sealed class SystemAuthorityManager : ISimSystem, IOffenceLog, IMarketAccess, IResearchIncidentLog, ISystemRenameLog,
+        IChartRegistryLog
     {
         private readonly World _world;
         private readonly ComponentStore<SystemSanction> _sanctions;
@@ -132,6 +133,13 @@ namespace Unruled.Core.SystemFactions
             _bulletins.Add(_world.Create(), new SystemBulletin
             {
                 Agency = SystemAgency.Sta, Kind = BulletinKind.SystemRenamed, PlayerId = playerId, Site = system,
+                Tick = tick, ExpiresTick = tick + _balance.BulletinTicks
+            });
+
+        public void ReportChartRegistered(int playerId, EntityId system, long tick) =>
+            _bulletins.Add(_world.Create(), new SystemBulletin
+            {
+                Agency = SystemAgency.Sta, Kind = BulletinKind.ChartRegistered, PlayerId = playerId, Site = system,
                 Tick = tick, ExpiresTick = tick + _balance.BulletinTicks
             });
 

@@ -20,7 +20,8 @@ namespace Unruled.Core.SystemFactions
         NuclearStrike = 1,
         CallToArms = 2,
         PrototypeBlast = 3,
-        SystemRenamed = 4
+        SystemRenamed = 4,
+        ChartRegistered = 5 // the STA registry lists a system's chart on THE SYSTEM's world shop
     }
 
     /// <summary>
@@ -32,7 +33,7 @@ namespace Unruled.Core.SystemFactions
         public SystemAgency Agency;
         public BulletinKind Kind;
         public int PlayerId; // the player concerned, 0 if none
-        public Ecs.EntityId Site; // for SystemRenamed: the StarSystem entity
+        public Ecs.EntityId Site; // for SystemRenamed and ChartRegistered: the StarSystem entity
         public long Tick;
         public long ExpiresTick;
     }

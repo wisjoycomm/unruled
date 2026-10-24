@@ -181,10 +181,15 @@ namespace Unruled.View.UI
                     return "PROTOTYPE BLAST AT " + where + " · STRESS TEST FAILED (" + who + ")";
                 case BulletinKind.SystemRenamed:
                     return "STA REGISTRY · " + RenamedText(bulletin.Site) + " (" + who + ")";
+                case BulletinKind.ChartRegistered:
+                    return "STA REGISTRY · CHART OF " + RegisteredText(bulletin.Site) + " ON THE WORLD SHOP (" + who + ")";
                 default:
                     return "BULLETIN AT " + where;
             }
         }
+
+        private string RegisteredText(EntityId system) =>
+            _sim.StarSystems.Has(system) ? UiFormat.SystemLabel(_sim, _sim.StarSystems.Get(system).ClusterId) : "A SYSTEM";
 
         private string RenamedText(EntityId system)
         {

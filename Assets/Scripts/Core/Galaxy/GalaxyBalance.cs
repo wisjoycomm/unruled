@@ -30,13 +30,18 @@ namespace Unruled.Core.Galaxy
         public readonly int HubSpacingSectors; // a new hub sits at least this far from the last one
         public readonly int SurveyFuel; // fuel a fleet burns to chart a new neighbour star
         public readonly int SurveyLaneLength; // length of the highway a survey opens to the new system
+        public readonly long ChartListingFeeCents; // STA fee to register a chart on THE SYSTEM's world shop
+        public readonly int ChartSaleCutPermille; // STA share of each world-shop chart sale
 
         public GalaxyBalance(
             int sectorSize, int radiusSectors, int coreRadiusSectors, int armCount, int armWindingPerSector,
             int armWidthAngle, int maxStarsPerSector, int armStarsPerSector, int fieldStarsPerSector, int neighbourCount,
             int maxNeighbourDistance, int hubSharePermille, int homeSharePermille, int spawnRingSectors, int playersPerHub,
-            int searchRadiusSectors, int hubSpacingSectors, int surveyFuel, int surveyLaneLength)
+            int searchRadiusSectors, int hubSpacingSectors, int surveyFuel, int surveyLaneLength, long chartListingFeeCents,
+            int chartSaleCutPermille)
         {
+            if (chartListingFeeCents < 0) throw new ArgumentOutOfRangeException(nameof(chartListingFeeCents));
+            if (chartSaleCutPermille < 0 || chartSaleCutPermille > 1000) throw new ArgumentOutOfRangeException(nameof(chartSaleCutPermille));
             if (surveyFuel < 0) throw new ArgumentOutOfRangeException(nameof(surveyFuel));
             if (surveyLaneLength < 1) throw new ArgumentOutOfRangeException(nameof(surveyLaneLength));
             if (sectorSize < 1) throw new ArgumentOutOfRangeException(nameof(sectorSize));
@@ -76,6 +81,8 @@ namespace Unruled.Core.Galaxy
             HubSpacingSectors = hubSpacingSectors;
             SurveyFuel = surveyFuel;
             SurveyLaneLength = surveyLaneLength;
+            ChartListingFeeCents = chartListingFeeCents;
+            ChartSaleCutPermille = chartSaleCutPermille;
         }
 
         public int RadiusUnits => RadiusSectors * SectorSize;

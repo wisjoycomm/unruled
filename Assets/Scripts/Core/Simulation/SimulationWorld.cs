@@ -49,6 +49,8 @@ namespace Unruled.Core.Simulation
         public readonly ComponentStore<StarSystem> StarSystems;
         public readonly ComponentStore<SystemName> SystemNames;
         public readonly ComponentStore<SystemChart> SystemCharts;
+        public readonly ComponentStore<ChartListing> ChartListings;
+        public readonly ChartMarket Charts;
         public readonly GalaxySystem Galaxy;
         public readonly ComponentStore<WtoOrder> WtoOrders;
         public readonly ComponentStore<ItemMarket> ItemMarkets;
@@ -143,6 +145,7 @@ namespace Unruled.Core.Simulation
             StarSystems = World.CreateStore<StarSystem>();
             SystemNames = World.CreateStore<SystemName>();
             SystemCharts = World.CreateStore<SystemChart>();
+            ChartListings = World.CreateStore<ChartListing>();
 
             Ledger = new Ledger(Wallets);
             WtoFeePool = World.Create();
@@ -302,6 +305,12 @@ namespace Unruled.Core.Simulation
             Clock.Register(Galaxy);
             Commands.Register(CommandType.RenameSystem, Galaxy);
             Commands.Register(CommandType.Survey, new SurveySystem(this, balance.Galaxy));
+            Charts = new ChartMarket(World, ChartListings, StarSystems, Sites, Galaxy, Ledger, StaTollPool, Authority, Authority,
+                balance.Galaxy);
+            Commands.Register(CommandType.ShareChart, Charts);
+            Commands.Register(CommandType.ListChart, Charts);
+            Commands.Register(CommandType.CancelChartListing, Charts);
+            Commands.Register(CommandType.BuyChart, Charts);
         }
 
         /// <summary>

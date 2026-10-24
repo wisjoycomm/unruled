@@ -44,7 +44,11 @@ namespace Unruled.Core.Simulation
         NuclearStrike = 38,
         BuildRelay = 39,
         Survey = 40,
-        RenameSystem = 41
+        RenameSystem = 41,
+        ShareChart = 42,
+        ListChart = 43,
+        CancelChartListing = 44,
+        BuyChart = 45
     }
 
     /// <summary>A player or AI command that takes effect after signal latency. Shared by players and the Server 2 AI.</summary>
