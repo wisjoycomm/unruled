@@ -94,6 +94,18 @@ namespace Unruled.View.UI
 
         public static string SiteName(in SiteInfo site) => StarName(site.ClusterId) + "-" + Number(site.OrbitIndex + 1);
 
+        /// <summary>NASA planet type, as the planet card names it.</summary>
+        public static string PlanetClassName(PlanetClass planet)
+        {
+            switch (planet)
+            {
+                case PlanetClass.SuperEarth: return "SUPER-EARTH";
+                case PlanetClass.NeptuneLike: return "NEPTUNE-LIKE";
+                case PlanetClass.GasGiant: return "GAS GIANT";
+                default: return "TERRESTRIAL";
+            }
+        }
+
         public static string StarName(int clusterId)
         {
             int wrap = clusterId / StarNames.Length;

@@ -66,6 +66,7 @@ namespace Unruled.SimLab
                     rivalCount.Value, ng.DepositsPerSite, ng.SurfaceReserve, ng.DeepCrustReserve, ng.CoreFractureReserve,
                     ng.CoreBaseReserveMultiplier, coreDeps, ng.FleetTechTier, ng.FleetLineShips, ng.FleetEwShips,
                     ng.FleetSupplyTenders, ng.FleetCargoConvoys, new[] { ItemId.RawTungsten, ItemId.RawUranium },
+                    DefaultGameBalance.CreateRawsByPlanetClass(),
                     startRefs, coreStock, fleetStock, ng.UninhabitedClustersPerParticipant);
             }
             return new GameBalanceConfig(d.Recipes, d.Universe, d.Starlanes, d.Weather, d.Refinery, d.Mining, d.Lifecycle,

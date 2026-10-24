@@ -1052,9 +1052,12 @@ namespace Unruled.View
                     : _lifecycleGlyphs[(int)site.LifecycleState];
                 if (glyph != null)
                 {
-                    // Full-colour planet plate; the owner reads from the ring around it, the lanes stop at the dark disc.
+                    // Full-colour planet plate sized by NASA type; the owner reads from the ring around it, the lanes
+                    // stop at the dark disc.
                     _mesh.Disc(p, 16f, UnruledPalette.Board);
-                    float size = citadel || coreOwner != 0 ? 54f : 40f;
+                    float size = citadel || coreOwner != 0 ? 54f : PlanetSizePx(PlanetClasses.Of(in site, _sim.Balance.Universe));
+                    if (glyph == _lifecycleGlyphs[(int)PlanetLifecycleState.PristineWorld] && !citadel && coreOwner == 0)
+                        glyph = PlanetClassGlyph(PlanetClasses.Of(in site, _sim.Balance.Universe), glyph);
                     if (!citadel)
                         _mesh.Ring(p, size * 0.5f + 4f, 2f, stroke);
                     PlaceGlyph(p, size, glyph, Husked(Color.white, site.LifecycleState));
@@ -1074,6 +1077,17 @@ namespace Unruled.View
                         UnruledPalette.Iaea);
                 PlaceLabel(p - new Vector2(0f, (coreOwner != 0 ? 40f : 32f) * _mesh.UnitsPerPixel), UiFormat.SiteName(site), UnruledPalette.InkSoft, true, false);
             }
+        }
+
+        private static float PlanetSizePx(PlanetClass planet) =>
+            planet == PlanetClass.GasGiant ? 56f : planet == PlanetClass.NeptuneLike ? 48f : planet == PlanetClass.SuperEarth ? 44f : 36f;
+
+        // A pristine world drawn by its NASA type (gas and ice giants have their own art); the fallback keeps the
+        // lifecycle sprite until the art for a type exists.
+        private Texture2D PlanetClassGlyph(PlanetClass planet, Texture2D fallback)
+        {
+            var art = _art.PlanetOfClass(planet);
+            return art != null ? art : fallback;
         }
 
         // Own site works under the glyph: one tick per rig (dim when paused or retracting), one square per refinery.

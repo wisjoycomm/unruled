@@ -17,11 +17,16 @@ namespace Unruled.Core.Board
         public readonly int HabitableRadius;
         public readonly int HabitableWidth;
         public readonly int AtmoNoiseMilli;
+        public readonly int IceLineRadius; // past this a giant is Neptune-like (see PlanetClasses)
+        public readonly int SuperEarthPermille; // share of habitable-zone rocky worlds that are Super-Earths
 
         public UniverseGenBalance(
             int sitesPerSystem, int minRadius, int radiusStep, int radiusNoise, int minSiteSpacing,
-            int angleStep, int angleJitter, int habitableRadius, int habitableWidth, int atmoNoiseMilli)
+            int angleStep, int angleJitter, int habitableRadius, int habitableWidth, int atmoNoiseMilli,
+            int iceLineRadius, int superEarthPermille)
         {
+            if (iceLineRadius <= habitableRadius + habitableWidth / 2) throw new ArgumentOutOfRangeException(nameof(iceLineRadius));
+            if (superEarthPermille < 0 || superEarthPermille > 1000) throw new ArgumentOutOfRangeException(nameof(superEarthPermille));
             if (sitesPerSystem < 1) throw new ArgumentOutOfRangeException(nameof(sitesPerSystem));
             if (minRadius < minSiteSpacing) throw new ArgumentOutOfRangeException(nameof(minRadius));
             if (radiusNoise < 0) throw new ArgumentOutOfRangeException(nameof(radiusNoise));
@@ -44,6 +49,8 @@ namespace Unruled.Core.Board
             HabitableRadius = habitableRadius;
             HabitableWidth = habitableWidth;
             AtmoNoiseMilli = atmoNoiseMilli;
+            IceLineRadius = iceLineRadius;
+            SuperEarthPermille = superEarthPermille;
         }
     }
 }

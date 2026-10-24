@@ -1,4 +1,5 @@
 using System;
+using Unruled.Core.Board;
 using Unruled.Core.Economy;
 
 namespace Unruled.Core.Simulation
@@ -38,6 +39,7 @@ namespace Unruled.Core.Simulation
         public readonly int FleetCargoConvoys;
         private readonly ItemStack[] _coreBaseDeposits;
         private readonly ItemId[] _homeExcludedRaws;
+        private readonly int[] _rawMaskByPlanetClass; // bit per raw slot, per PlanetClass
         private readonly ItemId[] _startingRefineries;
         private readonly ItemStack[] _coreBaseStock;
         private readonly ItemStack[] _fleetStock;
@@ -46,7 +48,8 @@ namespace Unruled.Core.Simulation
             int rivalCount, int depositsPerSite, int surfaceReserve, int deepCrustReserve, int coreFractureReserve,
             int coreBaseReserveMultiplier,
             ItemStack[] coreBaseDeposits, byte fleetTechTier, int fleetLineShips, int fleetEwShips, int fleetSupplyTenders,
-            int fleetCargoConvoys, ItemId[] homeExcludedRaws, ItemId[] startingRefineries, ItemStack[] coreBaseStock,
+            int fleetCargoConvoys, ItemId[] homeExcludedRaws, ItemId[][] rawsByPlanetClass, ItemId[] startingRefineries,
+            ItemStack[] coreBaseStock,
             ItemStack[] fleetStock, int uninhabitedClustersPerParticipant = 1)
         {
             if (rivalCount < 0) throw new ArgumentOutOfRangeException(nameof(rivalCount));
@@ -67,6 +70,20 @@ namespace Unruled.Core.Simulation
             for (int i = 0; i < homeExcludedRaws.Length; i++)
                 if (!ItemIds.IsRaw(homeExcludedRaws[i]))
                     throw new ArgumentException($"{homeExcludedRaws[i]} is not a raw item.", nameof(homeExcludedRaws));
+            if (rawsByPlanetClass == null || rawsByPlanetClass.Length != PlanetClasses.Count)
+                throw new ArgumentException($"Needs one raw list per planet class ({PlanetClasses.Count}).", nameof(rawsByPlanetClass));
+            _rawMaskByPlanetClass = new int[PlanetClasses.Count];
+            for (int c = 0; c < rawsByPlanetClass.Length; c++)
+            {
+                if (rawsByPlanetClass[c] == null) throw new ArgumentNullException(nameof(rawsByPlanetClass));
+                for (int i = 0; i < rawsByPlanetClass[c].Length; i++)
+                {
+                    var raw = rawsByPlanetClass[c][i];
+                    if (!ItemIds.IsRaw(raw))
+                        throw new ArgumentException($"{raw} is not a raw item.", nameof(rawsByPlanetClass));
+                    _rawMaskByPlanetClass[c] |= 1 << ItemIds.ToSlot(raw);
+                }
+            }
             if (startingRefineries == null) throw new ArgumentNullException(nameof(startingRefineries));
             for (int i = 0; i < startingRefineries.Length; i++)
                 if (!ItemIds.IsRefined(startingRefineries[i]))
@@ -95,6 +112,10 @@ namespace Unruled.Core.Simulation
         public ItemStack CoreBaseDeposit(int index) => _coreBaseDeposits[index];
 
         public bool IsExcludedAtHome(ItemId raw) => Array.IndexOf(_homeExcludedRaws, raw) >= 0;
+
+        /// <summary>Whether a planet of this class can hold deposits of <paramref name="raw"/>.</summary>
+        public bool PlanetHolds(PlanetClass planet, ItemId raw) =>
+            (_rawMaskByPlanetClass[(int)planet] & (1 << ItemIds.ToSlot(raw))) != 0;
 
         public int StartingRefineryCount => _startingRefineries.Length;
         public ItemId StartingRefinery(int index) => _startingRefineries[index];

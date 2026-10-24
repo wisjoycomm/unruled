@@ -141,7 +141,28 @@ namespace Unruled.Core.Simulation
             telemetryChanceBonusPerTierPermille: 50);
 
         /// <summary>
-        /// GDD §1 and §2.1 A: own home system with no tungsten or uranium, deposits by preferred ESI window.
+        /// PROVISIONAL: what each NASA planet type can hold. Terrestrial: rock and metal (all but methane, the only
+        /// home of tungsten and uranium); Super-Earth: water, a thick nitrogen atmosphere, life, iron, silicon and
+        /// titanium; Neptune-like: ices of water, methane and nitrogen; Gas Giant: methane and nitrogen from the
+        /// atmosphere. Indexed by <see cref="PlanetClass"/>.
+        /// </summary>
+        public static ItemId[][] CreateRawsByPlanetClass() => new[]
+        {
+            new[]
+            {
+                ItemId.RawWater, ItemId.RawNitrogen, ItemId.RawBiomass, ItemId.RawIron, ItemId.RawCopper, ItemId.RawSilicon,
+                ItemId.RawTitanium, ItemId.RawTungsten, ItemId.RawUranium
+            },
+            new[]
+            {
+                ItemId.RawWater, ItemId.RawNitrogen, ItemId.RawBiomass, ItemId.RawIron, ItemId.RawSilicon, ItemId.RawTitanium
+            },
+            new[] { ItemId.RawWater, ItemId.RawMethane, ItemId.RawNitrogen },
+            new[] { ItemId.RawMethane, ItemId.RawNitrogen }
+        };
+
+        /// <summary>
+        /// GDD §1 and §2.1 A: own home system with no tungsten or uranium, deposits by preferred ESI window and planet class.
         /// 4 AI rivals (archetypes 1..4), 2 deposits per site of 60,000 / 120,000 / 30,000 ore (5x at a core
         /// base), a core base that mines its own life support (water 4 rigs, nitrogen 3, methane 2, biomass 2: the coolant
         /// and fuel refineries, which run first, outrun the drills' burn at both depths, and rations cover fleet upkeep),
@@ -165,6 +186,7 @@ namespace Unruled.Core.Simulation
             fleetSupplyTenders: 2,
             fleetCargoConvoys: 0,
             homeExcludedRaws: new[] { ItemId.RawTungsten, ItemId.RawUranium },
+            rawsByPlanetClass: CreateRawsByPlanetClass(),
             startingRefineries: new[]
             {
                 ItemId.ItemCoolant, ItemId.ItemFuel, ItemId.ItemOxygen, ItemId.ItemRations, ItemId.ItemSteel, ItemId.ItemBattery
@@ -475,7 +497,9 @@ namespace Unruled.Core.Simulation
 
         /// <summary>
         /// 8 orbits from r = 300 to ~1560 (step 180 ± 25, min spacing 120), golden-angle spacing ±10°, habitable zone
-        /// centred on orbit 3 (R_HZ 840, W_HZ 700, ±0.05 atmo noise).
+        /// centred on orbit 3 (R_HZ 840, W_HZ 700, ±0.05 atmo noise). Planet classes (NASA types, PROVISIONAL):
+        /// orbits inside r 490 are hot Terrestrials, 490–1190 Terrestrial or (35%) Super-Earth, past 1190 Gas Giants,
+        /// past the 1450 ice line Neptune-likes, so every system has rocky inner worlds and giants outside.
         /// </summary>
         public static UniverseGenBalance CreateUniverseGenBalance() => new UniverseGenBalance(
             sitesPerSystem: 8,
@@ -487,7 +511,9 @@ namespace Unruled.Core.Simulation
             angleJitter: 1820, // ~10 degrees
             habitableRadius: 840,
             habitableWidth: 700,
-            atmoNoiseMilli: 50);
+            atmoNoiseMilli: 50,
+            iceLineRadius: 1450,
+            superEarthPermille: 350);
 
         public static RecipeDatabase CreateRecipeDatabase()
         {

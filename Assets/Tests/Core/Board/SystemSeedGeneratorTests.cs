@@ -89,7 +89,8 @@ namespace Unruled.Tests.Core.Board
         {
             Assert.Throws<ArgumentException>(() => new UniverseGenBalance(
                 sitesPerSystem: 8, minRadius: 300, radiusStep: 150, radiusNoise: 20, minSiteSpacing: 120,
-                angleStep: 40503, angleJitter: 0, habitableRadius: 840, habitableWidth: 700, atmoNoiseMilli: 0));
+                angleStep: 40503, angleJitter: 0, habitableRadius: 840, habitableWidth: 700, atmoNoiseMilli: 0,
+                iceLineRadius: 1450, superEarthPermille: 350));
         }
     }
 }

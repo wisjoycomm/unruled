@@ -343,19 +343,26 @@ namespace Unruled.Core.Simulation
                     continue;
                 EntityId best = default;
                 int bestDistance = int.MaxValue;
+                bool bestHolds = false;
                 for (int i = 0; i < sites.Length; i++)
                 {
                     var site = sites[i];
                     if ((site == coreBase && sites.Length > 1) || site == citadel)
                         continue;
-                    int esi = sim.Sites.Get(site).BaseEsiMilli;
+                    ref var info = ref sim.Sites.Get(site);
+                    bool holds = rules.PlanetHolds(PlanetClasses.Of(in info, sim.Balance.Universe), raw);
+                    int esi = info.BaseEsiMilli;
                     int distance = esi < item.PreferredEsiMinMilli ? item.PreferredEsiMinMilli - esi
                         : esi > item.PreferredEsiMaxMilli ? esi - item.PreferredEsiMaxMilli : 0;
-                    if (distance < bestDistance ||
-                        (distance == bestDistance && sim.Sites.Get(site).OrbitIndex < sim.Sites.Get(best).OrbitIndex))
+                    // A planet whose type holds the raw beats any that doesn't; then the nearest ESI, then the lowest orbit.
+                    bool better = best.IsNull || (holds && !bestHolds) ||
+                                  (holds == bestHolds && (distance < bestDistance ||
+                                                          (distance == bestDistance && info.OrbitIndex < sim.Sites.Get(best).OrbitIndex)));
+                    if (better)
                     {
                         best = site;
                         bestDistance = distance;
+                        bestHolds = holds;
                     }
                 }
                 var added = sim.World.Create();
@@ -386,12 +393,13 @@ namespace Unruled.Core.Simulation
         /// <summary>
         /// Picks up to <see cref="NewGameBalance.DepositsPerSite"/> distinct raw items whose preferred ESI window holds
         /// the site's ESI, in a seeded order. A site no window holds gets one deposit of the nearest window's item.
-        /// Home systems skip the raw items excluded at home.
+        /// Home systems skip the raw items excluded at home, and every planet skips the raws its NASA class can't hold.
         /// </summary>
         private static void AddDeposits(SimulationWorld sim, ref SplitMix64 rng, EntityId site, int esiMilli, bool home,
             List<EntityId> added)
         {
             var rules = sim.Balance.NewGame;
+            var planet = PlanetClasses.Of(in sim.Sites.Get(site), sim.Balance.Universe);
             Span<ItemId> candidates = stackalloc ItemId[ItemIds.RawCount];
             int count = 0;
             ItemId nearest = ItemId.None;
@@ -399,7 +407,7 @@ namespace Unruled.Core.Simulation
             for (int slot = 0; slot < ItemIds.RawCount; slot++)
             {
                 var raw = ItemIds.FromSlot(slot);
-                if (home && rules.IsExcludedAtHome(raw))
+                if ((home && rules.IsExcludedAtHome(raw)) || !rules.PlanetHolds(planet, raw))
                     continue;
                 ref readonly var item = ref sim.Balance.Recipes.GetItem(raw);
                 if (!item.HasPreferredEsi)

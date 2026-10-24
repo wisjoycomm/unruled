@@ -184,7 +184,8 @@ namespace Unruled.View.UI
             if (portrait != null)
                 _portrait.style.backgroundImage = new StyleBackground(portrait);
             _title.text = UiFormat.SiteName(in site) + (capital ? " · CAPITAL" : "");
-            _meta.text = OwnerText(site.OwnerPlayerId) + " · " + LifecycleText(site.LifecycleState);
+            _meta.text = UiFormat.PlanetClassName(PlanetClasses.Of(in site, _sim.Balance.Universe)) + " · " +
+                         OwnerText(site.OwnerPlayerId) + " · " + LifecycleText(site.LifecycleState);
 
             long max = System.Math.Max(1L, System.Math.Max(surface, System.Math.Max(crust, core)));
             SetLayer(0, surface, max);
