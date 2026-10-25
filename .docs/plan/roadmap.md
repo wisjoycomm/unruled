@@ -62,6 +62,11 @@ Where the project is heading, why, and rule exceptions. Build order follows GDD 
   never steps, so every view reads the same stores online and offline and no view code changed. Orders still pass
   the client's `CommandIssuer` checks, then the server issues them again. No lockstep: clients can't cheat by
   reading hidden state they never receive. Measured about 75 B per game second per client.
+- 2026-10-25 — **Server views are the scaling wall (measured)**: with real socket clients (`loadtest`), views took
+  526 us per player per tick at 100 players (53 ms/tick) and 1,115 us at 200 connected in a 309-empire world
+  (223 ms/tick); the simulation stayed under 1 ms. Every view scans the whole world, so one process caps near 400
+  players. Plan P2-P7 (encode once, interest index, dirty entities, views on worker threads, 1 s send rate) targets
+  <= 50 us per player per tick for 10,000 players per world.
 
 ## Exceptions
 

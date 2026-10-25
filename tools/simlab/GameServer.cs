@@ -42,6 +42,9 @@ namespace Unruled.SimLab
         private int _speed = 1; // sim ticks per real second
         private double _tickCostMs;
         private double _aiCostMs;
+        private double _viewCostMs; // all connected players' views, per loop pass that ran ticks
+        private double _passTicks; // ticks per loop pass (smoothed): views cost per tick = _viewCostMs / _passTicks
+        private readonly Stopwatch _viewWatch = new Stopwatch();
         private double _measuredTps;
         private DateTime _lastSave = DateTime.MinValue;
         private string _lastSaveError;
@@ -182,8 +185,14 @@ namespace Unruled.SimLab
                     else
                         owed = 0;
                     if (ran > 0)
+                    {
+                        _viewWatch.Restart();
                         foreach (var session in _sessions.Values)
                             session.PushView(_sim.Clock.CurrentTick);
+                        _viewWatch.Stop();
+                        _viewCostMs = _viewCostMs * 0.95 + _viewWatch.Elapsed.TotalMilliseconds * 0.05;
+                        _passTicks = _passTicks * 0.95 + ran * 0.05;
+                    }
                     if ((DateTime.UtcNow - _lastSave).TotalMinutes >= AutosaveMinutes)
                         SaveLocked("autosave");
                 }
@@ -483,6 +492,9 @@ namespace Unruled.SimLab
                     tps = Math.Round(_measuredTps, 1),
                     tickCostMs = Math.Round(_tickCostMs, 3),
                     aiCostMs = Math.Round(_aiCostMs, 3),
+                    viewCostMsPerPass = Math.Round(_viewCostMs, 3),
+                    viewUsPerPlayer = _sessions.Count == 0 ? 0 : Math.Round(_viewCostMs * 1000 / _sessions.Count, 1),
+                    ticksPerPass = Math.Round(_passTicks, 2),
                     budgetPercent = Math.Round(_tickCostMs * _speed / 10.0, 2),
                     empires = _sim.Players.Count,
                     online = _online.Count,
@@ -610,6 +622,30 @@ namespace Unruled.SimLab
                 foreach (var session in _sessions.Values)
                     session.Close("server stopping");
                 SaveLocked("saved on stop");
+            }
+        }
+
+        /// <summary>
+        /// Load tests: joins <paramref name="count"/> new players (newcomer protected) and issues each a token. Returns
+        /// the tokens; nothing is logged per player.
+        /// </summary>
+        public List<string> IssueTestTokens(int count)
+        {
+            lock (_gate)
+            {
+                var tokens = new List<string>(count);
+                for (int i = 0; i < count; i++)
+                {
+                    var joined = NewGameSetup.Join(_sim);
+                    int playerId = _sim.Players.Get(joined.PlayerHq).PlayerId;
+                    _sim.Presence.GrantNewcomerProtection(joined.PlayerHq);
+                    string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+                    _tokenOwners[HashToken(Encoding.ASCII.GetBytes(token))] = playerId;
+                    tokens.Add(token);
+                }
+                SaveTokens();
+                Log(0, $"load test: {count} players joined with tokens");
+                return tokens;
             }
         }
 

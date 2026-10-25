@@ -22,6 +22,8 @@ namespace Unruled.SimLab
                 return Play.Run(args);
             if (args.Length > 0 && args[0] == "server")
                 return ServeWorld(args);
+            if (args.Length > 0 && args[0] == "loadtest")
+                return LoadTest.Run(args);
             if (args.Length > 0 && args[0] == "client")
                 return ConsoleClient.Run(args);
             if (args.Length > 0 && args[0] == "profile")
@@ -75,6 +77,7 @@ namespace Unruled.SimLab
             app.MapPost("/api/server/logout", (PlayerRequest r) => server.LogOut(r.PlayerId, r.Governor));
             app.MapPost("/api/server/tutorial-done", (PlayerRequest r) => server.EndTutorial(r.PlayerId));
             app.MapPost("/api/server/token", (PlayerRequest r) => server.IssueToken(r.PlayerId, r.Join));
+            app.MapPost("/api/server/test-tokens", (int count) => server.IssueTestTokens(Math.Clamp(count, 1, 20_000)));
             app.MapGet("/api/server/viewhash", (int playerId) => server.ViewHash(playerId));
             app.MapPost("/api/bots/add", (BotRequest r) => server.AddBot(r.Preset ?? 1));
             app.MapPost("/api/bots/set", (BotRequest r) => server.SetBot(r.PlayerId, r.Preset, r.Hold));
