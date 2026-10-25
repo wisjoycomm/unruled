@@ -185,13 +185,17 @@ namespace Unruled.SimLab
                     }
                     else
                         owed = 0;
-                    if (ran > 0)
+                    _unsentTicks += ran;
+                    // one view per client per real second at most, whatever the speed: a delta covers every tick since
+                    if (_unsentTicks > 0 && _sinceViews.ElapsedMilliseconds >= ViewIntervalMs)
                     {
                         _viewWatch.Restart();
                         PushViews();
                         _viewWatch.Stop();
                         _viewCostMs = _viewCostMs * 0.95 + _viewWatch.Elapsed.TotalMilliseconds * 0.05;
-                        _passTicks = _passTicks * 0.95 + ran * 0.05;
+                        _passTicks = _passTicks * 0.95 + _unsentTicks * 0.05;
+                        _unsentTicks = 0;
+                        _sinceViews.Restart();
                     }
                     if ((DateTime.UtcNow - _lastSave).TotalMinutes >= AutosaveMinutes)
                         SaveLocked("autosave");
@@ -830,6 +834,9 @@ namespace Unruled.SimLab
         }
 
         private const int ParallelViewsFrom = 32;
+        private const int ViewIntervalMs = 900; // just under a second, so real-time ticks never wait a whole extra second
+        private readonly Stopwatch _sinceViews = Stopwatch.StartNew();
+        private int _unsentTicks;
 
         // The hub belongs to the world: a new world (reset) gets a new one.
         private PlayerViewHub Views
