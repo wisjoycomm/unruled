@@ -16,7 +16,7 @@ namespace Unruled.SimLab
     {
         public readonly int PlayerId;
         public readonly DateTime Since = DateTime.UtcNow;
-        internal readonly PlayerView View;
+        internal readonly PlayerView View; // shares its hub with every session of the world
         private readonly Channel<byte[]> _outbox = Channel.CreateBounded<byte[]>(
             new BoundedChannelOptions(256) { SingleReader = true, FullMode = BoundedChannelFullMode.DropWrite });
         private readonly CancellationTokenSource _closed = new CancellationTokenSource();

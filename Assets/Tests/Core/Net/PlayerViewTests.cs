@@ -143,6 +143,32 @@ namespace Unruled.Tests.Core.Net
             Assert.AreEqual(0, _serverView.LastRemovals);
         }
 
+        [Test]
+        public void ViewsSharingAHub_WriteTheSameBytes_AsViewsWithTheirOwn()
+        {
+            var hub = new PlayerViewHub(_server);
+            var shared = new System.Collections.Generic.List<PlayerView>();
+            var alone = new System.Collections.Generic.List<PlayerView>();
+            for (int i = 0; i < _server.Players.Count; i++)
+            {
+                int id = _server.Players.At(i).PlayerId;
+                shared.Add(new PlayerView(hub, id));
+                alone.Add(new PlayerView(_server, id));
+            }
+            for (int t = 0; t < 600; t++)
+            {
+                Play(1);
+                hub.BeginPass();
+                for (int v = 0; v < shared.Count; v++)
+                {
+                    bool full = t % 200 == 0;
+                    byte[] a = shared[v].Write(full).ToArray();
+                    byte[] b = alone[v].Write(full).ToArray();
+                    CollectionAssert.AreEqual(b, a, $"player {shared[v].PlayerId} at tick {_server.Clock.CurrentTick}");
+                }
+            }
+        }
+
         private sealed class Outbox : ICommandSink
         {
             public readonly List<DelayedPlayerCommand> Sent = new List<DelayedPlayerCommand>();

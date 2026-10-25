@@ -7,8 +7,13 @@ namespace Unruled.Core.Net
 {
     internal delegate void ComponentWriter<T>(MsgPackWriter w, in T value);
     internal delegate T ComponentReader<T>(MsgPackReader r);
-    internal delegate bool ViewFilter<T>(EntityId entity, in T value);
-    internal delegate T ViewMask<T>(EntityId entity, in T value);
+
+    /// <summary>Which form of a component one player sees: -1 hidden, 0 in full, 1.. a masked form (see <see cref="ViewMask{T}"/>).</summary>
+    internal delegate int ViewForm<T>(EntityId entity, in T value);
+
+    /// <summary>A masked form of a component. It may depend on the form and the component, never on the player, so one
+    /// encoding serves every player who sees that form.</summary>
+    internal delegate T ViewMask<T>(int form, in T value);
 
     /// <summary>One component store as a <see cref="PlayerView"/> carries it.</summary>
     internal abstract class ViewChannel
@@ -21,29 +26,35 @@ namespace Unruled.Core.Net
     }
 
     /// <summary>
-    /// The view of one <see cref="ComponentStore{T}"/>: the components the filter shows (masked if a mask is set). A
-    /// delta holds only those whose encoding changed since the last write (by a 64-bit hash of it) and the entities
-    /// no longer shown.
+    /// The view of one <see cref="ComponentStore{T}"/>: the components the form function shows, in the form it picks.
+    /// Each (component, form) is encoded once per hub pass and shared by every view of the world; a view only compares
+    /// the encoding's 64-bit hash with the one it last sent and copies the bytes when they differ. A delta holds those
+    /// and the entities no longer shown.
     /// </summary>
     internal sealed class ViewChannel<T> : ViewChannel where T : struct
     {
         private readonly ComponentStore<T> _store;
         private readonly ComponentWriter<T> _write;
         private readonly ComponentReader<T> _read;
-        private readonly ViewFilter<T> _shows;
+        private readonly ViewForm<T> _form;
         private readonly ViewMask<T> _mask;
+        private readonly PlayerViewHub _hub;
+        private readonly EncodedCache _cache;
         private Dictionary<EntityId, ulong> _sent = new Dictionary<EntityId, ulong>();
         private Dictionary<EntityId, ulong> _next = new Dictionary<EntityId, ulong>();
         private readonly List<EntityId> _removed = new List<EntityId>();
 
-        public ViewChannel(ComponentStore<T> store, ComponentWriter<T> write, ComponentReader<T> read,
-            ViewFilter<T> shows = null, ViewMask<T> mask = null)
+        public ViewChannel(PlayerViewHub hub, int index, ComponentStore<T> store, ComponentWriter<T> write,
+            ComponentReader<T> read, ViewForm<T> form, int forms, ViewMask<T> mask)
         {
+            _hub = hub ?? throw new ArgumentNullException(nameof(hub));
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _write = write ?? throw new ArgumentNullException(nameof(write));
             _read = read ?? throw new ArgumentNullException(nameof(read));
-            _shows = shows;
+            if (forms < 1 || (forms > 1 && mask == null)) throw new ArgumentException("Masked forms need a mask.", nameof(forms));
+            _form = form;
             _mask = mask;
+            _cache = hub.Cache(index, forms);
         }
 
         public override void Write(MsgPackWriter body, MsgPackWriter scratch, bool full, ref int upserts, ref int removals)
@@ -52,29 +63,22 @@ namespace Unruled.Core.Net
                 _sent.Clear();
             _next.Clear();
             scratch.Rewind(0);
+            _cache.Begin(_hub.Epoch, _store.Count);
             int count = 0;
             for (int i = 0; i < _store.Count; i++)
             {
                 var entity = _store.EntityAt(i);
                 ref var value = ref _store.At(i);
-                if (_shows != null && !_shows(entity, in value))
+                int form = _form == null ? 0 : _form(entity, in value);
+                if (form < 0)
                     continue;
-                int mark = scratch.Length;
-                scratch.WriteArrayHeader(2);
-                ComponentFormatters.WriteEntity(scratch, entity);
-                if (_mask != null)
-                {
-                    var masked = _mask(entity, in value);
-                    _write(scratch, in masked);
-                }
-                else
-                    _write(scratch, in value);
-                ulong hash = Hash(scratch.WrittenSpan.Slice(mark));
+                if (!_cache.TryGet(form, i, out ulong hash))
+                    hash = Encode(form, i, entity, in value);
                 _next[entity] = hash;
                 if (_sent.TryGetValue(entity, out ulong old) && old == hash)
-                    scratch.Rewind(mark);
-                else
-                    count++;
+                    continue;
+                scratch.WriteRaw(_cache.Bytes(form, i));
+                count++;
             }
 
             _removed.Clear();
@@ -94,6 +98,24 @@ namespace Unruled.Core.Net
             var swap = _sent;
             _sent = _next;
             _next = swap;
+        }
+
+        private ulong Encode(int form, int slot, EntityId entity, in T value)
+        {
+            var w = _cache.BeginPut(form);
+            int mark = w.Length;
+            w.WriteArrayHeader(2);
+            ComponentFormatters.WriteEntity(w, entity);
+            if (form == 0)
+                _write(w, in value);
+            else
+            {
+                var masked = _mask(form, in value);
+                _write(w, in masked);
+            }
+            ulong hash = Hash(w.WrittenSpan.Slice(mark));
+            _cache.EndPut(form, slot, mark, hash);
+            return hash;
         }
 
         public override bool Apply(MsgPackReader r, bool full)

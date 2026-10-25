@@ -36,6 +36,8 @@ namespace Unruled.Core.Net
         private readonly HashSet<EntityId> _eyes = new HashSet<EntityId>(); // sites the player sees fleets at
         private DelayedPlayerCommand[] _pending = new DelayedPlayerCommand[8];
         private bool _wroteOnce;
+        private readonly PlayerViewHub _hub;
+        private readonly bool _ownHub; // a private hub: begin a pass on every write
 
         // Channel indexes whose change needs a rebuilt index on the client.
         private readonly int _laneChannel;
@@ -48,94 +50,123 @@ namespace Unruled.Core.Net
 
         public int PlayerId => _playerId;
 
-        public PlayerView(SimulationWorld sim, int playerId)
+        /// <summary>A view with its own hub: correct on its own, as when a client applies what the server sent.</summary>
+        public PlayerView(SimulationWorld sim, int playerId) : this(new PlayerViewHub(sim), playerId, true)
         {
-            _sim = sim ?? throw new ArgumentNullException(nameof(sim));
+        }
+
+        /// <summary>
+        /// A server's view of one player, sharing encodings with every other view on <paramref name="hub"/>. The host
+        /// calls <see cref="PlayerViewHub.BeginPass"/> once after each change of the world, before writing the views.
+        /// </summary>
+        public PlayerView(PlayerViewHub hub, int playerId) : this(hub, playerId, false)
+        {
+        }
+
+        private PlayerView(PlayerViewHub hub, int playerId, bool ownHub)
+        {
+            _hub = hub ?? throw new ArgumentNullException(nameof(hub));
+            _ownHub = ownHub;
+            var sim = hub.Sim;
+            _sim = sim;
             if (playerId <= 0) throw new ArgumentOutOfRangeException(nameof(playerId));
             _playerId = playerId;
             int me = playerId;
 
             // Board.
-            Add(sim.Sites, ComponentFormatters.Write, ComponentFormatters.ReadSiteInfo, (EntityId e, in SiteInfo v) => Knows(v.ClusterId));
+            Add(sim.Sites, ComponentFormatters.Write, ComponentFormatters.ReadSiteInfo, (EntityId e, in SiteInfo v) => Show(Knows(v.ClusterId)));
             _laneChannel = _channels.Count;
             Add(sim.Starlanes, ComponentFormatters.Write, ComponentFormatters.ReadStarlaneEdge,
-                (EntityId e, in StarlaneEdge v) => KnowsSite(v.SiteA) || KnowsSite(v.SiteB));
-            Add(sim.LaneWeather, ComponentFormatters.Write, ComponentFormatters.ReadLaneWeather, (EntityId e, in LaneWeather v) => KnowsLane(e));
-            Add(sim.StormFronts, ComponentFormatters.Write, ComponentFormatters.ReadStormFront, (EntityId e, in StormFront v) => Knows(v.ClusterId));
-            Add(sim.Weather, ComponentFormatters.Write, ComponentFormatters.ReadSiteWeather, (EntityId e, in SiteWeather v) => KnowsSite(e));
+                (EntityId e, in StarlaneEdge v) => Show(KnowsSite(v.SiteA) || KnowsSite(v.SiteB)));
+            Add(sim.LaneWeather, ComponentFormatters.Write, ComponentFormatters.ReadLaneWeather, (EntityId e, in LaneWeather v) => Show(KnowsLane(e)));
+            Add(sim.StormFronts, ComponentFormatters.Write, ComponentFormatters.ReadStormFront, (EntityId e, in StormFront v) => Show(Knows(v.ClusterId)));
+            Add(sim.Weather, ComponentFormatters.Write, ComponentFormatters.ReadSiteWeather, (EntityId e, in SiteWeather v) => Show(KnowsSite(e)));
 
             // Economy at sites and on fleets: stock only for the player's own sites and fleets, and THE SYSTEM's shop.
-            Add(sim.Stockpiles, ComponentFormatters.Write, ComponentFormatters.ReadStockpile, (EntityId e, in Stockpile v) => OwnsHolder(e));
-            Add(sim.Deposits, ComponentFormatters.Write, ComponentFormatters.ReadMineralDeposit, (EntityId e, in MineralDeposit v) => KnowsSite(v.Site));
-            Add(sim.Refineries, ComponentFormatters.Write, ComponentFormatters.ReadRefinery, (EntityId e, in Refinery v) => KnowsSite(v.Site),
-                (EntityId e, in Refinery v) => SiteOwner(v.Site) == me ? v : new Refinery { Site = v.Site, Output = v.Output, State = v.State });
-            Add(sim.Quarantines, ComponentFormatters.Write, ComponentFormatters.ReadSiteQuarantine, (EntityId e, in SiteQuarantine v) => KnowsSite(e));
+            Add(sim.Stockpiles, ComponentFormatters.Write, ComponentFormatters.ReadStockpile, (EntityId e, in Stockpile v) => Show(OwnsHolder(e)));
+            Add(sim.Deposits, ComponentFormatters.Write, ComponentFormatters.ReadMineralDeposit, (EntityId e, in MineralDeposit v) => Show(KnowsSite(v.Site)));
+            Add(sim.Refineries, ComponentFormatters.Write, ComponentFormatters.ReadRefinery,
+                (EntityId e, in Refinery v) => !KnowsSite(v.Site) ? Hidden : SiteOwner(v.Site) == me ? Full : Rival, 2,
+                (int f, in Refinery v) => new Refinery { Site = v.Site, Output = v.Output, State = v.State });
+            Add(sim.Quarantines, ComponentFormatters.Write, ComponentFormatters.ReadSiteQuarantine, (EntityId e, in SiteQuarantine v) => Show(KnowsSite(e)));
 
             // Players: every HQ (rivals' core base only when its system is charted), relays in charted systems.
-            Add(sim.Players, ComponentFormatters.Write, ComponentFormatters.ReadPlayerHq, null,
-                (EntityId e, in PlayerHq v) => v.PlayerId == me ? v
-                    : new PlayerHq { PlayerId = v.PlayerId, CoreBase = KnowsSite(v.CoreBase) ? v.CoreBase : default });
-            Add(sim.Relays, ComponentFormatters.Write, ComponentFormatters.ReadRelayStation, (EntityId e, in RelayStation v) => KnowsSite(e));
+            Add(sim.Players, ComponentFormatters.Write, ComponentFormatters.ReadPlayerHq,
+                (EntityId e, in PlayerHq v) => v.PlayerId == me ? Full : KnowsSite(v.CoreBase) ? Rival : RivalUncharted, 3,
+                (int f, in PlayerHq v) => new PlayerHq { PlayerId = v.PlayerId, CoreBase = f == Rival ? v.CoreBase : default });
+            Add(sim.Relays, ComponentFormatters.Write, ComponentFormatters.ReadRelayStation, (EntityId e, in RelayStation v) => Show(KnowsSite(e)));
 
             // Fleets: own in full; others only where the player has eyes, never their stock, route or debts.
-            Add(sim.Fleets, ComponentFormatters.Write, ComponentFormatters.ReadFleetUnit, (EntityId e, in FleetUnit v) => SeesFleet(e));
-            Add(sim.FleetMotions, ComponentFormatters.Write, ComponentFormatters.ReadFleetMotion, (EntityId e, in FleetMotion v) => SeesFleet(e));
-            Add(sim.FleetRoutes, ComponentFormatters.Write, ComponentFormatters.ReadFleetRoute, (EntityId e, in FleetRoute v) => OwnsFleet(e));
-            Add(sim.FleetSensors, ComponentFormatters.Write, ComponentFormatters.ReadFleetSensors, (EntityId e, in FleetSensors v) => SeesFleet(e),
-                (EntityId e, in FleetSensors v) => OwnsFleet(e) ? v : new FleetSensors { RevealedUntilTick = v.RevealedUntilTick });
-            Add(sim.FleetReadiness, ComponentFormatters.Write, ComponentFormatters.ReadFleetReadiness, (EntityId e, in FleetReadiness v) => SeesFleet(e));
-            Add(sim.FleetCombat, ComponentFormatters.Write, ComponentFormatters.ReadFleetCombatState, (EntityId e, in FleetCombatState v) => SeesFleet(e),
-                (EntityId e, in FleetCombatState v) => OwnsFleet(e) ? v : new FleetCombatState
+            Add(sim.Fleets, ComponentFormatters.Write, ComponentFormatters.ReadFleetUnit, (EntityId e, in FleetUnit v) => Show(SeesFleet(e)));
+            Add(sim.FleetMotions, ComponentFormatters.Write, ComponentFormatters.ReadFleetMotion, (EntityId e, in FleetMotion v) => Show(SeesFleet(e)));
+            Add(sim.FleetRoutes, ComponentFormatters.Write, ComponentFormatters.ReadFleetRoute, (EntityId e, in FleetRoute v) => Show(OwnsFleet(e)));
+            Add(sim.FleetSensors, ComponentFormatters.Write, ComponentFormatters.ReadFleetSensors,
+                (EntityId e, in FleetSensors v) => OwnsFleet(e) ? Full : SeesFleet(e) ? Rival : Hidden, 2,
+                (int f, in FleetSensors v) => new FleetSensors { RevealedUntilTick = v.RevealedUntilTick });
+            Add(sim.FleetReadiness, ComponentFormatters.Write, ComponentFormatters.ReadFleetReadiness, (EntityId e, in FleetReadiness v) => Show(SeesFleet(e)));
+            Add(sim.FleetCombat, ComponentFormatters.Write, ComponentFormatters.ReadFleetCombatState,
+                (EntityId e, in FleetCombatState v) => OwnsFleet(e) ? Full : SeesFleet(e) ? Rival : Hidden, 2,
+                (int f, in FleetCombatState v) => new FleetCombatState
                 {
                     Focus = v.Focus, Rof = v.Rof, TemperatureMilli = v.TemperatureMilli, IsOverheated = v.IsOverheated,
                     IsVenting = v.IsVenting, EngagedUntilTick = v.EngagedUntilTick, FiredAtTick = v.FiredAtTick,
                     RaidsConvoys = v.RaidsConvoys
                 });
-            Add(sim.Relocations, ComponentFormatters.Write, ComponentFormatters.ReadCapitalRelocation, (EntityId e, in CapitalRelocation v) => IsMine(e));
-            Add(sim.RadarScans, ComponentFormatters.Write, ComponentFormatters.ReadRadarScan, (EntityId e, in RadarScan v) => v.OwnerPlayerId == me);
+            Add(sim.Relocations, ComponentFormatters.Write, ComponentFormatters.ReadCapitalRelocation, (EntityId e, in CapitalRelocation v) => Show(IsMine(e)));
+            Add(sim.RadarScans, ComponentFormatters.Write, ComponentFormatters.ReadRadarScan, (EntityId e, in RadarScan v) => Show(v.OwnerPlayerId == me));
 
             // Money and standing.
-            Add(sim.Wallets, ComponentFormatters.Write, ComponentFormatters.ReadWallet, (EntityId e, in Wallet v) => v.OwnerPlayerId == me);
-            Add(sim.Standings, ComponentFormatters.Write, ComponentFormatters.ReadPlayerStanding);
-            Add(sim.WtoOrders, ComponentFormatters.Write, ComponentFormatters.ReadWtoOrder, null,
-                (EntityId e, in WtoOrder v) => v.OwnerPlayerId == me ? v : new WtoOrder
+            Add(sim.Wallets, ComponentFormatters.Write, ComponentFormatters.ReadWallet, (EntityId e, in Wallet v) => Show(v.OwnerPlayerId == me));
+            Add<PlayerStanding>(sim.Standings, ComponentFormatters.Write, ComponentFormatters.ReadPlayerStanding, null);
+            Add(sim.WtoOrders, ComponentFormatters.Write, ComponentFormatters.ReadWtoOrder,
+                (EntityId e, in WtoOrder v) => v.OwnerPlayerId == me ? Full : Rival, 2,
+                (int f, in WtoOrder v) => new WtoOrder
                 {
                     Item = v.Item, Side = v.Side, PriceCents = v.PriceCents, Remaining = v.Remaining, PlacedTick = v.PlacedTick
                 });
-            Add(sim.ItemMarkets, ComponentFormatters.Write, ComponentFormatters.ReadItemMarket);
+            Add<ItemMarket>(sim.ItemMarkets, ComponentFormatters.Write, ComponentFormatters.ReadItemMarket, null);
             Add(sim.Contracts, ComponentFormatters.Write, ComponentFormatters.ReadWtoContract,
-                (EntityId e, in WtoContract v) => v.BuyerPlayerId == me || v.SellerPlayerId == me);
-            Add(sim.ContractCargo, ComponentFormatters.Write, ComponentFormatters.ReadContractCargo, (EntityId e, in ContractCargo v) => SeesFleet(e));
-            Add(sim.StolenGoods, ComponentFormatters.Write, ComponentFormatters.ReadStolenGoods, (EntityId e, in StolenGoods v) => OwnsHolder(e));
+                (EntityId e, in WtoContract v) => Show(v.BuyerPlayerId == me || v.SellerPlayerId == me));
+            Add(sim.ContractCargo, ComponentFormatters.Write, ComponentFormatters.ReadContractCargo, (EntityId e, in ContractCargo v) => Show(SeesFleet(e)));
+            Add(sim.StolenGoods, ComponentFormatters.Write, ComponentFormatters.ReadStolenGoods, (EntityId e, in StolenGoods v) => Show(OwnsHolder(e)));
 
             // THE SYSTEM.
-            Add(sim.Sanctions, ComponentFormatters.Write, ComponentFormatters.ReadSystemSanction, (EntityId e, in SystemSanction v) => IsMine(e));
-            Add(sim.Bulletins, ComponentFormatters.Write, ComponentFormatters.ReadSystemBulletin);
-            Add(sim.AiControllers, ComponentFormatters.Write, ComponentFormatters.ReadAiController, (EntityId e, in AiController v) => IsMine(e));
-            Add(sim.TechProgress, ComponentFormatters.Write, ComponentFormatters.ReadTechProgress, (EntityId e, in TechProgress v) => IsMine(e));
-            Add(sim.ShipOrders, ComponentFormatters.Write, ComponentFormatters.ReadShipBuildOrder, (EntityId e, in ShipBuildOrder v) => v.OwnerPlayerId == me);
+            Add(sim.Sanctions, ComponentFormatters.Write, ComponentFormatters.ReadSystemSanction, (EntityId e, in SystemSanction v) => Show(IsMine(e)));
+            Add<SystemBulletin>(sim.Bulletins, ComponentFormatters.Write, ComponentFormatters.ReadSystemBulletin, null);
+            Add(sim.AiControllers, ComponentFormatters.Write, ComponentFormatters.ReadAiController, (EntityId e, in AiController v) => Show(IsMine(e)));
+            Add(sim.TechProgress, ComponentFormatters.Write, ComponentFormatters.ReadTechProgress, (EntityId e, in TechProgress v) => Show(IsMine(e)));
+            Add(sim.ShipOrders, ComponentFormatters.Write, ComponentFormatters.ReadShipBuildOrder, (EntityId e, in ShipBuildOrder v) => Show(v.OwnerPlayerId == me));
             Add(sim.JumpGates, ComponentFormatters.Write, ComponentFormatters.ReadJumpGate,
-                (EntityId e, in JumpGate v) => v.OwnerPlayerId == me || KnowsSite(v.HomeSite) || KnowsSite(v.FarSite));
-            Add(sim.ConvoyRoutes, ComponentFormatters.Write, ComponentFormatters.ReadConvoyRoute, (EntityId e, in ConvoyRoute v) => OwnsFleet(e));
-            Add(sim.Citadels, ComponentFormatters.Write, ComponentFormatters.ReadSystemCitadel, (EntityId e, in SystemCitadel v) => KnowsSite(e));
-            Add(sim.CitadelAssaults, ComponentFormatters.Write, ComponentFormatters.ReadCitadelAssault, (EntityId e, in CitadelAssault v) => IsMine(e));
-            Add(sim.VictoryRecords, ComponentFormatters.Write, ComponentFormatters.ReadVictoryRecord);
-            Add(sim.DirectorateSeats, ComponentFormatters.Write, ComponentFormatters.ReadDirectorateSeat);
-            Add(sim.Loans, ComponentFormatters.Write, ComponentFormatters.ReadLoan, (EntityId e, in Loan v) => IsMine(e));
+                (EntityId e, in JumpGate v) => Show(v.OwnerPlayerId == me || KnowsSite(v.HomeSite) || KnowsSite(v.FarSite)));
+            Add(sim.ConvoyRoutes, ComponentFormatters.Write, ComponentFormatters.ReadConvoyRoute, (EntityId e, in ConvoyRoute v) => Show(OwnsFleet(e)));
+            Add(sim.Citadels, ComponentFormatters.Write, ComponentFormatters.ReadSystemCitadel, (EntityId e, in SystemCitadel v) => Show(KnowsSite(e)));
+            Add(sim.CitadelAssaults, ComponentFormatters.Write, ComponentFormatters.ReadCitadelAssault, (EntityId e, in CitadelAssault v) => Show(IsMine(e)));
+            Add<VictoryRecord>(sim.VictoryRecords, ComponentFormatters.Write, ComponentFormatters.ReadVictoryRecord, null);
+            Add<DirectorateSeat>(sim.DirectorateSeats, ComponentFormatters.Write, ComponentFormatters.ReadDirectorateSeat, null);
+            Add(sim.Loans, ComponentFormatters.Write, ComponentFormatters.ReadLoan, (EntityId e, in Loan v) => Show(IsMine(e)));
 
             // Galaxy: charted systems, their names, the player's own charts, the chart shop.
             _systemChannel = _channels.Count;
-            Add(sim.StarSystems, ComponentFormatters.Write, ComponentFormatters.ReadStarSystem, (EntityId e, in StarSystem v) => Knows(v.ClusterId));
-            Add(sim.SystemNames, ComponentFormatters.Write, ComponentFormatters.ReadSystemName, (EntityId e, in SystemName v) => KnowsSystem(e));
+            Add(sim.StarSystems, ComponentFormatters.Write, ComponentFormatters.ReadStarSystem, (EntityId e, in StarSystem v) => Show(Knows(v.ClusterId)));
+            Add(sim.SystemNames, ComponentFormatters.Write, ComponentFormatters.ReadSystemName, (EntityId e, in SystemName v) => Show(KnowsSystem(e)));
             _chartChannel = _channels.Count;
-            Add(sim.SystemCharts, ComponentFormatters.Write, ComponentFormatters.ReadSystemChart, (EntityId e, in SystemChart v) => v.PlayerId == me);
-            Add(sim.ChartListings, ComponentFormatters.Write, ComponentFormatters.ReadChartListing);
-            Add(sim.Presences, ComponentFormatters.Write, ComponentFormatters.ReadPlayerPresence, null,
-                (EntityId e, in PlayerPresence v) => IsMine(e) ? v : new PlayerPresence
+            Add(sim.SystemCharts, ComponentFormatters.Write, ComponentFormatters.ReadSystemChart, (EntityId e, in SystemChart v) => Show(v.PlayerId == me));
+            Add<ChartListing>(sim.ChartListings, ComponentFormatters.Write, ComponentFormatters.ReadChartListing, null);
+            Add(sim.Presences, ComponentFormatters.Write, ComponentFormatters.ReadPlayerPresence,
+                (EntityId e, in PlayerPresence v) => IsMine(e) ? Full : Rival, 2,
+                (int f, in PlayerPresence v) => new PlayerPresence
                 {
                     IsNewcomer = v.IsNewcomer, ShieldFromTick = v.ShieldFromTick, ShieldUntilTick = v.ShieldUntilTick
                 });
         }
+
+        // Forms of a component (see ViewForm): hidden, in full, or a rival's masked form.
+        private const int Hidden = -1;
+        private const int Full = 0;
+        private const int Rival = 1;
+        private const int RivalUncharted = 2; // a rival's HQ whose core base the player hasn't charted
+
+        private static int Show(bool shown) => shown ? Full : Hidden;
 
         /// <summary>
         /// The view now: in full the first time and when <paramref name="full"/> is set (a snapshot), otherwise only
@@ -145,6 +176,8 @@ namespace Unruled.Core.Net
         {
             full |= !_wroteOnce;
             _wroteOnce = true;
+            if (_ownHub)
+                _hub.BeginPass();
             FindEyes();
             _body.Rewind(0);
             _body.WriteArrayHeader(3);
@@ -211,8 +244,8 @@ namespace Unruled.Core.Net
         }
 
         private void Add<T>(ComponentStore<T> store, ComponentWriter<T> write, ComponentReader<T> read,
-            ViewFilter<T> shows = null, ViewMask<T> mask = null) where T : struct =>
-            _channels.Add(new ViewChannel<T>(store, write, read, shows, mask));
+            ViewForm<T> form, int forms = 1, ViewMask<T> mask = null) where T : struct =>
+            _channels.Add(new ViewChannel<T>(_hub, _channels.Count, store, write, read, form, forms, mask));
 
         // Sites the player has eyes on: its own sites and the sites its fleets are docked at.
         private void FindEyes()

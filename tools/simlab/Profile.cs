@@ -41,10 +41,12 @@ namespace Unruled.SimLab
             var ai = new Stopwatch();
             var viewWatch = new Stopwatch();
             var playerViews = new List<Unruled.Core.Net.PlayerView>();
+            var hub = new Unruled.Core.Net.PlayerViewHub(sim);
             if (viewers >= 0)
                 for (int i = 0; i < sim.Players.Count && (viewers == 0 || playerViews.Count < viewers); i++)
-                    playerViews.Add(new Unruled.Core.Net.PlayerView(sim, sim.Players.At(i).PlayerId));
+                    playerViews.Add(new Unruled.Core.Net.PlayerView(hub, sim.Players.At(i).PlayerId));
             long viewBytes = 0, snapshotBytes = 0;
+            hub.BeginPass();
             foreach (var v in playerViews)
                 snapshotBytes += v.Write(true).Length;
             long ticks = (long)(hours * SimTick.TicksPerHour);
@@ -58,6 +60,7 @@ namespace Unruled.SimLab
                 sim.Ai.Think(sim.Clock.CurrentTick);
                 ai.Stop();
                 viewWatch.Start();
+                hub.BeginPass();
                 foreach (var v in playerViews)
                     viewBytes += v.Write(false).Length;
                 viewWatch.Stop();

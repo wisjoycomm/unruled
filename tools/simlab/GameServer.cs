@@ -59,6 +59,7 @@ namespace Unruled.SimLab
         private readonly Dictionary<int, ClientSession> _sessions = new Dictionary<int, ClientSession>();
         private readonly Dictionary<string, int> _tokenOwners = new Dictionary<string, int>(); // token hash -> player
         private readonly MsgPackWriter _frame = new MsgPackWriter(256);
+        private PlayerViewHub _views; // shared encodings for every session's view; a pass begins before each round of views
 
         public readonly BotSettings Bots = new BotSettings();
         public int AutosaveMinutes = 5;
@@ -187,6 +188,7 @@ namespace Unruled.SimLab
                     if (ran > 0)
                     {
                         _viewWatch.Restart();
+                        Views.BeginPass();
                         foreach (var session in _sessions.Values)
                             session.PushView(_sim.Clock.CurrentTick);
                         _viewWatch.Stop();
@@ -706,8 +708,9 @@ namespace Unruled.SimLab
                     _sim.Ai.Release(hq);
                 if (_online.Add(playerId))
                     Queue(CommandType.LogIn, playerId);
-                var session = new ClientSession(playerId, new PlayerView(_sim, playerId));
+                var session = new ClientSession(playerId, new PlayerView(Views, playerId));
                 _sessions[playerId] = session;
+                Views.BeginPass();
                 _frame.Rewind(0);
                 WireCodec.Write(_frame, new WelcomeFrame
                 {
@@ -756,7 +759,10 @@ namespace Unruled.SimLab
                 WireCodec.Write(_frame, new CommandResultFrame { Sequence = frame.Sequence, Result = result, ExecuteAtTick = executeAt });
                 session.Push(_frame.ToArray());
                 if (result == IssueResult.Issued)
-                    session.PushView(_sim.Clock.CurrentTick); // the order shows in flight now, even while the world is paused
+                {
+                    Views.BeginPass();
+                    session.PushView(_sim.Clock.CurrentTick);
+                } // the order shows in flight now, even while the world is paused
             }
         }
 
@@ -794,6 +800,17 @@ namespace Unruled.SimLab
         private static string HashToken(byte[] token) => Convert.ToHexString(SHA256.HashData(token));
 
         private string TokensPath => _savePath + ".tokens";
+
+        // The hub belongs to the world: a new world (reset) gets a new one.
+        private PlayerViewHub Views
+        {
+            get
+            {
+                if (_views == null || _views.Sim != _sim)
+                    _views = new PlayerViewHub(_sim);
+                return _views;
+            }
+        }
 
         // One line per token: "<player id> <sha-256 of the token>". The tokens themselves are never stored.
         private void LoadTokens()

@@ -192,3 +192,4 @@
 - 2026-10-25 - Claude - N6 end to end: Unity client joined the server, mirror hash matched the server at 9/9 checks over ~53 min with a console client and 5 bots; docs (overview, roadmap decision, backend-api.md, Sim Lab README); plan archived to .docs/plan/next-online-client.md
 - 2026-10-25 - Claude - Sim Lab profile --views: times every player's view delta per tick (baseline: views are 99% of server time, 389 us/player/tick at 50 empires, 893 at 200)
 - 2026-10-25 - Claude - P1 load test: Sim Lab `loadtest --clients N` (bulk test tokens, N read-only socket clients, server view cost per player per tick); baseline 526 us/player/tick at 100 players, 1,115 us at 200 connected in a 309-empire world
+- 2026-10-25 - Claude - P2 shared view encodings: PlayerViewHub encodes each component once per pass (full or masked form) for every player's view; 50 empires 389 -> 230 us/player/tick, 200 empires 893 -> 738 (the per-entity world scan is the rest, P3)
