@@ -53,7 +53,8 @@ longer shown. What one player sees:
   quarantines, relays, jump gates, the Citadel, star systems and names.
 - **Rival and THE SYSTEM's fleets** only where the player has eyes: docked at a site the player owns or at a site
   one of its fleets is docked at, or revealed by radar. Never their hold, route, debts or RWR state.
-- **Rivals:** HQ (core base only if charted), standing, shield window and newcomer flag. Never wallet, stock, loan,
+- **Rivals met:** a rival whose home system the player holds a chart of: HQ, standing, shield window and newcomer
+  flag. Rivals not met aren't sent at all (a world of 10,000 doesn't send 10,000 HQs). Never wallet, stock, loan,
   research or AI.
 - **Public:** market prices and the order book without owners or deposits, THE SYSTEM's shop stock, bulletins, chart
   listings, Directorate seats.

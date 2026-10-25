@@ -67,6 +67,10 @@ Where the project is heading, why, and rule exceptions. Build order follows GDD 
   (223 ms/tick); the simulation stayed under 1 ms. Every view scans the whole world, so one process caps near 400
   players. Plan P2-P7 (encode once, interest index, dirty entities, views on worker threads, 1 s send rate) targets
   <= 50 us per player per tick for 10,000 players per world.
+- 2026-10-25 — **A player only sees rivals they have met**: rival HQs, standings and shields go only to players
+  holding a chart of the rival's home system. Sending every empire's HQ to everyone cost ~200 us per player per tick
+  at 1,000 empires and grows with the world; with the per-pass interest index, a view now costs ~50 us per player per
+  tick, flat from 1,000 to 2,000 empires (it was 893 us at 200).
 
 ## Exceptions
 
