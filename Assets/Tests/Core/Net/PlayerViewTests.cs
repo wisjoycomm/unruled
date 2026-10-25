@@ -169,6 +169,42 @@ namespace Unruled.Tests.Core.Net
             }
         }
 
+        [Test]
+        public void IndexedViews_WriteTheSameBytes_AsFullScans_InABusyWorld()
+        {
+            for (int i = 0; i < 12; i++)
+                NewGameSetup.Join(_server, (byte)(i % _server.Balance.Ai.Count + 1));
+            var hub = new PlayerViewHub(_server);
+            var indexed = new System.Collections.Generic.List<PlayerView>();
+            var scanned = new System.Collections.Generic.List<PlayerView>();
+            for (int i = 0; i < _server.Players.Count; i++)
+            {
+                int id = _server.Players.At(i).PlayerId;
+                indexed.Add(new PlayerView(hub, id));
+                scanned.Add(PlayerView.FullScan(_server, id));
+            }
+            // a rival fleet docked at my core base, so someone's eyes matter from the start
+            var rival = RivalFleet(out _);
+            _server.FleetMotions.Get(rival).Site = _game.CoreBase;
+            int compared = 0;
+            for (int t = 0; t < 2 * 3_600; t++)
+            {
+                Play(1);
+                if (t % 30 != 0)
+                    continue;
+                hub.BeginPass();
+                for (int v = 0; v < indexed.Count; v++)
+                {
+                    bool full = t % 1_800 == 0;
+                    byte[] a = indexed[v].Write(full).ToArray();
+                    byte[] b = scanned[v].Write(full).ToArray();
+                    CollectionAssert.AreEqual(b, a, $"player {indexed[v].PlayerId} at tick {_server.Clock.CurrentTick}");
+                    compared++;
+                }
+            }
+            Assert.Greater(compared, 1_000);
+        }
+
         private sealed class Outbox : ICommandSink
         {
             public readonly List<DelayedPlayerCommand> Sent = new List<DelayedPlayerCommand>();

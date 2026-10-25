@@ -19,7 +19,9 @@ namespace Unruled.Core.Net
     internal abstract class ViewChannel
     {
         /// <summary>Writes <c>[upserts [[entity, component]...], removals [entity...]]</c>.</summary>
-        public abstract void Write(MsgPackWriter body, MsgPackWriter scratch, bool full, ref int upserts, ref int removals);
+        /// <param name="interest">What the view looks for; null scans the whole store.</param>
+        public abstract void Write(MsgPackWriter body, MsgPackWriter scratch, ViewInterest interest, List<int> candidates,
+            bool full, ref int upserts, ref int removals);
 
         /// <summary>Applies what <see cref="Write"/> wrote; true when the store changed.</summary>
         public abstract bool Apply(MsgPackReader r, bool full);
@@ -27,6 +29,8 @@ namespace Unruled.Core.Net
 
     /// <summary>
     /// The view of one <see cref="ComponentStore{T}"/>: the components the form function shows, in the form it picks.
+    /// With keys (see <see cref="ViewIndex"/>), a view visits only the components under the keys it holds; the form
+    /// function still decides, so the keys only have to cover everyone who might see a component.
     /// Each (component, form) is encoded once per hub pass and shared by every view of the world; a view only compares
     /// the encoding's 64-bit hash with the one it last sent and copies the bytes when they differ. A delta holds those
     /// and the entities no longer shown.
@@ -40,13 +44,17 @@ namespace Unruled.Core.Net
         private readonly ViewMask<T> _mask;
         private readonly PlayerViewHub _hub;
         private readonly EncodedCache _cache;
+        private readonly ViewKeys<T> _keys;
+        private readonly ViewIndex _index;
         private Dictionary<EntityId, ulong> _sent = new Dictionary<EntityId, ulong>();
         private Dictionary<EntityId, ulong> _next = new Dictionary<EntityId, ulong>();
         private readonly List<EntityId> _removed = new List<EntityId>();
 
         public ViewChannel(PlayerViewHub hub, int index, ComponentStore<T> store, ComponentWriter<T> write,
-            ComponentReader<T> read, ViewForm<T> form, int forms, ViewMask<T> mask)
+            ComponentReader<T> read, ViewForm<T> form, int forms, ViewMask<T> mask, ViewKeys<T> keys)
         {
+            _keys = keys;
+            _index = keys != null ? hub.Index(index) : null;
             _hub = hub ?? throw new ArgumentNullException(nameof(hub));
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _write = write ?? throw new ArgumentNullException(nameof(write));
@@ -57,16 +65,25 @@ namespace Unruled.Core.Net
             _cache = hub.Cache(index, forms);
         }
 
-        public override void Write(MsgPackWriter body, MsgPackWriter scratch, bool full, ref int upserts, ref int removals)
+        public override void Write(MsgPackWriter body, MsgPackWriter scratch, ViewInterest interest, List<int> candidates,
+            bool full, ref int upserts, ref int removals)
         {
             if (full)
                 _sent.Clear();
             _next.Clear();
             scratch.Rewind(0);
             _cache.Begin(_hub.Epoch, _store.Count);
-            int count = 0;
-            for (int i = 0; i < _store.Count; i++)
+            bool indexed = _keys != null && interest != null;
+            if (indexed)
             {
+                BuildIndex();
+                interest.Collect(_index, candidates);
+            }
+            int visits = indexed ? candidates.Count : _store.Count;
+            int count = 0;
+            for (int v = 0; v < visits; v++)
+            {
+                int i = indexed ? candidates[v] : v;
                 var entity = _store.EntityAt(i);
                 ref var value = ref _store.At(i);
                 int form = _form == null ? 0 : _form(entity, in value);
@@ -98,6 +115,20 @@ namespace Unruled.Core.Net
             var swap = _sent;
             _sent = _next;
             _next = swap;
+        }
+
+        // Once per pass, shared by every view: each component's keys.
+        private void BuildIndex()
+        {
+            if (_index.Epoch == _hub.Epoch)
+                return;
+            _index.Begin(_hub.Epoch);
+            for (int i = 0; i < _store.Count; i++)
+            {
+                _index.At(i);
+                _keys(_store.EntityAt(i), in _store.At(i), _index);
+            }
+            _index.Seal();
         }
 
         private ulong Encode(int form, int slot, EntityId entity, in T value)

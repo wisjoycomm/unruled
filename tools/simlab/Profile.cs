@@ -78,6 +78,7 @@ namespace Unruled.SimLab
             rows.Add(("UtilityAiEngine.Think", ai.Elapsed.TotalMilliseconds / ticks));
             if (playerViews.Count > 0)
             {
+                ChannelCosts(sim, hub, playerViews);
                 double viewMs = viewWatch.Elapsed.TotalMilliseconds / ticks;
                 rows.Add(($"PlayerView x{playerViews.Count}", viewMs));
                 Console.WriteLine($"   views: {viewMs / playerViews.Count * 1000:0.0} us per player per tick, " +
@@ -88,6 +89,47 @@ namespace Unruled.SimLab
             foreach (var (name, ms) in rows)
                 if (ms >= 0.0005)
                     Console.WriteLine($"   {name,-32} {ms,9:0.0000} ms/tick  {ms / perTick * 100,5:0.0}%");
+        }
+
+        // One more tick, with every view's channels timed one by one (reflection: tooling only).
+        private static void ChannelCosts(SimulationWorld sim, Unruled.Core.Net.PlayerViewHub hub, List<Unruled.Core.Net.PlayerView> views)
+        {
+            var channelsField = typeof(Unruled.Core.Net.PlayerView).GetField("_channels", BindingFlags.NonPublic | BindingFlags.Instance);
+            var interestField = typeof(Unruled.Core.Net.PlayerView).GetField("_interest", BindingFlags.NonPublic | BindingFlags.Instance);
+            var candidatesField = typeof(Unruled.Core.Net.PlayerView).GetField("_candidates", BindingFlags.NonPublic | BindingFlags.Instance);
+            var eyes = typeof(Unruled.Core.Net.PlayerView).GetMethod("FindEyes", BindingFlags.NonPublic | BindingFlags.Instance);
+            sim.Clock.Advance(1);
+            hub.BeginPass();
+            var costs = new double[64];
+            var names = new string[64];
+            var body = new Unruled.Core.Persistence.MsgPackWriter(1 << 16);
+            var scratch = new Unruled.Core.Persistence.MsgPackWriter(1 << 16);
+            var watch = new Stopwatch();
+            foreach (var view in views)
+            {
+                eyes.Invoke(view, null);
+                var channels = (System.Collections.IList)channelsField.GetValue(view);
+                var interest = interestField.GetValue(view);
+                var candidates = candidatesField.GetValue(view);
+                for (int c = 0; c < channels.Count; c++)
+                {
+                    var channel = channels[c];
+                    var write = channel.GetType().GetMethod("Write");
+                    body.Rewind(0);
+                    watch.Restart();
+                    write.Invoke(channel, new object[] { body, scratch, interest, candidates, false, 0, 0 });
+                    watch.Stop();
+                    costs[c] += watch.Elapsed.TotalMilliseconds;
+                    names[c] ??= channel.GetType().GetGenericArguments()[0].Name;
+                }
+            }
+            var order = new List<int>();
+            for (int c = 0; c < 64; c++) if (names[c] != null) order.Add(c);
+            order.Sort((a, b) => costs[b].CompareTo(costs[a]));
+            Console.Write("   channels (us per player):");
+            for (int i = 0; i < Math.Min(8, order.Count); i++)
+                Console.Write($" {names[order[i]]} {costs[order[i]] * 1000 / views.Count:0.0}");
+            Console.WriteLine();
         }
 
         private sealed class Timed : ISimSystem
