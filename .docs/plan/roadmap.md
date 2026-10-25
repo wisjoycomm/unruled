@@ -71,6 +71,14 @@ Where the project is heading, why, and rule exceptions. Build order follows GDD 
   holding a chart of the rival's home system. Sending every empire's HQ to everyone cost ~200 us per player per tick
   at 1,000 empires and grows with the world; with the per-pass interest index, a view now costs ~50 us per player per
   tick, flat from 1,000 to 2,000 empires (it was 893 us at 200).
+- 2026-10-25 — **Server views fit 10,000 players per world (measured)**: after P2-P6 (shared encodings, interest
+  index, views on worker threads, one view per client per real second), `profile --views` at 10,000 empires: 19 us
+  per player per tick on 8 threads (~195 ms of each 1 s tick for everyone's views; the simulation itself ~1 ms per
+  1,000 empires); 1,000 real socket clients on one 12-thread PC: 11 us per player, 11 ms/tick for all views,
+  ~155 B/s per client, 0 drops, a mirror client in sync. Estimate: one 8-core server holds a 10,000-player world
+  (views ~2 cores, sim < 1 core); bandwidth ~1.5 MB/s at 10,000. Memory ~1.2 GB live heap at 10,000 empires.
+  Not done (P4 in the plan): views still compare every visible component each pass; skipping unchanged ones would
+  cut the cost further but isn't needed for the target.
 
 ## Exceptions
 
