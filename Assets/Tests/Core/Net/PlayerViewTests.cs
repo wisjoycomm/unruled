@@ -205,6 +205,33 @@ namespace Unruled.Tests.Core.Net
             Assert.Greater(compared, 1_000);
         }
 
+        [Test]
+        public void ViewsWrittenOnManyThreads_AfterASharedPass_MatchViewsWrittenOneByOne()
+        {
+            for (int i = 0; i < 12; i++)
+                NewGameSetup.Join(_server, (byte)(i % _server.Balance.Ai.Count + 1));
+            var hubA = new PlayerViewHub(_server);
+            var hubB = new PlayerViewHub(_server);
+            var parallel = new System.Collections.Generic.List<PlayerView>();
+            var serial = new System.Collections.Generic.List<PlayerView>();
+            for (int i = 0; i < _server.Players.Count; i++)
+            {
+                int id = _server.Players.At(i).PlayerId;
+                parallel.Add(new PlayerView(hubA, id));
+                serial.Add(new PlayerView(hubB, id));
+            }
+            var bytes = new byte[parallel.Count][];
+            for (int t = 0; t < 300; t++)
+            {
+                Play(1);
+                hubA.BeginSharedPass();
+                System.Threading.Tasks.Parallel.For(0, parallel.Count, v => bytes[v] = parallel[v].Write(false).ToArray());
+                hubB.BeginPass();
+                for (int v = 0; v < serial.Count; v++)
+                    CollectionAssert.AreEqual(serial[v].Write(false).ToArray(), bytes[v], $"player {serial[v].PlayerId}");
+            }
+        }
+
         private sealed class Outbox : ICommandSink
         {
             public readonly List<DelayedPlayerCommand> Sent = new List<DelayedPlayerCommand>();

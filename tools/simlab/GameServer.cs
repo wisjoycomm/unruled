@@ -188,9 +188,7 @@ namespace Unruled.SimLab
                     if (ran > 0)
                     {
                         _viewWatch.Restart();
-                        Views.BeginPass();
-                        foreach (var session in _sessions.Values)
-                            session.PushView(_sim.Clock.CurrentTick);
+                        PushViews();
                         _viewWatch.Stop();
                         _viewCostMs = _viewCostMs * 0.95 + _viewWatch.Elapsed.TotalMilliseconds * 0.05;
                         _passTicks = _passTicks * 0.95 + ran * 0.05;
@@ -800,6 +798,38 @@ namespace Unruled.SimLab
         private static string HashToken(byte[] token) => Convert.ToHexString(SHA256.HashData(token));
 
         private string TokensPath => _savePath + ".tokens";
+
+        private readonly List<ClientSession> _pushList = new List<ClientSession>();
+        private readonly ViewWorkers _viewThreads = new ViewWorkers(Math.Max(1, Environment.ProcessorCount - 3));
+        private Action<int> _prepareChannel;
+        private Action<int> _pushOne;
+        private long _pushTick;
+
+        // Under the lock, the world still: few sessions write one by one; many share a prepared pass and write on the
+        // worker threads (each session's view on one thread; the world and the hub are only read).
+        private void PushViews()
+        {
+            long tick = _sim.Clock.CurrentTick;
+            if (_sessions.Count < ParallelViewsFrom)
+            {
+                Views.BeginPass();
+                foreach (var session in _sessions.Values)
+                    session.PushView(tick);
+                return;
+            }
+            var hub = Views;
+            hub.BeginPass();
+            hub.PrepareInterest();
+            _prepareChannel ??= c => Views.PrepareChannel(c);
+            _pushOne ??= i => _pushList[i].PushView(_pushTick);
+            _viewThreads.For(hub.ChannelCount, _prepareChannel);
+            _pushList.Clear();
+            _pushList.AddRange(_sessions.Values);
+            _pushTick = tick;
+            _viewThreads.For(_pushList.Count, _pushOne);
+        }
+
+        private const int ParallelViewsFrom = 32;
 
         // The hub belongs to the world: a new world (reset) gets a new one.
         private PlayerViewHub Views

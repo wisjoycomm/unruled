@@ -25,6 +25,9 @@ namespace Unruled.Core.Net
 
         /// <summary>Applies what <see cref="Write"/> wrote; true when the store changed.</summary>
         public abstract bool Apply(MsgPackReader r, bool full);
+
+        /// <summary>Builds the pass's shared index and encodes every component in every form (see <see cref="PlayerViewHub.BeginSharedPass"/>).</summary>
+        public abstract void Prepare();
     }
 
     /// <summary>
@@ -46,6 +49,7 @@ namespace Unruled.Core.Net
         private readonly EncodedCache _cache;
         private readonly ViewKeys<T> _keys;
         private readonly ViewIndex _index;
+        private readonly int _forms;
         private Dictionary<EntityId, ulong> _sent = new Dictionary<EntityId, ulong>();
         private Dictionary<EntityId, ulong> _next = new Dictionary<EntityId, ulong>();
         private readonly List<EntityId> _removed = new List<EntityId>();
@@ -63,6 +67,8 @@ namespace Unruled.Core.Net
             _form = form;
             _mask = mask;
             _cache = hub.Cache(index, forms);
+            _forms = forms;
+            hub.Register(index, this);
         }
 
         public override void Write(MsgPackWriter body, MsgPackWriter scratch, ViewInterest interest, List<int> candidates,
@@ -115,6 +121,17 @@ namespace Unruled.Core.Net
             var swap = _sent;
             _sent = _next;
             _next = swap;
+        }
+
+        public override void Prepare()
+        {
+            _cache.Begin(_hub.Epoch, _store.Count);
+            if (_keys != null)
+                BuildIndex();
+            for (int i = 0; i < _store.Count; i++)
+                for (int form = 0; form < _forms; form++)
+                    if (!_cache.TryGet(form, i, out _))
+                        Encode(form, i, _store.EntityAt(i), in _store.At(i));
         }
 
         // Once per pass, shared by every view: each component's keys.

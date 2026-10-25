@@ -22,11 +22,14 @@ namespace Unruled.SimLab
             double hours = double.Parse(ArgString(args, "--hours") ?? "6", System.Globalization.CultureInfo.InvariantCulture);
             ulong seed = ulong.Parse(ArgString(args, "--seed") ?? "777");
             string views = ArgString(args, "--views");
-            Console.WriteLine($"Profile: {hours} game hours per run, seed {seed}" + (views != null ? $", views {views}" : ""));
+            _threads = int.Parse(ArgString(args, "--threads") ?? "1");
+            Console.WriteLine($"Profile: {hours} game hours per run, seed {seed}" + (views != null ? $", views {views}, threads {_threads}" : ""));
             foreach (var part in counts.Split(','))
                 RunOne(int.Parse(part), hours, seed, views == null ? -1 : int.Parse(views));
             return 0;
         }
+
+        private static int _threads = 1;
 
         private static void RunOne(int empires, double hours, ulong seed, int viewers)
         {
@@ -60,9 +63,25 @@ namespace Unruled.SimLab
                 sim.Ai.Think(sim.Clock.CurrentTick);
                 ai.Stop();
                 viewWatch.Start();
-                hub.BeginPass();
-                foreach (var v in playerViews)
-                    viewBytes += v.Write(false).Length;
+                if (_threads > 1)
+                {
+                    hub.BeginPass();
+                    hub.PrepareInterest();
+                    System.Threading.Tasks.Parallel.For(0, hub.ChannelCount,
+                        new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = _threads }, hub.PrepareChannel);
+                    long passBytes = 0;
+                    System.Threading.Tasks.Parallel.For(0, playerViews.Count,
+                        new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = _threads },
+                        () => 0L, (v, _, sum) => sum + playerViews[v].Write(false).Length,
+                        sum => System.Threading.Interlocked.Add(ref passBytes, sum));
+                    viewBytes += passBytes;
+                }
+                else
+                {
+                    hub.BeginPass();
+                    foreach (var v in playerViews)
+                        viewBytes += v.Write(false).Length;
+                }
                 viewWatch.Stop();
             }
             total.Stop();

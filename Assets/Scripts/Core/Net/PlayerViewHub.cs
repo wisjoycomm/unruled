@@ -37,6 +37,39 @@ namespace Unruled.Core.Net
         /// <summary>Starts a pass: every cached encoding is out of date.</summary>
         public void BeginPass() => Epoch++;
 
+        /// <summary>
+        /// Starts a pass and builds everything the views share up front (every index, every component in every form),
+        /// so the views of this pass only read the hub and the world: they may then be written on several threads at
+        /// once, each view on one thread. Needs at least one view built on this hub.
+        /// </summary>
+        public void BeginSharedPass()
+        {
+            BeginPass();
+            BuildInterest();
+            for (int i = 0; i < _prototypes.Count; i++)
+                _prototypes[i].Prepare();
+        }
+
+        /// <summary>
+        /// Channels to prepare for a shared pass. Each channel's preparation touches only its own cache and index, so a
+        /// host may call <see cref="PrepareChannel"/> for different channels on different threads, after
+        /// <see cref="BeginPass"/> and <see cref="PrepareInterest"/>; then the views may be written in parallel.
+        /// </summary>
+        public int ChannelCount => _prototypes.Count;
+
+        public void PrepareInterest() => BuildInterest();
+
+        public void PrepareChannel(int channel) => _prototypes[channel].Prepare();
+
+        private readonly List<ViewChannel> _prototypes = new List<ViewChannel>();
+
+        // The first view's channels: their writers, masks and keys don't depend on the player, so they prepare for all.
+        internal void Register(int channel, ViewChannel prototype)
+        {
+            if (channel == _prototypes.Count)
+                _prototypes.Add(prototype);
+        }
+
         internal int Epoch { get; private set; } = 1;
 
         internal EncodedCache Cache(int channel, int forms)
